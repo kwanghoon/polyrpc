@@ -14,8 +14,6 @@
 ### Run an polyrpc interpreter
 ~~~
 $ stack exec -- polyrpc ./examples/helloworld.rl
-Stack has not been tested with GHC versions above 8.6, and using 8.8.3, this may fail
-Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
 POLYRPC, version 0.1.0: http://github.com/kwanghoon/polyrpc/
 [Reading] ./examples/helloworld.rl
 [Lexing]
