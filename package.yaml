@@ -1,0 +1,59 @@
+name:                polyrpc
+version:             0.1.0.0
+github:              "kwanghoon/polyrpc"
+license:             BSD3
+author:              "Kwanghoon Choi"
+maintainer:          "lazyswamp@gmail.com"
+copyright:           "2020 Kwanghoon Choi"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+synopsis:            PolyRpc
+category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         A multi-tier functional programming language based on the polymorphic RPC calculus. Please see the README on GitHub at <https://github.com/kwanghoon/polyrpc#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- regex-tdfa
+- bytestring
+- aeson          >= 1.4.7 && < 1.5
+- aeson-pretty   >= 0.8.8 && < 0.9
+- prettyprinter  >= 1.6.1 && < 1.7
+- json           >= 0.10 && < 0.11
+- pretty         >= 1.1.3 && < 1.2
+- yapb           >= 0.1.0 && <= 0.1.0
+- containers     >= 0.6.0 && < 0.7
+
+# library:
+#  source-dirs: src
+
+executables:
+  polyrpc:
+    main:                Main.hs
+    source-dirs:
+    - app
+    - app/ast
+    - app/cs
+    
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    
+tests:
+  polyrpc-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - polyrpc
