@@ -41,7 +41,6 @@ executables:
     - app
     - app/ast
     - app/cs
-    - app/untypedcs
     
     ghc-options:
     - -threaded

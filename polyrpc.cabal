@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.31.2.
+-- This file has been generated from package.yaml by hpack version 0.33.0.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: a4f70e62c19d93d7eb81b0a5ebf144fcfdfa460dd2cc8422c00b2e0b17c91ff6
+-- hash: 97e761e34c49d2755b43bd0f99b95738ade38a1539029b9cc5c4d65e66a503e2
 
 name:           polyrpc
 version:        0.1.0.0
@@ -31,6 +31,7 @@ executable polyrpc
   main-is: Main.hs
   other-modules:
       Compile
+      Erase
       Execute
       Lexer
       Parser
@@ -45,13 +46,11 @@ executable polyrpc
       Type
       CSExpr
       CSType
-      UntypedCSExpr
       Paths_polyrpc
   hs-source-dirs:
       app
       app/ast
       app/cs
-      app/untypedcs
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson >=1.4.7 && <1.5
