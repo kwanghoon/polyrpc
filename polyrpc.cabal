@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 97e761e34c49d2755b43bd0f99b95738ade38a1539029b9cc5c4d65e66a503e2
+-- hash: 5cbad89a1bbb466c2b572ede169a320752bfb683468d63983ec0a7c8c4241776
 
 name:           polyrpc
 version:        0.1.0.0
@@ -37,6 +37,7 @@ executable polyrpc
       Parser
       Token
       TypeCheck
+      UntypedExecute
       Verify
       BasicLib
       Expr
@@ -46,6 +47,7 @@ executable polyrpc
       Type
       CSExpr
       CSType
+      UntypedCSExpr
       Paths_polyrpc
   hs-source-dirs:
       app
