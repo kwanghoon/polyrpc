@@ -25,7 +25,7 @@ typeCheck toplevelDecls = do
   conTypeInfo <- elabConTypeDecls elab_datatypeDecls
   
   -- 5. elaborate types declared in the bindings
-  partial_elab_bindingDecls <- elabBindingTypes typeInfo bindingDecls
+  partial_elab_bindingDecls <- elabBindingTypes typeInfo [] [] bindingDecls
 
 --------------------------------
 -- for fully recursive bindings:
@@ -44,8 +44,9 @@ typeCheck toplevelDecls = do
 -------------------------------
 --              , _bindingTypeInfo=basicLibTypeInfo ++ bindingTypeInfo }
               , _bindingTypeInfo=basicLibTypeInfo }
-            
-  elab_bindingDecls <- elaborate gti partial_elab_bindingDecls
+              
+  let initEnv = (emptyEnv{_varEnv=_bindingTypeInfo gti ++ bindingTypeInfo})
+  elab_bindingDecls <- elaborate gti initEnv partial_elab_bindingDecls
 
   -- 7. return elaborated data types and bindings
   let elab_toplevels = [ LibDeclTopLevel x ty | (x,ty) <- basicLibTypeInfo]
@@ -161,10 +162,10 @@ elabConTypeDecl (DataType name locvars tyvars typeConDecls) = do
 
 -- type BindingTypeInfo = [(String, Type)]
 
-elabBindingTypes :: Monad m => TypeInfo -> [BindingDecl] -> m [BindingDecl]
-elabBindingTypes typeInfo bindingDecls =
+elabBindingTypes :: Monad m => TypeInfo -> [String] -> [String] -> [BindingDecl] -> m [BindingDecl]
+elabBindingTypes typeInfo tyvars locvars bindingDecls =
   mapM (\(Binding f ty expr)-> do
-           elab_ty <- elabType typeInfo [] [] ty
+           elab_ty <- elabType typeInfo tyvars locvars ty
            return (Binding f elab_ty expr)) bindingDecls
 
 bindingTypes :: Monad m => [BindingDecl] -> m [(String,Type)]
@@ -181,17 +182,17 @@ bindingTypes partial_elab_bindingDecls =
 --        , _dataTypeInfo :: DataTypeInfo
 --        , _bindingTypeInfo :: BindingTypeInfo }
 
-elaborate :: Monad m => GlobalTypeInfo -> [BindingDecl] -> m [BindingDecl]
-elaborate gti [] =  return []
-elaborate gti (bindingDecl@(Binding f ty _):bindingDecls) = do
+elaborate :: Monad m => GlobalTypeInfo -> Env -> [BindingDecl] -> m [BindingDecl]
+elaborate gti env [] =  return []
+elaborate gti env (bindingDecl@(Binding f ty _):bindingDecls) = do
   let gti1 = gti {_bindingTypeInfo = (f,ty):_bindingTypeInfo gti}   -- for self-recursion
-  elab_bindingDecl <- elabBindingDecl gti1 bindingDecl
-  elab_bindingDecls <- elaborate gti1 bindingDecls
+  elab_bindingDecl <- elabBindingDecl gti1 env bindingDecl
+  elab_bindingDecls <- elaborate gti1 env bindingDecls
   return (elab_bindingDecl:elab_bindingDecls)
 
-elabBindingDecl :: Monad m => GlobalTypeInfo -> BindingDecl -> m BindingDecl
-elabBindingDecl gti (Binding name ty expr) = do
-  let env = emptyEnv{_varEnv=_bindingTypeInfo gti}
+elabBindingDecl :: Monad m => GlobalTypeInfo -> Env -> BindingDecl -> m BindingDecl
+elabBindingDecl gti env (Binding name ty expr) = do
+  -- let env = emptyEnv{_varEnv=_bindingTypeInfo gti}
   (elab_expr,elab_ty) <- elabExpr gti env clientLoc expr
   if equalType elab_ty ty
   then return (Binding name ty elab_expr)
@@ -316,7 +317,7 @@ elabExpr :: Monad m =>
   GlobalTypeInfo -> Env -> Location -> Expr -> m (Expr, Type)
 elabExpr gti env loc (Var x)
   | isConstructorName x =    -- if it is a constructor
-      case lookupConstr gti x  of
+  case lookupConstr gti x  of
         ((argtys, tyname, locvars, tyvars):_) -> return $ mkLocAbs loc x tyname locvars tyvars argtys 
 
         [] -> error $ "[TypeCheck] elabExpr: Not found constructor " ++ x
@@ -324,7 +325,7 @@ elabExpr gti env loc (Var x)
   | otherwise =    --  isBindingName x =        -- if it is a term variable
   case lookupVar env x of    -- try to find it in the local var env or
     (x_ty:_) -> return (Var x, x_ty)
-    [] -> error $ "[TypeCheck] Not found constructor " ++ x
+    [] -> error $ "[TypeCheck] elabExpr: Not found variable " ++ x
         
 elabExpr gti env loc (TypeAbs tyvars expr) = do
   let typeVarEnv = _typeVarEnv env
@@ -360,7 +361,8 @@ elabExpr gti env loc_0 (Abs [] expr)  =
 
 elabExpr gti env loc (Let letBindingDecls expr) = do
   let typeInfo = _typeInfo gti
-  partial_elab_letBindingDecls <- elabBindingTypes typeInfo letBindingDecls
+  partial_elab_letBindingDecls
+     <- elabBindingTypes typeInfo (_typeVarEnv env) (_locVarEnv env) letBindingDecls
 
 --------------------------------
 -- for fully recursive bindings:  
@@ -370,12 +372,12 @@ elabExpr gti env loc (Let letBindingDecls expr) = do
 --  let letBindingTypeInfo' = letBindingTypeInfo ++ _bindingTypeInfo gti
 --  let gti1 = gti {_bindingTypeInfo=letBindingTypeInfo'}
   let gti1 = gti
-  elab_letBindingDecls <- elaborate gti1 partial_elab_letBindingDecls
+  elab_letBindingDecls <- elaborate gti1 env partial_elab_letBindingDecls
 
   letBindingTypeInfo <- bindingTypes partial_elab_letBindingDecls -- for let body
   
-  let varEnv = letBindingTypeInfo ++ _varEnv env
-  (elab_expr, elab_ty) <- elabExpr gti (env {_varEnv=varEnv}) loc expr
+  let varEnv' = letBindingTypeInfo ++ _varEnv env
+  (elab_expr, elab_ty) <- elabExpr gti (env {_varEnv=varEnv'}) loc expr
   return (Let elab_letBindingDecls elab_expr, elab_ty)
 
 elabExpr gti env loc (Case expr _ []) =

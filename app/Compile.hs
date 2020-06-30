@@ -268,7 +268,7 @@ compExpr s_gti env loc s_ty funStore (SE.Let bindingDecls expr) = do
               return (funStore1, bindingDecl1:bindingDecls0))
           (funStore, [])
           (reverse bindingDecls)
-  (funStore3, t_expr) <- compExpr s_gti env loc s_ty funStore2 expr
+  (funStore3, t_expr) <- compExpr s_gti env1 loc s_ty funStore2 expr
   return (funStore3, TE.singleBindM $ TE.BindM t_bindingDecls t_expr)
    
 compExpr s_gti env loc s_ty funStore (SE.Case expr (Just case_ty) alts) = do
