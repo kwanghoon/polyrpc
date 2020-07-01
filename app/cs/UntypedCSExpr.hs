@@ -11,8 +11,23 @@ import Literal
 import qualified Expr as SE
 import Text.JSON.Generic
 
-type LocationRep = Value 
+type LocationRep = Value
 
+----------------------------------------
+-- mkConNameForLocation
+--  : client => @client, server => @server
+----------------------------------------
+mkConstForLocation :: String -> Value
+mkConstForLocation s = Constr (mkConName s) [] []
+
+mkAlternatives clientExpr serverExpr =
+  [ Alternative (mkConName clientLocName) clientExpr
+  , Alternative (mkConName serverLocName) serverExpr
+  ]
+
+mkConName s = "@" ++ s
+
+--
 data Expr =
     ValExpr Value
   | Let [BindingDecl] Expr
