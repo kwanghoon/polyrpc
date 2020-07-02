@@ -20,9 +20,10 @@ type LocationRep = Value
 mkConstForLocation :: String -> Value
 mkConstForLocation s = Constr (mkConName s) [] []
 
+mkAlternatives :: Expr -> Expr -> [Alternative]
 mkAlternatives clientExpr serverExpr =
-  [ Alternative (mkConName clientLocName) clientExpr
-  , Alternative (mkConName serverLocName) serverExpr
+  [ Alternative (mkConName clientLocName) [] clientExpr
+  , Alternative (mkConName serverLocName) [] serverExpr
   ]
 
 mkConName s = "@" ++ s
@@ -278,3 +279,18 @@ singleBindM (BindM [] expr) = expr
 singleBindM (BindM (bind:binds) expr) =
   ValExpr $ BindM [bind] (singleBindM (BindM binds expr))
 -}
+
+
+-- Primitives
+
+---------------------------------------------------------------
+-- equalLoc : Loc -> Bool in the untyped CS expression language
+---------------------------------------------------------------
+
+equalLoc :: (String, Expr)
+equalLoc =
+  ( "equalLoc"
+  , Case (Var "loc1") (mkAlternatives
+      ( Case (Var "loc2") (mkAlternatives (ValExpr (Constr trueLit [] []))  (ValExpr (Constr falseLit [] []))) )
+      ( Case (Var "loc2") (mkAlternatives (ValExpr (Constr falseLit [] [])) (ValExpr (Constr trueLit [] [])))  )) )
+
