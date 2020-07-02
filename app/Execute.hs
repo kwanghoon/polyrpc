@@ -394,7 +394,11 @@ calc' OrPrimOp [loc] [] [BoolLit x, BoolLit y] = BoolLit (x || y)
 
 calc' AndPrimOp [loc] [] [BoolLit x, BoolLit y] = BoolLit (x && y)
 
-calc' EqPrimOp [loc] [] [IntLit x, IntLit y] = BoolLit (x==y)
+calc' EqStringPrimOp [loc] [] [StrLit x, StrLit y] = BoolLit (x==y)
+
+calc' EqBoolPrimOp [loc] [] [BoolLit x, BoolLit y] = BoolLit (x==y)
+
+calc' EqIntPrimOp [loc] [] [IntLit x, IntLit y] = BoolLit (x==y)
 
 calc' NeqPrimOp [loc] [] [IntLit x, IntLit y] = BoolLit (x/=y)
 

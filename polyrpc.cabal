@@ -31,7 +31,6 @@ executable polyrpc
   main-is: Main.hs
   other-modules:
       Compile
-      Erase
       Execute
       Lexer
       Parser

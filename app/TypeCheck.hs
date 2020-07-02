@@ -1,5 +1,7 @@
 module TypeCheck(typeCheck, lookupCon) where
 
+import Data.Either
+
 import Location
 import Type
 import Literal
@@ -449,23 +451,48 @@ elabExpr gti env loc (Prim op op_locs op_tys exprs) = do
   elab_op_tys  <- mapM (elabType (_typeInfo gti) (_typeVarEnv env) (_locVarEnv env)) op_tys
   elabExprTyList <- mapM (elabExpr gti env loc) exprs
   let (elab_exprs, tys) = unzip elabExprTyList
-  case lookupPrimOpType op of
-    ((locvars, tyvars, argtys, retty):_) -> do
-      let substTy  = zip tyvars op_tys
-      let substLoc = zip locvars op_locs
-      let substed_argtys = map (doSubstLoc substLoc . doSubst substTy) argtys
+  case op of
+    EqIntPrimOp -> overloaded elab_op_locs elab_op_tys elab_exprs tys 
+    _           -> do
+       match <- nonoverloaded elab_op_locs elab_op_tys elab_exprs tys op
+       case match of
+         Left expr -> return expr
+         Right err -> error err
+
+  where {- A hack: overloaded operator (=) : EqStringPrimOp, EqBoolPrimOp, EqIntPrimOp -}
+     overloaded elab_op_locs elab_op_tys elab_exprs tys  = do
+       matchInt <- nonoverloaded elab_op_locs elab_op_tys elab_exprs tys EqIntPrimOp
+       case matchInt of
+         Left expr -> return expr
+         Right err -> do
+            matchBool <- nonoverloaded elab_op_locs elab_op_tys elab_exprs tys EqBoolPrimOp
+            case matchBool of
+              Left expr -> return expr
+              Right err -> do
+                matchString <- nonoverloaded elab_op_locs elab_op_tys elab_exprs tys EqStringPrimOp
+                case matchString of
+                  Left expr -> return expr
+                  Right err -> error $ err
+          
+     nonoverloaded elab_op_locs elab_op_tys elab_exprs tys  op = 
+       case lookupPrimOpType op of
+         ((locvars, tyvars, argtys, retty):_) -> do
+           let substTy  = zip tyvars op_tys
+           let substLoc = zip locvars op_locs
+           let substed_argtys = map (doSubstLoc substLoc . doSubst substTy) argtys
       
-      if length tys==length argtys
-         && and (map (uncurry equalType) (zip substed_argtys tys))
-         && length locvars==length op_locs
-         && length tyvars==length op_tys
+           if length tys==length argtys
+              && and (map (uncurry equalType) (zip substed_argtys tys))
+              && length locvars==length op_locs
+              && length tyvars==length op_tys
  
-      then return (Prim op elab_op_locs elab_op_tys elab_exprs, retty)
+           then return $ Left $ (Prim op elab_op_locs elab_op_tys elab_exprs, retty)
       
-      else error $ "[TypeCheck] elabExpr: incorrect arg types in Prim op: "
-                     ++ show tys ++ " != " ++ show substed_argtys
+           else return $ Right $ "[TypeCheck] elabExpr: incorrect arg types in Prim op: "
+                                  ++ show tys ++ " != " ++ show substed_argtys
       
-    [] -> error $ "[TypeCheck] elabExpr: type not found type in Prim op: "
+         [] -> return $ Right $ "[TypeCheck] elabExpr: type not found type in Prim op: "
+                                  ++ show op
 
 elabExpr gti env loc (Lit literal) = return (Lit literal, typeOfLiteral literal)
 
