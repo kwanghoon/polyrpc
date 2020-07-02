@@ -11,22 +11,35 @@ import Literal
 import qualified Expr as SE
 import Text.JSON.Generic
 
-type LocationRep = Value
+------------------------------------------
+-- Representation of locations by integers
+------------------------------------------
+type LocationRep = Value      -- integer values
 
-----------------------------------------
--- mkConNameForLocation
---  : client => @client, server => @server
-----------------------------------------
-mkConstForLocation :: String -> Value
-mkConstForLocation s = Constr (mkConName s) [] []
+clientRep :: Int
+clientRep = 1
 
-mkAlternatives :: Expr -> Expr -> [Alternative]
-mkAlternatives clientExpr serverExpr =
-  [ Alternative (mkConName clientLocName) [] clientExpr
-  , Alternative (mkConName serverLocName) [] serverExpr
-  ]
+serverRep :: Int
+serverRep = 2
 
-mkConName s = "@" ++ s
+equalLoc :: Location -> Value -> Value -> Expr
+equalLoc currentLoc locVal1 locVal2 =
+  Prim EqIntPrimOp [locRep currentLoc] [locVal1, locVal2] 
+
+ifThenElse :: Expr -> Expr -> Expr -> Expr
+ifThenElse condExpr thenExpr elseExpr =
+  Let [Binding "$cond" condExpr]
+    (Case (Var "$cond")
+       [ Alternative trueLit  [] thenExpr
+       , Alternative falseLit [] elseExpr ])
+
+locRep :: Location -> Value
+locRep (LocVar x) = Var x  
+locRep (Location s)
+  | s == clientLocName = Lit (IntLit clientRep)
+  | s == serverLocName = Lit (IntLit serverRep)
+  | otherwise          = error $ "locRep: not supported location: " ++ s
+------------------------------------------
 
 --
 data Expr =
@@ -279,18 +292,3 @@ singleBindM (BindM [] expr) = expr
 singleBindM (BindM (bind:binds) expr) =
   ValExpr $ BindM [bind] (singleBindM (BindM binds expr))
 -}
-
-
--- Primitives
-
----------------------------------------------------------------
--- equalLoc : Loc -> Bool in the untyped CS expression language
----------------------------------------------------------------
-
-equalLoc :: (String, Expr)
-equalLoc =
-  ( "equalLoc"
-  , Case (Var "loc1") (mkAlternatives
-      ( Case (Var "loc2") (mkAlternatives (ValExpr (Constr trueLit [] []))  (ValExpr (Constr falseLit [] []))) )
-      ( Case (Var "loc2") (mkAlternatives (ValExpr (Constr falseLit [] [])) (ValExpr (Constr trueLit [] [])))  )) )
-

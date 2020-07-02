@@ -76,8 +76,16 @@ doProcess cmd file = do
   verify t_gti funStore t_expr
   verbose (_flag_debug_verify cmd) $ putStrLn "[Well-typed]"
 
+  -- putStrLn "[Executing typed locative codes]"
+  -- v <- execute (_flag_debug_run cmd) t_gti funStore t_expr
+  -- verbose (_flag_debug_run cmd) $ putStrLn $ "[Result]\n" ++ show v
+
+  putStrLn "[Erasing types and locations]"
+  (untyped_funStore, untyped_t_expr) <- eraseProgram funStore t_expr
+  verbose (_flag_debug_erase cmd) $ putStrLn "Erased...\n
+
   putStrLn "[Executing codes]"
-  v <- execute (_flag_debug_run cmd) t_gti funStore t_expr
+  v <- UntypedExecute.execute (_flag_debug_run cmd) t_gti funStore t_expr
   verbose (_flag_debug_run cmd) $ putStrLn $ "[Result]\n" ++ show v
 
   putStrLn "[Success]"
@@ -139,6 +147,7 @@ initCmd =
       , _flag_debug_typecheck = False
       , _flag_debug_compile = False
       , _flag_debug_verify = False
+      , _flag_debug_erase = False
       , _flag_debug_run = False
       , _files = []
       }
@@ -178,6 +187,10 @@ collect cmd ("--debug-compile":args) = do
   
 collect cmd ("--debug-verify":args) = do    
   let new_cmd = cmd { _flag_debug_verify = True }
+  collect new_cmd args
+
+collect cmd ("--debug-erase":args) = do    
+  let new_cmd = cmd { _flag_debug_erase = True }
   collect new_cmd args
   
 collect cmd ("--debug-run":args) = do    

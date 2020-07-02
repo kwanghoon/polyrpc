@@ -6,6 +6,36 @@ import Location
 import qualified CSExpr as TE -- (Typed) Target expressions
 import qualified UntypedCSExpr as UE  -- Untyped target expressions
 
+eraseProgram funStore expr = do
+  untyped_expr <- erase clientLoc expr
+  let clientstore = _clientstore funStore
+  let serverstore = _serverstore funStore
+  
+  return (untyped_funStore, untyped_expr)
+
+-------------
+-- Erase code
+-------------
+eraseFunStore loc (name, (codetype, code)) = do
+  untyped_code <- eraseCode loc code
+  return (name, code)
+  
+eraseCode loc (TE.Code freeLocs freeTyvars freeVars opencode) =
+  untyped_opencode <- eraseOpencode loc opencode
+  return (UE.Code freeLocs freeVars untyped_opencode)
+
+eraseOpencode loc (TE.CodeAbs xTys expr) = do
+  untyped_expr <- erase loc expr
+  return (UE.CodeAbs [x | (x,_) <- xTys] untyped_expr)
+
+-- eraseOpencode loc (TE.CodeTypeAbs tyvars expr) = do
+--   untyped_expr <- erase loc expr
+--   return ???
+
+-- eraseOpencode loc (TE.CodeLocAbs lovars expr) = do
+--   untyped_expr <- erase loc expr
+--   return ???
+
 ---------------------------------------------
 -- Erase types and locations from expressions
 ---------------------------------------------
@@ -34,12 +64,13 @@ erase currentLoc (TE.TypeApp fn ty argtys) = do
   untyped_fn <- eraseVal currentLoc fn
   return $ UE.ValExpr untyped_fn
 
-erase currentLoc (TE.LocApp fn ty arglocs) = do
+erase currentLoc (TE.LocApp fn ty arglocs) = do  -- Important!
+  let locVals = map UE.locRep arglocs
   untyped_fn <- eraseVal currentLoc fn
-  return $ UE.ValExpr untyped_fn
+  return $ foldl (\l r -> UE.Let [UE.Binding "$arg" l] (UE.App (UE.Var "$arg") r)) (UE.ValExpr untyped_fn) locVals
 
 erase currentLoc (TE.Prim primOp locs tys vals) = do
-  locVals <- mapM locationToValue locs
+  let locVals = map UE.locRep locs
   untyped_vals <- mapM (eraseVal currentLoc) vals
   return (UE.Prim primOp locVals untyped_vals)
 
@@ -76,11 +107,14 @@ eraseVal currentLoc (TE.Tuple vals) = do
   return (UE.Tuple untyped_vals)
   
 eraseVal currentLoc (TE.Constr conName locs tys argvals argtys) = do
-  locVals <- mapM locationToValue locs
+  let locVals = map UE.locRep locs
   untyped_argvals <- mapM (eraseVal currentLoc) argvals
   return (UE.Constr conName locVals untyped_argvals)
   
--- eraseval currentLoc (TE.Closure fvVals fvTys
+eraseVal currentLoc (TE.Closure fvVals fvTys (TE.CodeName name locs tys) recChumNames) = do
+  let locVals = map UE.locRep locs
+  untyped_fvVals <- mapM (eraseVal currentLoc) fvVals
+  return (UE.Closure untyped_fvVals (UE.CodeName name locVals) recChumNames)
 
 eraseVal currentLoc (TE.UnitM val) = do
   untyped_val <- eraseVal currentLoc val
@@ -101,43 +135,23 @@ eraseVal currentLoc (TE.Call fn ty arg) = do
   untyped_arg <- eraseVal currentLoc arg
   return (UE.Call untyped_fn untyped_arg)
   
---
--- TODO:
--- 
---   (1) Current location [DONE]
---   (2) Comparising of the current location with loc
---   (3) let bidnings for untyped_fn and untyped_arg for not duplicating them
--- 
 eraseVal currentLoc (TE.GenApp loc fn ty arg)
    | currentLoc == loc = do    -- if statically equivalent
        untyped_fn <- eraseVal currentLoc fn
        untyped_arg <- eraseVal currentLoc arg
-       return (UE.BindM [UE.Binding "ret" (UE.App untyped_fn untyped_arg)] (UE.ValExpr $ UE.Var "ret"))
+       return (UE.BindM [UE.Binding "$result" (UE.App untyped_fn untyped_arg)] (UE.ValExpr $ UE.Var "$result"))
        
    | otherwise = do            -- if need to examine the equivalence dynamically
-
-       locVal <- locationToValue loc
+       let currentLocVal = UE.locRep currentLoc
+       let locVal = UE.locRep loc
        untyped_fn <- eraseVal currentLoc fn
        untyped_arg <- eraseVal currentLoc arg
-       return (UE.BindM [UE.Binding "ret" (UE.App untyped_fn untyped_arg)] (UE.ValExpr $ UE.Var "ret"))
        
---   return (UE.Case locVal
---           (mkAlternatives
---            (UE.App untyped_fn untyped_arg)
---            (UE.Req untyped_fn untyped_arg)
---            (UE.Call untyped_fn untyped_arg)))
-
-   
-
------------------------------------
--- Convrsion of locations to values
------------------------------------
-locationToValue :: Location -> IO UE.Value
-
-locationToValue (Location s)
- | isClient (Location s) = return $ UE.mkConstForLocation s
- | isServer (Location s) = return $ UE.mkConstForLocation s
- | otherwise = error $ "locationToValue: not supported location: " ++ s
- 
-locationToValue (LocVar x) = return $ UE.Var x
-
+       return $ UE.BindM [UE.Binding "$result"
+         (UE.ifThenElse
+            (UE.equalLoc currentLoc currentLocVal locVal)
+            (UE.App untyped_fn untyped_arg)
+            (UE.ifThenElse
+               (UE.equalLoc currentLoc locVal (UE.locRep serverLoc))
+               (UE.ValExpr (UE.Req untyped_fn untyped_arg))
+               (UE.ValExpr (UE.Call untyped_fn untyped_arg))))] (UE.ValExpr (UE.Var "$result"))
