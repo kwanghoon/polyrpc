@@ -3,6 +3,7 @@
 module Erase where
 
 import Location
+import qualified CSType as TT -- (Typed) Target expressions
 import qualified CSExpr as TE -- (Typed) Target expressions
 import qualified UntypedCSExpr as UE  -- Untyped target expressions
 
@@ -11,8 +12,8 @@ eraseProgram funStore expr = do
   let clientstore = TE._clientstore funStore
   let serverstore = TE._serverstore funStore
   
-  untyped_clientstore <- mapM (eraseFunStore clientLoc) clientstore
-  untyped_serverstore <- mapM (eraseFunStore serverLoc) serverstore
+  untyped_clientstore <- mapM (eraseFunStore clientLoc clientstore) clientstore
+  untyped_serverstore <- mapM (eraseFunStore serverLoc serverstore) serverstore
 
   let untyped_funStore =
         UE.FunctionStore {
@@ -25,23 +26,35 @@ eraseProgram funStore expr = do
 -------------
 -- Erase code
 -------------
-eraseFunStore loc (name, (codetype, code)) = do
-  untyped_code <- eraseCode loc code
+eraseFunStore :: Location -> [(String, (TT.CodeType,TE.Code))] -> (String, (TT.CodeType,TE.Code))
+  -> IO (String, UE.Code)
+eraseFunStore loc onefunstore (name, (codetype, code)) = do
+  untyped_code <- eraseCode loc onefunstore code
   return (name, untyped_code)
-  
-eraseCode loc (TE.Code freeLocs freeTyvars freeVars opencode) = do
-  untyped_opencode <- eraseOpencode loc opencode
+
+--
+eraseCode loc onefunstore (TE.Code freeLocs freeTyvars freeVars opencode) = do
+  untyped_opencode <- eraseOpencode loc onefunstore opencode
   return (UE.Code freeLocs freeVars untyped_opencode)
 
-eraseOpencode loc (TE.CodeAbs xTys expr) = do
+--
+eraseOpencode loc onefunstore (TE.CodeAbs xTys expr) = do
   untyped_expr <- erase loc expr
   return (UE.CodeAbs [x | (x,_) <- xTys] untyped_expr)
 
-eraseOpencode loc (TE.CodeTypeAbs tyvars expr) = do
-  untyped_expr <- erase loc expr
-  return (UE.CodeExpr untyped_expr)
+eraseOpencode loc onefunstore (TE.CodeTypeAbs tyvars expr) = 
+  case expr of
+    (TE.ValExpr (TE.UnitM (TE.Closure fvars ftyvars (TE.CodeName _codename locs tys) recf))) ->
+    
+      case [code | (name,(_,code)) <- onefunstore, name==_codename] of
+        (TE.Code freeLocs freeTyvars freeVars opencode:_) ->
+             eraseOpencode loc onefunstore opencode
 
-eraseOpencode loc (TE.CodeLocAbs locvars expr) = do
+        _ -> error $ "eraseOpencode: not found " ++ _codename ++ " in " ++ show loc
+        
+    _ -> error $ "eraseOpencode: unexpected expr: " ++ show expr
+
+eraseOpencode loc onefunstore (TE.CodeLocAbs locvars expr) = do
   let untyped_vars = map UE.locRep (map LocVar locvars)
   untyped_expr <- erase loc expr
   return (UE.CodeAbs [x | UE.Var x <- untyped_vars] untyped_expr)

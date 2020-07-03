@@ -79,12 +79,12 @@ doProcess cmd file = do
   verify t_gti funStore t_expr
   verbose (_flag_debug_verify cmd) $ putStrLn "[Well-typed]"
 
-  verbose (_flag_debug_typed_run cmd) $ (do
+  verbose (_flag_debug_typed_run cmd || _flag_typed_run cmd) $ (do
     putStrLn "[Executing typed locative codes]"
     v <- Execute.execute (_flag_debug_typed_run cmd) t_gti funStore t_expr
     putStrLn $ "[Result]\n" ++ show v)
 
-  verbose (_flag_debug_typed_run cmd == False) $ (do
+  verbose ((_flag_debug_typed_run cmd || _flag_typed_run cmd) == False) $ (do
     putStrLn "[Erasing types and locations]"
     (untyped_funStore, untyped_t_expr) <- eraseProgram funStore t_expr
     verbose (_flag_debug_erase cmd) $ putStrLn "Erased...\n"
@@ -152,6 +152,7 @@ data Cmd =
       , _flag_debug_compile :: Bool
       , _flag_debug_verify :: Bool
       , _flag_debug_erase :: Bool
+      , _flag_typed_run :: Bool
       , _flag_debug_typed_run :: Bool
       , _flag_debug_run :: Bool
       , _files :: [String]
@@ -167,6 +168,7 @@ initCmd =
       , _flag_debug_compile = False
       , _flag_debug_verify = False
       , _flag_debug_erase = False
+      , _flag_typed_run = True   -- Turn it on as long as Erasure is untable!
       , _flag_debug_typed_run = False
       , _flag_debug_run = False
       , _files = []
@@ -219,6 +221,10 @@ collect cmd ("--debug-erase":args) = do
   
 collect cmd ("--debug-run":args) = do    
   let new_cmd = cmd { _flag_debug_run = True }
+  collect new_cmd args
+  
+collect cmd ("--typed-run":args) = do    
+  let new_cmd = cmd { _flag_typed_run = True }
   collect new_cmd args
   
 collect cmd ("--debug-typed-run":args) = do    

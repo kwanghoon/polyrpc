@@ -329,13 +329,16 @@ elabExpr gti env loc (Var x)
     (x_ty:_) -> return (Var x, x_ty)
     [] -> error $ "[TypeCheck] elabExpr: Not found variable " ++ x
         
-elabExpr gti env loc (TypeAbs tyvars expr) = do
-  let typeVarEnv = _typeVarEnv env
-  let typeVarEnv' = reverse tyvars ++ typeVarEnv
-  (elab_expr, elab_ty) <- elabExpr gti (env{_typeVarEnv=typeVarEnv'}) loc expr
-  return (singleTypeAbs (TypeAbs tyvars elab_expr), singleTypeAbsType (TypeAbsType tyvars elab_ty))
+elabExpr gti env loc (TypeAbs tyvars expr)
+  | isAbsExpression expr = do
+     let typeVarEnv = _typeVarEnv env
+     let typeVarEnv' = reverse tyvars ++ typeVarEnv
+     (elab_expr, elab_ty) <- elabExpr gti (env{_typeVarEnv=typeVarEnv'}) loc expr
+     return (singleTypeAbs (TypeAbs tyvars elab_expr), singleTypeAbsType (TypeAbsType tyvars elab_ty))
+  | otherwise =
+     error $ "[TypeCheck] elabExpr: the body of TypeAbs is not an abs expression"
 
-elabExpr gti env loc (LocAbs locvars expr) = do
+elabExpr gti env loc (LocAbs locvars expr) = do 
   let locVarEnv = _locVarEnv env
   let locVarEnv' = reverse locvars ++ locVarEnv
   (elab_expr, elab_ty) <- elabExpr gti (env{_locVarEnv=locVarEnv'}) loc expr
@@ -564,3 +567,9 @@ elabAlt gti env loc substLoc substTy tycondecls externTys (TupleAlternative args
 allUnique [] = []
 allUnique (x:xs) =
   if elem x xs then [x] else allUnique xs
+
+isAbsExpression :: Expr -> Bool
+isAbsExpression (Abs _ _) = True
+isAbsExpression (TypeAbs _ _) = True
+isAbsExpression (LocAbs _ _) = True
+isAbsExpression _ = False
