@@ -148,6 +148,14 @@ clientExpr fun_store evctx (App clo@(Closure vs {- vstys -} codename recf) {- fu
 {-      let substTy  = zip tyvars tys -}
       let substed_expr = doRec clo recf $ doSubstExpr subst (doSubstExpr substLoc expr) {- (doSubstTyExpr substTy (doSubstLocExpr substLoc expr)) -}
       return $ ClientConfig evctx substed_expr client_stack mem_c server_stack mem_s
+
+--     ((Code locvars {- tyvars -} fvvars (CodeExpr expr)):_) -> do
+--       let subst    = zip fvvars vs 
+--       let substLoc = zip locvars locs 
+--       let substed_expr = doRec clo recf $ doSubstExpr subst (doSubstExpr substLoc expr) {- (doSubstTyExpr substTy (doSubstLocExpr substLoc expr)) -}
+-- --      let lifted_substed_expr = Let [Binding "$clo" substed_expr] (ValExpr (UnitM (Var "$clo")))
+--       clientExpr fun_store ((\(ValExpr cloVal) -> App cloVal arg):evctx) substed_expr client_stack mem_c server_stack mem_s
+
     
     [] -> error $ "[clientExpr] Client abs code not found: " ++ fname
 
@@ -273,6 +281,14 @@ serverExpr fun_store client_stack mem_c evctx (App clo@(Closure vs {- vstys -} c
 {-      let substTy  = zip tyvars tys -}
       let substed_expr = doRec clo recf $ doSubstExpr subst (doSubstExpr substLoc expr) {- (doSubstTyExpr substTy (doSubstLocExpr substLoc expr)) -}
       return $ ServerConfig client_stack mem_c evctx substed_expr server_stack mem_s
+
+    ((Code locvars {- tyvars -} fvvars (CodeExpr expr)):_) -> do
+      let subst    = zip fvvars vs
+      let substLoc = zip locvars locs
+      let substed_expr = doRec clo recf $ doSubstExpr subst (doSubstExpr substLoc expr) {- (doSubstTyExpr substTy (doSubstLocExpr substLoc expr)) -}
+--      let lifted_substed_expr = Let [Binding "$clo" substed_expr] (ValExpr (UnitM (Var "$clo")))
+      serverExpr fun_store client_stack mem_c ((\(ValExpr cloVal) -> App cloVal arg):evctx) substed_expr server_stack mem_s
+   
 
     [] -> error $ "[serverExpr] Server abs code not found: " ++ fname
 

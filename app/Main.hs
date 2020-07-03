@@ -12,10 +12,13 @@ import Type
 import Expr
 import qualified CSType as TT
 import qualified CSExpr as TE
+import qualified UntypedCSExpr as UE
 import TypeCheck
 import Compile
 import Verify
 import Execute
+import Erase
+import UntypedExecute
 
 import Text.JSON.Generic
 import Text.JSON.Pretty
@@ -76,17 +79,21 @@ doProcess cmd file = do
   verify t_gti funStore t_expr
   verbose (_flag_debug_verify cmd) $ putStrLn "[Well-typed]"
 
-  -- putStrLn "[Executing typed locative codes]"
-  -- v <- execute (_flag_debug_run cmd) t_gti funStore t_expr
-  -- verbose (_flag_debug_run cmd) $ putStrLn $ "[Result]\n" ++ show v
+  verbose (_flag_debug_typed_run cmd) $ (do
+    putStrLn "[Executing typed locative codes]"
+    v <- Execute.execute (_flag_debug_typed_run cmd) t_gti funStore t_expr
+    putStrLn $ "[Result]\n" ++ show v)
 
-  putStrLn "[Erasing types and locations]"
-  (untyped_funStore, untyped_t_expr) <- eraseProgram funStore t_expr
-  verbose (_flag_debug_erase cmd) $ putStrLn "Erased...\n
+  verbose (_flag_debug_typed_run cmd == False) $ (do
+    putStrLn "[Erasing types and locations]"
+    (untyped_funStore, untyped_t_expr) <- eraseProgram funStore t_expr
+    verbose (_flag_debug_erase cmd) $ putStrLn "Erased...\n"
 
-  putStrLn "[Executing codes]"
-  v <- UntypedExecute.execute (_flag_debug_run cmd) t_gti funStore t_expr
-  verbose (_flag_debug_run cmd) $ putStrLn $ "[Result]\n" ++ show v
+    print_untyped_cs cmd file untyped_funStore untyped_t_expr
+
+    putStrLn "[Executing codes]"
+    v <- UntypedExecute.execute (_flag_debug_run cmd) untyped_funStore untyped_t_expr
+    verbose (_flag_debug_run cmd) $ putStrLn $ "[Result]\n" ++ show v)
 
   putStrLn "[Success]"
 
@@ -106,6 +113,14 @@ print_cs cmd file funStore t_expr = do
   then do putStrLn $ "Writing to " ++ jsonfile
           writeFile jsonfile $ render
              $ pp_value $ toJSON (funStore :: TE.FunctionStore, t_expr :: TE.Expr)
+  else return ()
+
+print_untyped_cs cmd file funStore t_expr = do
+  let jsonfile = prefixOf file ++ "_untyped_cs.json"
+  if _flag_print_untyped_cs_json cmd
+  then do putStrLn $ "Writing to " ++ jsonfile
+          writeFile jsonfile $ render
+             $ pp_value $ toJSON (funStore :: UE.FunctionStore, t_expr :: UE.Expr)
   else return ()
 
 prefixOf str = reverse (removeDot (dropWhile (/='.') (reverse str)))
@@ -130,11 +145,14 @@ readline' = do
 data Cmd =
   Cmd { _flag_print_rpc_json :: Bool
       , _flag_print_cs_json :: Bool
+      , _flag_print_untyped_cs_json :: Bool
       , _flag_debug_lex :: Bool
       , _flag_debug_parse :: Bool
       , _flag_debug_typecheck :: Bool
       , _flag_debug_compile :: Bool
       , _flag_debug_verify :: Bool
+      , _flag_debug_erase :: Bool
+      , _flag_debug_typed_run :: Bool
       , _flag_debug_run :: Bool
       , _files :: [String]
       }
@@ -142,12 +160,14 @@ data Cmd =
 initCmd =
   Cmd { _flag_print_rpc_json = False
       , _flag_print_cs_json  = False
+      , _flag_print_untyped_cs_json = False
       , _flag_debug_lex = False
       , _flag_debug_parse = False
       , _flag_debug_typecheck = False
       , _flag_debug_compile = False
       , _flag_debug_verify = False
       , _flag_debug_erase = False
+      , _flag_debug_typed_run = False
       , _flag_debug_run = False
       , _files = []
       }
@@ -167,6 +187,10 @@ collect cmd ("--output-rpc-json":args) = do
   
 collect cmd ("--output-cs-json":args) = do  
   let new_cmd = cmd { _flag_print_cs_json = True }
+  collect new_cmd args
+
+collect cmd ("--output-untyped-cs-json":args) = do  
+  let new_cmd = cmd { _flag_print_untyped_cs_json = True }
   collect new_cmd args
 
 collect cmd ("--debug-lex":args) = do    
@@ -195,6 +219,10 @@ collect cmd ("--debug-erase":args) = do
   
 collect cmd ("--debug-run":args) = do    
   let new_cmd = cmd { _flag_debug_run = True }
+  collect new_cmd args
+  
+collect cmd ("--debug-typed-run":args) = do    
+  let new_cmd = cmd { _flag_debug_typed_run = True }
   collect new_cmd args
   
 collect cmd (arg:args) = do

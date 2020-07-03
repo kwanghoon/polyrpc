@@ -8,9 +8,18 @@ import qualified UntypedCSExpr as UE  -- Untyped target expressions
 
 eraseProgram funStore expr = do
   untyped_expr <- erase clientLoc expr
-  let clientstore = _clientstore funStore
-  let serverstore = _serverstore funStore
+  let clientstore = TE._clientstore funStore
+  let serverstore = TE._serverstore funStore
   
+  untyped_clientstore <- mapM (eraseFunStore clientLoc) clientstore
+  untyped_serverstore <- mapM (eraseFunStore serverLoc) serverstore
+
+  let untyped_funStore =
+        UE.FunctionStore {
+          UE._clientstore = untyped_clientstore,
+          UE._serverstore = untyped_serverstore
+        }
+
   return (untyped_funStore, untyped_expr)
 
 -------------
@@ -18,9 +27,9 @@ eraseProgram funStore expr = do
 -------------
 eraseFunStore loc (name, (codetype, code)) = do
   untyped_code <- eraseCode loc code
-  return (name, code)
+  return (name, untyped_code)
   
-eraseCode loc (TE.Code freeLocs freeTyvars freeVars opencode) =
+eraseCode loc (TE.Code freeLocs freeTyvars freeVars opencode) = do
   untyped_opencode <- eraseOpencode loc opencode
   return (UE.Code freeLocs freeVars untyped_opencode)
 
@@ -28,13 +37,14 @@ eraseOpencode loc (TE.CodeAbs xTys expr) = do
   untyped_expr <- erase loc expr
   return (UE.CodeAbs [x | (x,_) <- xTys] untyped_expr)
 
--- eraseOpencode loc (TE.CodeTypeAbs tyvars expr) = do
---   untyped_expr <- erase loc expr
---   return ???
+eraseOpencode loc (TE.CodeTypeAbs tyvars expr) = do
+  untyped_expr <- erase loc expr
+  return (UE.CodeExpr untyped_expr)
 
--- eraseOpencode loc (TE.CodeLocAbs lovars expr) = do
---   untyped_expr <- erase loc expr
---   return ???
+eraseOpencode loc (TE.CodeLocAbs locvars expr) = do
+  let untyped_vars = map UE.locRep (map LocVar locvars)
+  untyped_expr <- erase loc expr
+  return (UE.CodeAbs [x | UE.Var x <- untyped_vars] untyped_expr)
 
 ---------------------------------------------
 -- Erase types and locations from expressions

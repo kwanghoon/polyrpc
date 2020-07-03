@@ -103,6 +103,7 @@ data Code =
 
 data OpenCode =
     CodeAbs     [{- ( -} String {- , Type) -}] Expr
+    | CodeExpr Expr
 {-  | CodeTypeAbs [String] Expr -}
 {-  | CodeLocAbs  [String] Expr -}
   deriving (Show, Typeable, Data)

@@ -353,7 +353,7 @@
                                                          {"Case": [{"Var": "x36"},
                                                                    {"ConType": ["Bool", [], []]},
                                                                    [{"Alternative": ["True", [],
-                                                                                     {"ValExpr": {"UnitM": {"Lit": {"IntLit": 0}}}}]},
+                                                                                     {"ValExpr": {"UnitM": {"Lit": {"IntLit": 1}}}}]},
                                                                     {"Alternative": ["False", [],
                                                                                      {"ValExpr": {"BindM": [[["x41",
                                                                                                               {"ConType": ["Int",
