@@ -184,11 +184,11 @@ verifyExpr gtigci loc env ty (Case caseval casety alts) = do
   verifyValue gtigci loc env casety caseval
   mapM_ (verifyAlt gtigci loc env casety ty) alts 
 
-verifyExpr gtigci loc env ty (App left (CloType (FunType argty funloc resty)) right) = do
-  assert (equalLoc loc funloc)  --   (1) loc == funloc
-    ("[verifyExpr] Not equal locations: " ++ show loc ++ " != " ++ show funloc)
-  assert (equalType ty resty)  --   (2) ty == resty
+verifyExpr gtigci loc env ty expr@(App left (CloType (FunType argty funloc resty)) right) = do
+  assert (equalType ty resty)  --   (1) ty == resty
     ("[verifyExpr] Not equal types: " ++ show ty ++ " != " ++ show resty)
+  assert (equalLoc loc funloc)  --   (2) loc == funloc
+    ("[verifyExpr] App: Not equal locations: " ++ show loc ++ " != " ++ show funloc ++ "\n" ++ show expr ++ "\n")
   
   verifyValue gtigci loc env (CloType (FunType argty funloc resty)) left
   verifyValue gtigci loc env argty right
@@ -346,7 +346,7 @@ verifyValue gtigci loc env ty (GenApp funloc0 left (CloType (FunType argty funlo
   assert (equalType ty resty)  --   (1) ty == resty
     ("[verifyValue] Not equal types: " ++ show ty ++ " != " ++ show resty)
   assert (equalLoc funloc0 funloc)  --   (2) funloc0 == funloc
-    ("[verifyValue] Not equal locations: " ++ show funloc0 ++ " != " ++ show funloc)
+    ("[verifyValue] GenApp: Not equal locations: " ++ show funloc0 ++ " != " ++ show funloc)
   
   verifyValue gtigci loc env (CloType (FunType argty funloc resty)) left
   verifyValue gtigci loc env argty right
