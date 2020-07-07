@@ -7,6 +7,10 @@ import qualified Expr as SE
 import CSType
 import CSExpr
 
+import Debug.Trace
+import Text.JSON.Generic
+import Text.JSON.Pretty
+import Text.PrettyPrint
 
 ---------------------
 -- Verify CS programs
@@ -34,7 +38,8 @@ verifyFunStoreAt :: Monad m => GlobalTypeInfo -> Location -> FunctionStore -> m(
   
 verifyFunStoreAt gti loc funStore =
   let gci = if loc==clientLoc then _clientstore funStore else _serverstore funStore in
-  mapM_ (\(f, (codety, code)) -> verifyCode (gti,funStore) loc codety code) gci
+  mapM_ (\(f, (codety, code)) ->
+     verifyCode (gti,funStore) loc codety code) gci
 
 
 ---------------

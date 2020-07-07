@@ -77,6 +77,11 @@ event: {l}. [a]. List [ToServer] -client-> List [ToClient] -client-> (In {l} -l-
 = {l}. [a]. \tos: List [ToServer] @ client toc: List [ToClient] @ client f: (In {l} -l-> Option [a]) @ client.
   Event {l} [a] tos toc f;
 
+// [K.Choi]
+// event: {l}. [a]. List [ToServer] -l-> List [ToClient] -l-> (In {l} -l-> Option [a]) -l-> Event {l} [a]
+// = {l}. [a]. \tos: List [ToServer] @ l toc: List [ToClient] @ l f: (In {l} -l-> Option [a]) @ l.
+//   Event {l} [a] tos toc f;
+
 // [KWANGHOON]:
 // You can use let with more than one bindings!
 // Also, a == ca is now available.
@@ -196,19 +201,19 @@ bAccum : {l}. [a b]. (b -l-> (b -l-> a -l-> b) -l-> Event {l} [a] -l-> Behavior 
 //   Q. What is an intuitive explanation on having Nil both for ToServer and ToClient in the event?
 
 actions : {l}. Event {l} [Action]
-= {l}. event {l} [Action] (Nil [ToServer]) (Nil [ToClient]) (\in: In {l} @ l.
+= {l}. (\unit:Unit @ l. event {l} [Action] (Nil [ToServer]) (Nil [ToClient]) (\in: In {l} @ l.
   case in { In actionOpt t => actionOpt }
-);
+) ) ();
 
 lines : {l}. Event {l} [String]
-= {l}. event {l} [String] (Nil [ToServer]) (Nil [ToClient]) (\in: In {l} @ l.
+= {l}. (\unit:Unit @ l. event {l} [String] (Nil [ToServer]) (Nil [ToClient]) (\in: In {l} @ l.
   case in { In actionOpt t => case actionOpt {
     None => None [String];
     Some action => case action {
       Typed str => Some [String] str
     }
   }}
-);
+) ) ();
 
 
 // [KWANGHOON] bImpl, bToS, bToC, BEpoch: four extractors of a value of Behavior.
@@ -516,24 +521,24 @@ loop : Event {client} [String] -client-> Unit
 //
 //
 
-x: Behavior {client} [String] =
-  bAccum {client} [String String] "" (\acc: String @ client n: String @ client. n) (lines {client});
-xx: Behavior {server} [String] = bToServer [String] x;
-noGlitch: Behavior {server} [String] =
-  bApp {server} [String String] (bApp {server} [String (String -server-> String)]
-    (bPure {server} [String -server-> String -server-> String] (\x: String @ server xx: String @ server. concat {server} x xx))
-    (bToServer [String] x))
-    xx;
+// x: Behavior {client} [String] =
+//   bAccum {client} [String String] "" (\acc: String @ client n: String @ client. n) (lines {client});
+// xx: Behavior {server} [String] = bToServer [String] x;
+// noGlitch: Behavior {server} [String] =
+//   bApp {server} [String String] (bApp {server} [String (String -server-> String)]
+//     (bPure {server} [String -server-> String -server-> String] (\x: String @ server xx: String @ server. concat {server} x xx))
+//     (bToServer [String] x))
+//     xx;
 
-y: Behavior {client} [String] =
-  bAccum {client} [String String] "" (\acc: String @ client n: String @ client. n) (lines {client});
-yy: Behavior {server} [String] = bToServer [String] y;
-yyy: Behavior {client} [String] = bToClient [String] yy;
-glitch: Behavior {client} [String] =
-  bApp {client} [String String] (bApp {client} [String (String -client-> String)]
-    (bPure {client} [String -client-> String -client-> String] (\x: String @ client xx: String @ client. concat {client} x xx))
-    y)
-    yyy;
+// y: Behavior {client} [String] =
+//   bAccum {client} [String String] "" (\acc: String @ client n: String @ client. n) (lines {client});
+// yy: Behavior {server} [String] = bToServer [String] y;
+// yyy: Behavior {client} [String] = bToClient [String] yy;
+// glitch: Behavior {client} [String] =
+//   bApp {client} [String String] (bApp {client} [String (String -client-> String)]
+//     (bPure {client} [String -client-> String -client-> String] (\x: String @ client xx: String @ client. concat {client} x xx))
+//     y)
+//     yyy;
 
 
 main : Unit = loop timedCountTimedLines

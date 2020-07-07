@@ -215,7 +215,11 @@ clientValue fun_store evctx (BindM [Binding x ty b@(_)] expr) client_stack mem_c
   clientExpr fun_store ((\bexpr->ValExpr (BindM [Binding x ty bexpr] expr)):evctx) b client_stack mem_c server_stack mem_s
 
 clientValue fun_store evctx v client_stack mem_c server_stack mem_s =
-  error $ "[clientValue] Unexpected: " ++ show v ++ "\n" ++ show (applyEvCxt evctx (ValExpr v)) ++ "\n" 
+  error $ "[clientValue] Unexpected: " ++ show v ++ "\n" ++ show (applyEvCxt evctx (ValExpr v)) ++ "\n"
+             ++ showStack client_stack ++ "\n"
+             ++ show (Map.toList $ _map mem_c) ++ "\n"
+             ++ showStack server_stack ++ "\n"
+             ++ show (Map.toList $ _map mem_s) ++ "\n"
   
 
 ------------------------------------------------------------
