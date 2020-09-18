@@ -34,7 +34,7 @@ data Value =
   | GenApp Location Value Type Value
 
   -- Runtime values
-  | Addr Integer  
+  | Addr Integer
   deriving (Show, Typeable, Data)
 
 data BindingDecl =
@@ -43,27 +43,27 @@ data BindingDecl =
 
 data DataTypeDecl =
     DataType String [String] [TypeConDecl]
--- For aeson  
+-- For aeson
 --  deriving (Show, Generic)
     deriving (Show, Typeable, Data)
 
 data TopLevelDecl =
     BindingTopLevel BindingDecl
   | DataTypeTopLevel DataTypeDecl
-  | LibDeclTopLevel String Type 
--- For aeson  
+  | LibDeclTopLevel String Type
+-- For aeson
 --  deriving (Show, Generic)
     deriving (Show, Typeable, Data)
 
 data TypeConDecl =
    TypeCon String [Type]
--- For aeson  
+-- For aeson
 --  deriving (Show, Generic)
     deriving (Show, Typeable, Data)
-    
+
 data Alternative =
     Alternative String [String] Expr
-  | TupleAlternative [String] Expr    
+  | TupleAlternative [String] Expr
   deriving (Show, Typeable, Data)
 
 data Code =
@@ -75,18 +75,18 @@ data OpenCode =
   | CodeTypeAbs [String] Expr
   | CodeLocAbs  [String] Expr
   deriving (Show, Typeable, Data)
-  
+
 
 data CodeName =
-    CodeName String [Location] [Type] 
+    CodeName String [Location] [Type]
     deriving (Show, Typeable, Data)
 
 --
 -- [(Name, Location Vars, Type Vars)]
-type TypeInfo = [(String, [String], [String])] 
+type TypeInfo = [(String, [String], [String])]
 
 -- [(ConName, (ConArgTypes, DTName, LocationVars, TypeVars))]
-type ConTypeInfo = [(String, ([Type], String, [String], [String]))] 
+type ConTypeInfo = [(String, ([Type], String, [String], [String]))]
 
 type BindingTypeInfo = [(String, Type)]
 
@@ -101,7 +101,7 @@ data GlobalTypeInfo = GlobalTypeInfo
    , _dataTypeInfo :: DataTypeInfo
    , _libInfo :: LibInfo } -- library types
     deriving (Show, Typeable, Data)
-       
+
 data Env = Env
    { _locVarEnv  :: [String]
    , _typeVarEnv :: [String]
@@ -143,7 +143,7 @@ newVar fnstore = let n = _new fnstore in ("x" ++ show n, fnstore{_new =n+1})
 
 newVars :: Int -> FunctionStore -> ([String], FunctionStore)
 newVars 0 funStore = ([], funStore)
-newVars n funStore = 
+newVars n funStore =
     let (x,  funStore1) = newVar funStore
         (xs, funStore2) = newVars (n-1) funStore1
     in  (x:xs, funStore2)
@@ -153,7 +153,7 @@ initFunctionStore = FunctionStore
    , _serverstore=[]
    , _new        = 1
    }
-   
+
 --
 --
 primOpTypes :: [(PrimOp, ([String], [String], [Type], Type))] -- (locvars, tyvars, argtys, retty)
@@ -182,18 +182,18 @@ primOpTypes =
 
   , (PrimRefCreateOp,
       let l1 = "l1" in
-      let a  = "a"  in                 
+      let a  = "a"  in
       let tyvar_a = TypeVarType a in
       let locvar_l1 = LocVar l1 in
         ([l1], [a], [tyvar_a], ConType refType [locvar_l1] [tyvar_a]))
-    
+
   , (PrimRefReadOp,
       let l1 = "l1" in
       let a  = "a"  in
       let tyvar_a = TypeVarType a in
       let locvar_l1 = LocVar l1 in
         ([l1], [a], [ConType refType [locvar_l1] [tyvar_a]], tyvar_a))
-    
+
   , (PrimRefWriteOp,
      let l1 = "l1" in
      let a  = "a"  in

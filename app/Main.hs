@@ -14,6 +14,7 @@ import qualified CSType as TT
 import qualified CSExpr as TE
 import TypeCheck
 import Compile
+import Inline
 import Verify
 import Execute
 
@@ -24,14 +25,14 @@ import Text.PrettyPrint
 --import qualified Data.ByteString.Lazy.Char8 as B
 --import Data.Aeson.Encode.Pretty
 import Data.Maybe
-import System.IO 
+import System.IO
 import System.Environment (getArgs)
 
 main :: IO ()
 main = do
   args <- getArgs
   cmd  <- getCmd args
-  
+
   let files = _files cmd
 
   printVersion
@@ -48,13 +49,13 @@ doProcess cmd file = do
 
   putStrLn "[Parsing]"
   exprSeqAst <- parsing parserSpec terminalList
-  
+
   verbose (_flag_debug_parse cmd) $ putStrLn "Dumping..."
   verbose (_flag_debug_parse cmd) $ putStrLn $ show $ fromASTTopLevelDeclSeq exprSeqAst
-  
+
   let toplevelDecls = fromASTTopLevelDeclSeq exprSeqAst
 
-  
+
   putStrLn "[Type checking]"
   (gti, elab_toplevelDecls) <- typeCheck toplevelDecls
   verbose (_flag_debug_typecheck cmd) $ putStrLn "Dumping..."
@@ -72,7 +73,18 @@ doProcess cmd file = do
 
   print_cs cmd file funStore t_expr
 
-  putStrLn "[Verifying generated codes]"
+  putStrLn "[Verifying generated codes - after compilation]"
+  verify t_gti funStore t_expr
+  verbose (_flag_debug_verify cmd) $ putStrLn "[Well-typed]"
+
+  putStrLn "[Inlining]"
+  (t_gti, funStore, t_expr) <- inline t_gti funStore t_expr
+  verbose (_flag_debug_inline cmd) $ putStrLn "Dumping...\nGlobal type information:\n"
+  verbose (_flag_debug_inline cmd) $ putStrLn $ (show t_gti ++ "\n\nFunction stores:")
+  verbose (_flag_debug_inline cmd) $ putStrLn $ (show funStore ++ "\n\nMain expression:")
+  verbose (_flag_debug_inline cmd) $ putStrLn $ (show t_expr ++ "\n")
+
+  putStrLn "[Verifying generated codes - after inlining]"
   verify t_gti funStore t_expr
   verbose (_flag_debug_verify cmd) $ putStrLn "[Well-typed]"
 
@@ -126,6 +138,7 @@ data Cmd =
       , _flag_debug_parse :: Bool
       , _flag_debug_typecheck :: Bool
       , _flag_debug_compile :: Bool
+      , _flag_debug_inline :: Bool
       , _flag_debug_verify :: Bool
       , _flag_debug_run :: Bool
       , _files :: [String]
@@ -138,61 +151,65 @@ initCmd =
       , _flag_debug_parse = False
       , _flag_debug_typecheck = False
       , _flag_debug_compile = False
+      , _flag_debug_inline = False
       , _flag_debug_verify = False
       , _flag_debug_run = False
       , _files = []
       }
 
 getCmd :: Monad m => [String] -> m Cmd
-getCmd args = collect initCmd args 
+getCmd args = collect initCmd args
 
 collect :: Monad m => Cmd -> [String] -> m Cmd
 collect cmd [] = return cmd
 collect cmd ("--output-json":args) = do
   let new_cmd = cmd { _flag_print_rpc_json = True }
   collect new_cmd args
-  
-collect cmd ("--output-rpc-json":args) = do  
+
+collect cmd ("--output-rpc-json":args) = do
   let new_cmd = cmd { _flag_print_rpc_json = True }
   collect new_cmd args
-  
-collect cmd ("--output-cs-json":args) = do  
+
+collect cmd ("--output-cs-json":args) = do
   let new_cmd = cmd { _flag_print_cs_json = True }
   collect new_cmd args
 
-collect cmd ("--debug-lex":args) = do    
+collect cmd ("--debug-lex":args) = do
   let new_cmd = cmd { _flag_debug_lex = True }
   collect new_cmd args
-  
-collect cmd ("--debug-parse":args) = do    
+
+collect cmd ("--debug-parse":args) = do
   let new_cmd = cmd { _flag_debug_parse = True }
   collect new_cmd args
-  
-collect cmd ("--debug-typecheck":args) = do    
+
+collect cmd ("--debug-typecheck":args) = do
   let new_cmd = cmd { _flag_debug_typecheck = True }
   collect new_cmd args
-  
-collect cmd ("--debug-compile":args) = do    
+
+collect cmd ("--debug-compile":args) = do
   let new_cmd = cmd { _flag_debug_compile = True }
   collect new_cmd args
-  
-collect cmd ("--debug-verify":args) = do    
+
+collect cmd ("--debug-inline":args) = do
+  let new_cmd = cmd { _flag_debug_inline = True }
+  collect new_cmd args
+
+collect cmd ("--debug-verify":args) = do
   let new_cmd = cmd { _flag_debug_verify = True }
   collect new_cmd args
-  
-collect cmd ("--debug-run":args) = do    
+
+collect cmd ("--debug-run":args) = do
   let new_cmd = cmd { _flag_debug_run = True }
   collect new_cmd args
-  
+
 collect cmd (arg:args) = do
-  let old_files = _files cmd 
+  let old_files = _files cmd
   let new_cmd = cmd { _files = old_files ++ [arg] }
   collect new_cmd args
 
-  
+
 verbose b action = if b then action else return ()
 
 --
 version = "0.1.0"
 printVersion = putStrLn $ "POLYRPC, version " ++ version ++ ": http://github.com/kwanghoon/polyrpc/"
-

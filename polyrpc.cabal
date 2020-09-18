@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5775e38740616ed1504d4706f0bbcfae619b17eef5df0525e2217fa7e4a4d525
+-- hash: 14b2e92c7f0cffb9c9ab8ae82ecf2620ed0cf87b192818e7b80f4e1755f6331c
 
 name:           polyrpc
 version:        0.1.0.0
@@ -32,6 +32,7 @@ executable polyrpc
   other-modules:
       Compile
       Execute
+      Inline
       Lexer
       Parser
       Token
