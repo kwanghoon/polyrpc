@@ -14,7 +14,7 @@ import qualified CSType as TT
 import qualified CSExpr as TE
 import TypeCheck
 import Compile
-import Inline
+import Simpl
 import Verify
 import Execute
 
@@ -78,11 +78,11 @@ doProcess cmd file = do
   verbose (_flag_debug_verify cmd) $ putStrLn "[Well-typed]"
 
   putStrLn "[Inlining]"
-  (t_gti, funStore, t_expr) <- inline t_gti funStore t_expr
-  verbose (_flag_debug_inline cmd) $ putStrLn "Dumping...\nGlobal type information:\n"
-  verbose (_flag_debug_inline cmd) $ putStrLn $ (show t_gti ++ "\n\nFunction stores:")
-  verbose (_flag_debug_inline cmd) $ putStrLn $ (show funStore ++ "\n\nMain expression:")
-  verbose (_flag_debug_inline cmd) $ putStrLn $ (show t_expr ++ "\n")
+  (t_gti, funStore, t_expr) <- simpl t_gti funStore t_expr
+  verbose (_flag_debug_simpl cmd) $ putStrLn "Dumping...\nGlobal type information:\n"
+  verbose (_flag_debug_simpl cmd) $ putStrLn $ (show t_gti ++ "\n\nFunction stores:")
+  verbose (_flag_debug_simpl cmd) $ putStrLn $ (show funStore ++ "\n\nMain expression:")
+  verbose (_flag_debug_simpl cmd) $ putStrLn $ (show t_expr ++ "\n")
 
   putStrLn "[Verifying generated codes - after inlining]"
   verify t_gti funStore t_expr
@@ -138,7 +138,7 @@ data Cmd =
       , _flag_debug_parse :: Bool
       , _flag_debug_typecheck :: Bool
       , _flag_debug_compile :: Bool
-      , _flag_debug_inline :: Bool
+      , _flag_debug_simpl :: Bool
       , _flag_debug_verify :: Bool
       , _flag_debug_run :: Bool
       , _files :: [String]
@@ -151,7 +151,7 @@ initCmd =
       , _flag_debug_parse = False
       , _flag_debug_typecheck = False
       , _flag_debug_compile = False
-      , _flag_debug_inline = False
+      , _flag_debug_simpl = False
       , _flag_debug_verify = False
       , _flag_debug_run = False
       , _files = []
@@ -190,8 +190,8 @@ collect cmd ("--debug-compile":args) = do
   let new_cmd = cmd { _flag_debug_compile = True }
   collect new_cmd args
 
-collect cmd ("--debug-inline":args) = do
-  let new_cmd = cmd { _flag_debug_inline = True }
+collect cmd ("--debug-simpl":args) = do
+  let new_cmd = cmd { _flag_debug_simpl = True }
   collect new_cmd args
 
 collect cmd ("--debug-verify":args) = do

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 14b2e92c7f0cffb9c9ab8ae82ecf2620ed0cf87b192818e7b80f4e1755f6331c
+-- hash: f0e457b60a7cadf941c1c3719db7824baebf6cd0a13749590bf9414a44d98b64
 
 name:           polyrpc
 version:        0.1.0.0
@@ -32,9 +32,9 @@ executable polyrpc
   other-modules:
       Compile
       Execute
-      Inline
       Lexer
       Parser
+      Simpl
       Token
       TypeCheck
       Verify
@@ -62,6 +62,7 @@ executable polyrpc
     , pretty >=1.1.3 && <1.2
     , prettyprinter >=1.6.1 && <1.7
     , regex-tdfa
+    , unordered-containers >=0.2.12.0 && <=0.2.12.0
     , yapb >=0.1.0 && <=0.1.0
   default-language: Haskell2010
 
@@ -84,5 +85,6 @@ test-suite polyrpc-test
     , pretty >=1.1.3 && <1.2
     , prettyprinter >=1.6.1 && <1.7
     , regex-tdfa
+    , unordered-containers >=0.2.12.0 && <=0.2.12.0
     , yapb >=0.1.0 && <=0.1.0
   default-language: Haskell2010
