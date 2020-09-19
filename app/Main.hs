@@ -73,7 +73,7 @@ doProcess cmd file = do
 
   print_cs cmd file funStore t_expr
 
-  putStrLn "[Verifying generated codes - after compilation]"
+  putStrLn "[Verifying after compilation]"
   verify t_gti funStore t_expr
   verbose (_flag_debug_verify cmd) $ putStrLn "[Well-typed]"
 
@@ -84,7 +84,7 @@ doProcess cmd file = do
   verbose (_flag_debug_simpl cmd) $ putStrLn $ (show funStore ++ "\n\nMain expression:")
   verbose (_flag_debug_simpl cmd) $ putStrLn $ (show t_expr ++ "\n")
 
-  putStrLn "[Verifying generated codes - after inlining]"
+  putStrLn "[Verifying after inlining]"
   verify t_gti funStore t_expr
   verbose (_flag_debug_verify cmd) $ putStrLn "[Well-typed]"
 

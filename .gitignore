@@ -1,2 +1,7 @@
 .stack-work/
 *~
+action_table.txt
+goto_table.txt
+mygrammar.grm
+mygrammar.grm.hash
+prod_rules.txt

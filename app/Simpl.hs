@@ -17,11 +17,6 @@ import Data.HashMap.Strict
 ---------------------------------------------------------------------------
 
 --
-data Used = C String Int  -- How many times this code name is used.
-          | B String Int  -- How many times this bound variable is used.
-
--- initC cnames = Data.List.map (\cname -> C cname 0) cnames
-
 data UseInfo =
   UseInfo { cNameUseInfo :: HashMap String Int
           , varUseInfo   :: HashMap String Int }
@@ -35,50 +30,38 @@ initUseInfo = UseInfo { cNameUseInfo = empty, varUseInfo = empty }
 simpl :: Monad m => GlobalTypeInfo -> FunctionStore -> Expr
                      -> m (GlobalTypeInfo, FunctionStore, Expr)
 simpl gti funStore mainexpr = do
-  return (gti, funStore, mainexpr)
-  -- useInfo <- useAnalysis initUseInfo funStore mainexpr
-  -- (funStore', mainexpr') <- doSimpl useInfo funStore mainexpr
-  -- return (gti, funStore', mainexpr')
+  useInfo <-useAnalysis funStore mainexpr
+  (funStore', mainexpr') <- doSimpl useInfo funStore mainexpr
+  return (gti, funStore, mainexpr')
 
-useAnalysis :: Monad m => UseInfo -> FunctionStore -> Expr -> m UseInfo
-useAnalysis useInfo funStore expr = return useInfo
+--------------------------------------------------------------------------------
+-- Use analysis
+--------------------------------------------------------------------------------
+useAnalysis :: Monad m => FunctionStore -> Expr -> m UseInfo
+useAnalysis funStore expr = do
+  let initUseInfo = initUseInfoFrom funStore
+  useInfo1 <- uaExpr initUseInfo expr
+  useInfo2 <- uaFunStore useInfo1 funStore
+  return useInfo2
 
+
+initUseInfoFrom :: FunctionStore -> UseInfo
+initUseInfoFrom funStore = UseInfo
+  { cNameUseInfo =
+      foldl (\hash x -> insert x 0 hash) empty
+       ([ codeName | (codeName, _) <- _clientstore funStore ] ++
+        [ codeName | (codeName, _) <- _serverstore funStore ])
+  , varUseInfo = empty }
+
+
+uaFunStore :: Monad m => UseInfo -> FunctionStore -> m UseInfo
+uaFunStore useInfo funStore = return useInfo
+
+uaExpr :: Monad m => UseInfo -> Expr -> m UseInfo
+uaExpr useInfo expr = return useInfo
+
+--------------------------------------------------------------------------------
+-- Simplification
+--------------------------------------------------------------------------------
 doSimpl :: Monad m => UseInfo -> FunctionStore -> Expr -> m (FunctionStore, Expr)
-doSimpl useInfo funStore expr = return (funStore, expr)
-
--- -------------------------
--- -- Simplify function stores
--- -------------------------
-
--- type GlobalInfo = (GlobalTypeInfo, FunctionStore)
-
--- simplFunStore :: Monad m => GlobalTypeInfo -> FunctionStore -> m FunctionStore
--- simplFunStore gti funStore = do
---   let clientFunStore = _clientstore funStore
---   let serverFunStore = _serverstore funStore
-
---   clientFunStore' <- mapM (simplFnCode gti clientLoc funStore) clientFunStore
---   serverFunStore' <- mapM (simplFnCode gti serverLoc funStore) serverFunStore
-
---   return $ funStore{_clientstore=clientFunStore', _serverstore=serverFunStore'}
-
-
--- simplFnCode :: Monad m => GlobalTypeInfo -> Location -> FunctionStore
---                         -> (String, (CodeType, Code)) -> m (String, (CodeType, Code))
--- simplFnCode gti loc funStore (f, (codety, code)) = do
---   code' <- simplCode (gti,funStore) loc codety code
---   return (f, (codety, code'))
-
-
--- simplCode gtigci loc (CodeType _freeLocVars _freeTyVars freeVarTys ty)
---                       (Code freeLocVars freeTyVars freeVars openCode) = do
---   let env = Env { _locVarEnv  = freeLocVars
---                 , _typeVarEnv = freeTyVars
---                 , _varEnv     = zip freeVars freeVarTys }
-
---   simplOpenCode gtigci loc env ty openCode
-
-
-
-
--- simplExpr gtigci loc env ty expr = return expr
+doSimpl useInfo funstore expr = return (funstore, expr)
