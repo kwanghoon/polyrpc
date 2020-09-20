@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f0e457b60a7cadf941c1c3719db7824baebf6cd0a13749590bf9414a44d98b64
+-- hash: 80a3658a4306ba1756e67ee806b09034fc258c4b13ef4cbc5f445b6555a3758d
 
 name:           polyrpc
 version:        0.1.0.0
@@ -62,7 +62,7 @@ executable polyrpc
     , pretty >=1.1.3 && <1.2
     , prettyprinter >=1.6.1 && <1.7
     , regex-tdfa
-    , unordered-containers >=0.2.12.0 && <=0.2.12.0
+    , unordered-containers >=0.2.10.0 && <=0.2.12.0
     , yapb >=0.1.0 && <=0.1.0
   default-language: Haskell2010
 
@@ -85,6 +85,6 @@ test-suite polyrpc-test
     , pretty >=1.1.3 && <1.2
     , prettyprinter >=1.6.1 && <1.7
     , regex-tdfa
-    , unordered-containers >=0.2.12.0 && <=0.2.12.0
+    , unordered-containers >=0.2.10.0 && <=0.2.12.0
     , yapb >=0.1.0 && <=0.1.0
   default-language: Haskell2010
