@@ -8,6 +8,8 @@ import CSExpr
 
 import Control.Monad
 import Data.HashMap.Strict as H
+import Data.List as L
+import Data.Maybe as M
 
 ---------------------------------------------------------------------------
 -- Simplification:
@@ -26,19 +28,34 @@ initUseInfo = UseInfo { cNameUseInfo = empty, varUseInfo = empty }
 
 addVar :: String -> UseInfo -> UseInfo
 addVar x useInfo =
-  useInfo { varUseInfo = insert x 0 (varUseInfo useInfo) }
+  useInfo { varUseInfo = H.insert x 0 (varUseInfo useInfo) }
 
 rmVar :: String -> UseInfo -> UseInfo
 rmVar x useInfo =
-  useInfo { varUseInfo = delete x (varUseInfo useInfo) }
+  useInfo { varUseInfo = H.delete x (varUseInfo useInfo) }
   
 incVar :: String -> UseInfo -> UseInfo
 incVar x useInfo =
   case H.lookup x (varUseInfo useInfo) of
     Nothing    -> addVar x useInfo
     Just count ->
-      let varUseInfo' = insert x (count+1) (varUseInfo useInfo) in
+      let varUseInfo' = H.insert x (count+1) (varUseInfo useInfo) in
         useInfo { varUseInfo = varUseInfo' }
+
+save :: UseInfo -> [String] -> [(String, Int)]
+save useInfo xs =
+  [ (x, M.fromJust z) | x <- xs, let z = H.lookup x hashmap, M.isJust z ]
+  where
+    hashmap = varUseInfo useInfo
+
+restore :: [(String, Int)] -> UseInfo -> UseInfo
+restore xUseList useInfo =
+  useInfo { varUseInfo = foldl fXUseList hashmap xUseList }
+  where
+    hashmap = varUseInfo useInfo
+
+    fXUseList hashmap (x,count) = H.insert x count hashmap
+
 
 ---------------------
 -- Simplify CS programs
@@ -55,7 +72,7 @@ simpl gti funStore mainexpr = do
 initUseInfoFrom :: FunctionStore -> UseInfo
 initUseInfoFrom funStore = UseInfo
   { cNameUseInfo =
-      foldl (\hash x -> insert x 0 hash) empty
+      foldl (\hash x -> H.insert x 0 hash) empty
        ([ codeName | (codeName, _) <- _clientstore funStore ] ++
         [ codeName | (codeName, _) <- _serverstore funStore ])
   , varUseInfo = empty }
@@ -67,14 +84,20 @@ doExpr useInfo (ValExpr v) = do
   return (useInfo', ValExpr v')
   
 doExpr useInfo (Let bindDecls expr) = do
+  let savedInfo = save useInfo xs
+  
   (useInfo1, bindDecls1) <- foldM fBindDecl (useInfo, []) bindDecls
   (useInfo2, expr1) <- doExpr useInfo1 expr
-  return (useInfo2, Let bindDecls1 expr1)
+  
+  let useInfo3 = restore savedInfo useInfo2
+  return (useInfo3, Let bindDecls1 expr1)
   
   where
     fBindDecl (useInfo, bindDecls) (Binding x ty bexpr) = do
       (useInfo', bexpr') <- doExpr (addVar x useInfo) bexpr
       return (useInfo', bindDecls ++ [Binding x ty bexpr'])
+
+    xs = L.map (\(Binding x ty expr) -> x) bindDecls
 
 doExpr useInfo (Case v ty alts) = do
   (useInfo1, v1) <- doValue useInfo v
@@ -83,12 +106,20 @@ doExpr useInfo (Case v ty alts) = do
 
   where
     fAlt (useInfo, alts) (Alternative cname xs expr) = do
+      let savedInfo = save useInfo xs
+      
       (useInfo1, expr1) <- doExpr useInfo expr
-      return (useInfo1, alts ++ [Alternative cname xs expr1])
+
+      let useInfo2 = restore savedInfo useInfo1
+      return (useInfo2, alts ++ [Alternative cname xs expr1])
       
     fAlt (useInfo, alts) (TupleAlternative xs expr) = do
+      let savedInfo = save useInfo xs
+      
       (useInfo1, expr1) <- doExpr useInfo expr
-      return (useInfo1, alts ++ [TupleAlternative xs expr])
+
+      let useInfo2 = restore savedInfo useInfo1
+      return (useInfo2, alts ++ [TupleAlternative xs expr])
 
 doExpr useInfo (App v ty arg) = do
   (useInfo1, v1) <- doValue useInfo v
@@ -152,14 +183,20 @@ doValue useInfo (UnitM v) = do
   return (useInfo1, UnitM v1)
   
 doValue useInfo (BindM bindDecls expr) = do
+  let savedInfo = save useInfo xs
+  
   (useInfo1, bindDecls1) <- foldM fBindDecl (useInfo, []) bindDecls
   (useInfo2, expr1) <- doExpr useInfo1 expr
-  return (useInfo2, BindM bindDecls1 expr1)
+
+  let useInfo3 = restore savedInfo useInfo2
+  return (useInfo3, BindM bindDecls1 expr1)
 
   where
     fBindDecl (useInfo, bindDecls) (Binding x ty bexpr) = do
       (useInfo', bexpr') <- doExpr (addVar x useInfo) bexpr
       return (useInfo', bindDecls ++ [Binding x ty bexpr'])
+
+    xs = L.map (\(Binding x ty expr) -> x) bindDecls      
   
 doValue useInfo (Req v ty arg) = do
   (useInfo1, v1) <- doValue useInfo v
