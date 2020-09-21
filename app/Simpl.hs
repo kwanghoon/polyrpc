@@ -30,9 +30,17 @@ addVar :: String -> UseInfo -> UseInfo
 addVar x useInfo =
   useInfo { varUseInfo = H.insert x 0 (varUseInfo useInfo) }
 
+addVars :: [String] -> UseInfo -> UseInfo
+addVars xs useInfo =
+  foldl (\useInfo x -> addVar x useInfo) useInfo xs
+
 rmVar :: String -> UseInfo -> UseInfo
 rmVar x useInfo =
   useInfo { varUseInfo = H.delete x (varUseInfo useInfo) }
+
+rmVars :: [String] -> UseInfo -> UseInfo
+rmVars xs useInfo =
+  foldl (\useInfo x -> rmVar x useInfo) useInfo xs
   
 incVar :: String -> UseInfo -> UseInfo
 incVar x useInfo =
@@ -85,16 +93,21 @@ doExpr useInfo (ValExpr v) = do
   
 doExpr useInfo (Let bindDecls expr) = do
   let savedInfo = save useInfo xs
-  
-  (useInfo1, bindDecls1) <- foldM fBindDecl (useInfo, []) bindDecls
+
+  let useInfo0 = addVars xs useInfo
+  (useInfo1, bindDecls1) <- foldM fBindDecl (useInfo0, []) bindDecls
   (useInfo2, expr1) <- doExpr useInfo1 expr
+  -------------------------------------
+  -- This is where inlining is applied.
+  -------------------------------------
+  let useInfo3 = rmVars xs useInfo2
   
-  let useInfo3 = restore savedInfo useInfo2
-  return (useInfo3, Let bindDecls1 expr1)
+  let useInfo4 = restore savedInfo useInfo3
+  return (useInfo4, Let bindDecls1 expr1)
   
   where
     fBindDecl (useInfo, bindDecls) (Binding x ty bexpr) = do
-      (useInfo', bexpr') <- doExpr (addVar x useInfo) bexpr
+      (useInfo', bexpr') <- doExpr useInfo bexpr
       return (useInfo', bindDecls ++ [Binding x ty bexpr'])
 
     xs = L.map (\(Binding x ty expr) -> x) bindDecls
@@ -107,19 +120,23 @@ doExpr useInfo (Case v ty alts) = do
   where
     fAlt (useInfo, alts) (Alternative cname xs expr) = do
       let savedInfo = save useInfo xs
-      
-      (useInfo1, expr1) <- doExpr useInfo expr
 
-      let useInfo2 = restore savedInfo useInfo1
-      return (useInfo2, alts ++ [Alternative cname xs expr1])
+      let useInfo0 = addVars xs useInfo
+      (useInfo1, expr1) <- doExpr useInfo0 expr
+      let useInfo2 = rmVars xs useInfo1
+
+      let useInfo3 = restore savedInfo useInfo2
+      return (useInfo3, alts ++ [Alternative cname xs expr1])
       
     fAlt (useInfo, alts) (TupleAlternative xs expr) = do
       let savedInfo = save useInfo xs
-      
-      (useInfo1, expr1) <- doExpr useInfo expr
 
-      let useInfo2 = restore savedInfo useInfo1
-      return (useInfo2, alts ++ [TupleAlternative xs expr])
+      let useInfo0 = addVars xs useInfo
+      (useInfo1, expr1) <- doExpr useInfo0 expr
+      let useInfo2 = rmVars xs useInfo1
+
+      let useInfo3 = restore savedInfo useInfo2
+      return (useInfo3, alts ++ [TupleAlternative xs expr])
 
 doExpr useInfo (App v ty arg) = do
   (useInfo1, v1) <- doValue useInfo v
@@ -184,16 +201,21 @@ doValue useInfo (UnitM v) = do
   
 doValue useInfo (BindM bindDecls expr) = do
   let savedInfo = save useInfo xs
-  
-  (useInfo1, bindDecls1) <- foldM fBindDecl (useInfo, []) bindDecls
-  (useInfo2, expr1) <- doExpr useInfo1 expr
 
-  let useInfo3 = restore savedInfo useInfo2
-  return (useInfo3, BindM bindDecls1 expr1)
+  let useInfo0 = addVars xs useInfo
+  (useInfo1, bindDecls1) <- foldM fBindDecl (useInfo0, []) bindDecls
+  (useInfo2, expr1) <- doExpr useInfo1 expr
+  -------------------------------------
+  -- This is where inlining is applied.
+  -------------------------------------
+  let useInfo3 = rmVars xs useInfo2
+
+  let useInfo4 = restore savedInfo useInfo3
+  return (useInfo4, BindM bindDecls1 expr1)
 
   where
     fBindDecl (useInfo, bindDecls) (Binding x ty bexpr) = do
-      (useInfo', bexpr') <- doExpr (addVar x useInfo) bexpr
+      (useInfo', bexpr') <- doExpr useInfo bexpr
       return (useInfo', bindDecls ++ [Binding x ty bexpr'])
 
     xs = L.map (\(Binding x ty expr) -> x) bindDecls      
