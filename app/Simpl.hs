@@ -86,7 +86,7 @@ simpl :: Monad m => GlobalTypeInfo -> FunctionStore -> Expr
                      -> m (GlobalTypeInfo, FunctionStore, Expr)
 simpl gti funStore mainexpr = do
   let initUseInfo = initUseInfoFrom funStore
-  (useInfo, mainexpr') <-doExpr initUseInfo mainexpr
+  (useInfo, mainexpr') <-doExpr initUseInfo mainexpr -- (MonType unit_type) 
   funStore' <- doFunStore useInfo funStore
   return (gti, funStore', mainexpr')
 
@@ -114,13 +114,13 @@ doExpr useInfo (Let bindDecls expr) = do
   -------------------------------------
   -- This is where inlining is applied.
   -------------------------------------
-  (bindDecls2, expr2) <- doSubstBindDecls useInfo2 bindDecls1 expr1
+  expr2 <- doSubstLet useInfo2 bindDecls1 expr1
   -------------------------------------
 
   let useInfo3 = rmVars xs useInfo2
 
   let useInfo4 = restore savedInfo useInfo3
-  return (useInfo4, Let bindDecls2 expr2)
+  return (useInfo4, expr2)
 
   where
     fBindDecl (useInfo, bindDecls) (Binding x ty bexpr) = do
@@ -226,12 +226,12 @@ doValue useInfo (BindM bindDecls expr) = do
   -------------------------------------
   -- This is where inlining is applied.
   -------------------------------------
-  (bindDecls2, expr2) <- doSubstBindDecls useInfo2 bindDecls1 expr1
+  value2 <- doSubstBindM useInfo2 bindDecls1 expr1
   -------------------------------------
   let useInfo3 = rmVars xs useInfo2
 
   let useInfo4 = restore savedInfo useInfo3
-  return (useInfo4, BindM bindDecls2 expr2)
+  return (useInfo4, value2)
 
   where
     fBindDecl (useInfo, bindDecls) (Binding x ty bexpr) = do
@@ -263,6 +263,21 @@ doFunStore useInfo funStore =
   return funStore
 
 --
+doSubstLet :: Monad m => UseInfo -> [BindingDecl] -> Expr -> m Expr
+doSubstLet useInfo bindDecls expr = do 
+  (bindDecls1, expr1) <- doSubstBindDecls useInfo bindDecls expr
+  case bindDecls1 of
+    [] -> return expr1
+    _  -> return (Let bindDecls1 expr1)
+
+doSubstBindM :: Monad m => UseInfo -> [BindingDecl] -> Expr -> m Value
+doSubstBindM useInfo bindDecls expr = do 
+  (bindDecls1, expr1) <- doSubstBindDecls useInfo bindDecls expr
+  case bindDecls1 of
+--    [] -> return (BindM [Binding "$x" ty??? expr1] (ValExpr (Var "x"))) -- Todo: Should fix!!
+    _  -> return (BindM bindDecls1 expr1)
+
+--
 doSubstBindDecls :: Monad m => UseInfo -> [BindingDecl]
                      -> Expr -> m ([BindingDecl], Expr)
 doSubstBindDecls useInfo bindDecls expr = do
@@ -272,7 +287,7 @@ doSubstBindDecls useInfo bindDecls expr = do
   where
     -- fBindDecl (bindDecls, expr) binding@(Binding x ty (ValExpr (UnitM v))) =
     --   case H.lookup x (varUseInfo useInfo) of
-    --     Nothing  -> return (bindDecls, expr)  -- dead code elimination
+    --     Nothing  -> error "What?" -- return (bindDecls, expr)  -- dead code elimination
     --     Just 0   -> return (bindDecls, expr)  -- dead code elimination
     --     Just 1   -> return (bindDecls, doSubstExpr [(x,v)] expr)  -- inlining
     --     Just cnt -> return (bindDecls++[binding], expr)  -- do nothing
