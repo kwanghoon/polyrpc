@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 80a3658a4306ba1756e67ee806b09034fc258c4b13ef4cbc5f445b6555a3758d
+-- hash: d20bab1caed0214a353f1ddddf88965187d5858dd0862167fd9e8186c5dd5093
 
 name:           polyrpc
 version:        0.1.0.0
@@ -45,6 +45,7 @@ executable polyrpc
       Prim
       Type
       CSExpr
+      CSSubst
       CSType
       Paths_polyrpc
   hs-source-dirs:

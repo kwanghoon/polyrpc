@@ -81,6 +81,8 @@ data CodeName =
     CodeName String [Location] [Type]
     deriving (Show, Typeable, Data)
 
+getCodeName (CodeName name _ _) = name
+
 --
 -- [(Name, Location Vars, Type Vars)]
 type TypeInfo = [(String, [String], [String])]
