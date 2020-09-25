@@ -267,13 +267,6 @@ doValue useInfo (GenApp loc v ty@(CloType (FunType argty _ _))  arg) valty = do
   return (useInfo2, GenApp loc v1 ty arg1)
 
 --
-doFunStore :: Monad m => UseInfo -> FunctionStore -> m FunctionStore
-doFunStore useInfo funStore =
-  -- 1. do Use Analysis
-  -- 2. Delete unused codes
-  return funStore
-
---
 doSubstLet :: Monad m => UseInfo -> [BindingDecl] -> Expr -> Type -> m Expr
 doSubstLet useInfo bindDecls expr exprty = do
   (bindDecls1, expr1) <- doSubstBindDecls useInfo bindDecls expr exprty
@@ -305,3 +298,32 @@ doSubstBindDecls useInfo bindDecls expr exprty = do
 
     fBindDecl (bindDecls, expr) binding =
       return (bindDecls++[binding], expr)
+
+--
+doFunStore :: Monad m => UseInfo -> FunctionStore -> m FunctionStore
+doFunStore useInfo funStore = do
+  -- 1. do Use analysis
+  (useInfo1, clientstore) <- foldM fStore (useInfo, []) (_clientstore funStore)
+  (useInfo2, serverstore) <- foldM fStore (useInfo, []) (_serverstore funStore)
+
+  -- 2. Do deadcode elimination
+  return (funStore {_clientstore=clientstore} {_serverstore=serverstore})
+
+  where
+    fStore (useInfo, store) (name, codeTypeCode) = do
+      (useInfo1, codeTypeCode1) <- doCode useInfo codeTypeCode
+      return (useInfo1, store++[(name,codeTypeCode1)])
+
+doCode :: Monad m => UseInfo -> (CodeType, Code) -> m (UseInfo, (CodeType, Code))
+doCode useInfo (CodeType as1 ls1 tys ty, Code ls2 as2 vs opencode) = do
+  (useInfo1, opencode1) <- doOpenCode useInfo opencode
+  return (useInfo1, (CodeType as1 ls1 tys ty, Code ls2 as2 vs opencode1))
+
+
+doOpenCode :: Monad m => UseInfo -> OpenCode -> m (UseInfo, OpenCode)
+doOpenCode useInfo (CodeAbs xTys expr) = do
+  return (useInfo, CodeAbs xTys expr)
+doOpenCode useInfo (CodeTypeAbs tyvars expr) = do
+  return (useInfo, CodeTypeAbs tyvars expr)
+doOpenCode useInfo (CodeLocAbs locvars expr) = do
+  return (useInfo, CodeLocAbs locvars expr)
