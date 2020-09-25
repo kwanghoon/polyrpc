@@ -84,6 +84,8 @@ doProcess cmd file = do
   verbose (_flag_debug_simpl cmd) $ putStrLn $ (show funStore ++ "\n\nMain expression:")
   verbose (_flag_debug_simpl cmd) $ putStrLn $ (show t_expr ++ "\n")
 
+  print_inlined_cs cmd file funStore t_expr
+
   putStrLn "[Verifying after inlining]"
   verify t_gti funStore t_expr
   verbose (_flag_debug_verify cmd) $ putStrLn "[Well-typed]"
@@ -105,12 +107,27 @@ print_rpc cmd file elab_toplevelDecls = do
   else return ()
 
 print_cs cmd file funStore t_expr = do
-  let jsonfile = prefixOf file ++ "_cs.json"
+  -- let jsonfile = prefixOf file ++ "_cs.json"
+  -- if _flag_print_cs_json cmd
+  -- then do putStrLn $ "Writing to " ++ jsonfile
+  --         writeFile jsonfile $ render
+  --            $ pp_value $ toJSON (funStore :: TE.FunctionStore, t_expr :: TE.Expr)
+  -- else return ()
+
   if _flag_print_cs_json cmd
-  then do putStrLn $ "Writing to " ++ jsonfile
-          writeFile jsonfile $ render
-             $ pp_value $ toJSON (funStore :: TE.FunctionStore, t_expr :: TE.Expr)
+  then print_cs_json file funStore t_expr
   else return ()
+
+print_inlined_cs cmd file funStore t_expr = do
+  if _flag_print_inlined_cs_json cmd
+  then print_cs_json file funStore t_expr
+  else return ()
+
+print_cs_json file funStore t_expr = do
+  let jsonfile = prefixOf file ++ "_cs.json"
+  putStrLn $ "Writing to " ++ jsonfile
+  writeFile jsonfile $ render
+      $ pp_value $ toJSON (funStore :: TE.FunctionStore, t_expr :: TE.Expr)
 
 prefixOf str = reverse (removeDot (dropWhile (/='.') (reverse str)))
   where removeDot []     = []
@@ -134,6 +151,7 @@ readline' = do
 data Cmd =
   Cmd { _flag_print_rpc_json :: Bool
       , _flag_print_cs_json :: Bool
+      , _flag_print_inlined_cs_json :: Bool
       , _flag_debug_lex :: Bool
       , _flag_debug_parse :: Bool
       , _flag_debug_typecheck :: Bool
@@ -147,6 +165,7 @@ data Cmd =
 initCmd =
   Cmd { _flag_print_rpc_json = False
       , _flag_print_cs_json  = False
+      , _flag_print_inlined_cs_json = False
       , _flag_debug_lex = False
       , _flag_debug_parse = False
       , _flag_debug_typecheck = False
@@ -172,6 +191,10 @@ collect cmd ("--output-rpc-json":args) = do
 
 collect cmd ("--output-cs-json":args) = do
   let new_cmd = cmd { _flag_print_cs_json = True }
+  collect new_cmd args
+
+collect cmd ("--output-inlined-cs-json":args) = do
+  let new_cmd = cmd { _flag_print_inlined_cs_json = True }
   collect new_cmd args
 
 collect cmd ("--debug-lex":args) = do

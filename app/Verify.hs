@@ -232,7 +232,7 @@ verifyExpr gtigci loc env ty (Prim prim op_locs op_tys vs) = do
                  ++ show prim ++ " " ++ show op_locs ++ " " ++ show op_tys ++ " " ++  show vs
                  ++ "\n   " ++ show locvars ++ " " ++ show tyvars)
 
-       mapM_ (\ (argty, v) -> verifyValue gtigci loc env argty v) (zip argtys vs)
+       mapM_ (\ (argty, v) -> verifyValue gtigci loc env argty v) (zip argtys vs) -- Bug?? substed_argtys
        assert (equalType ty resty)  --   (1) ty == resty
           ("[verifyExpr] Not equal types: " ++ show ty ++ " != " ++ show resty)
 

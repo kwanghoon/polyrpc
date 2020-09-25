@@ -86,7 +86,7 @@ simpl :: Monad m => GlobalTypeInfo -> FunctionStore -> Expr
                      -> m (GlobalTypeInfo, FunctionStore, Expr)
 simpl gti funStore mainexpr = do
   let initUseInfo = initUseInfoFrom funStore
-  (useInfo, mainexpr') <-doExpr initUseInfo mainexpr -- (MonType unit_type) 
+  (useInfo, mainexpr') <-doExpr initUseInfo mainexpr (MonType unit_type)
   funStore' <- doFunStore useInfo funStore
   return (gti, funStore', mainexpr')
 
@@ -99,22 +99,22 @@ initUseInfoFrom funStore = UseInfo
   , varUseInfo = empty }
 
 --
-doExpr :: Monad m => UseInfo -> Expr -> m (UseInfo, Expr)
-doExpr useInfo (ValExpr v) = do
-  (useInfo', v') <- doValue useInfo v
+doExpr :: Monad m => UseInfo -> Expr -> Type -> m (UseInfo, Expr)
+doExpr useInfo (ValExpr v) exprty = do
+  (useInfo', v') <- doValue useInfo v exprty
   return (useInfo', ValExpr v')
 
-doExpr useInfo (Let bindDecls expr) = do
+doExpr useInfo (Let bindDecls expr) exprty = do
   let savedInfo = save useInfo xs
 
   let useInfo0 = addVars xs useInfo
   (useInfo1, bindDecls1) <- foldM fBindDecl (useInfo0, []) bindDecls
-  (useInfo2, expr1) <- doExpr useInfo1 expr
+  (useInfo2, expr1) <- doExpr useInfo1 expr exprty
 
   -------------------------------------
   -- This is where inlining is applied.
   -------------------------------------
-  expr2 <- doSubstLet useInfo2 bindDecls1 expr1
+  expr2 <- doSubstLet useInfo2 bindDecls1 expr1 exprty
   -------------------------------------
 
   let useInfo3 = rmVars xs useInfo2
@@ -124,13 +124,13 @@ doExpr useInfo (Let bindDecls expr) = do
 
   where
     fBindDecl (useInfo, bindDecls) (Binding x ty bexpr) = do
-      (useInfo', bexpr') <- doExpr useInfo bexpr
+      (useInfo', bexpr') <- doExpr useInfo bexpr ty
       return (useInfo', bindDecls ++ [Binding x ty bexpr'])
 
     xs = L.map (\(Binding x ty expr) -> x) bindDecls
 
-doExpr useInfo (Case v ty alts) = do
-  (useInfo1, v1) <- doValue useInfo v
+doExpr useInfo (Case v ty alts) exprty = do
+  (useInfo1, v1) <- doValue useInfo v ty
   (useInfo2, alts1) <- foldM fAlt (useInfo1, []) alts
   return (useInfo2, Case v1 ty alts1)
 
@@ -139,7 +139,7 @@ doExpr useInfo (Case v ty alts) = do
       let savedInfo = save useInfo xs
 
       let useInfo0 = addVars xs useInfo
-      (useInfo1, expr1) <- doExpr useInfo0 expr
+      (useInfo1, expr1) <- doExpr useInfo0 expr exprty
       let useInfo2 = rmVars xs useInfo1
 
       let useInfo3 = restore savedInfo useInfo2
@@ -149,84 +149,95 @@ doExpr useInfo (Case v ty alts) = do
       let savedInfo = save useInfo xs
 
       let useInfo0 = addVars xs useInfo
-      (useInfo1, expr1) <- doExpr useInfo0 expr
+      (useInfo1, expr1) <- doExpr useInfo0 expr exprty
       let useInfo2 = rmVars xs useInfo1
 
       let useInfo3 = restore savedInfo useInfo2
       return (useInfo3, alts ++ [TupleAlternative xs expr])
 
-doExpr useInfo (App v ty arg) = do
-  (useInfo1, v1) <- doValue useInfo v
-  (useInfo2, arg1) <- doValue useInfo1 arg
+doExpr useInfo (App v ty@(CloType (FunType argty _ _)) arg) exprty = do
+  (useInfo1, v1) <- doValue useInfo v ty
+  (useInfo2, arg1) <- doValue useInfo1 arg argty
   return (useInfo2, App v1 ty arg1)
 
-doExpr useInfo (TypeApp v ty tys) = do
-  (useInfo1, v1) <- doValue useInfo v
+doExpr useInfo (TypeApp v ty tys) exprty = do
+  (useInfo1, v1) <- doValue useInfo v ty
   return (useInfo1, TypeApp v1 ty tys)
 
-doExpr useInfo (LocApp v ty locs) = do
-  (useInfo1, v1) <- doValue useInfo v
+doExpr useInfo (LocApp v ty locs) exprty = do
+  (useInfo1, v1) <- doValue useInfo v ty
   return (useInfo1, LocApp v1 ty locs)
 
-doExpr useInfo (Prim op locs tys vs) = do
-  (useInfo1, vs1) <- foldM fVs (useInfo, []) vs
-  return (useInfo1, Prim op locs tys vs1)
+doExpr useInfo (Prim MkRecOp locs tys vs@[Var recvar, _]) exprty = do
+  let useInfo1 = incVar recvar (incVar recvar useInfo) -- #(recvr)=2
+  return (useInfo1, Prim MkRecOp locs tys vs)
+
+doExpr useInfo (Prim prim op_locs op_tys vs) exprty =
+  case lookupPrimOpType prim of
+    [] -> error $ "[Simpl:doExpr] Not found prim: " ++ show prim
+    ((locvars, tyvars, argtys, _):_) -> do
+      let substTy = zip tyvars op_tys
+      let substLoc = zip locvars op_locs
+      let substed_argtys = L.map (doSubstLoc substLoc . doSubst substTy) argtys
+
+      (useInfo1, vs1) <- foldM fVs (useInfo, []) (zip vs argtys) -- vs. argtys
+      return (useInfo1, Prim prim op_locs op_tys vs1)
 
   where
-    fVs (useInfo, vs) v = do
-      (useInfo', v') <- doValue useInfo v
+    fVs (useInfo, vs) (v, vty) = do
+      (useInfo', v') <- doValue useInfo v vty
       return (useInfo', vs ++ [v'])
 
 --
-doValue :: Monad m => UseInfo -> Value -> m (UseInfo, Value)
-doValue useInfo (Var x) =
+doValue :: Monad m => UseInfo -> Value -> Type -> m (UseInfo, Value)
+doValue useInfo (Var x) valty =
   return (incVar x useInfo, Var x)
 
-doValue useInfo (Lit x) =
+doValue useInfo (Lit x) valty =
   return (useInfo, Lit x)
 
-doValue useInfo (Tuple vs) = do
-  (useInfo1, vs1) <- foldM fVs (useInfo, []) vs
+doValue useInfo (Tuple vs) (TupleType tys) = do
+  (useInfo1, vs1) <- foldM fVs (useInfo, []) (zip vs tys)
   return (useInfo1, Tuple vs1)
 
   where
-    fVs (useInfo, vs) v = do
-      (useInfo', v') <- doValue useInfo v
+    fVs (useInfo, vs) (v, vty) = do
+      (useInfo', v') <- doValue useInfo v vty
       return (useInfo', vs ++ [v'])
 
-doValue useInfo (Constr cname locs tys vs tys') = do
-  (useInfo1, vs1) <- foldM fVs (useInfo, []) vs
-  return (useInfo1, Constr cname locs tys vs1 tys')
+doValue useInfo (Constr cname locs tys vs vstys) valty = do
+  (useInfo1, vs1) <- foldM fVs (useInfo, []) (zip vs vstys)
+  return (useInfo1, Constr cname locs tys vs1 vstys)
 
   where
-    fVs (useInfo, vs) v = do
-      (useInfo', v') <- doValue useInfo v
+    fVs (useInfo, vs) (v, vty) = do
+      (useInfo', v') <- doValue useInfo v vty
       return (useInfo', vs ++ [v'])
 
-doValue useInfo (Closure vs tys cname optrecs) = do
+doValue useInfo (Closure vs vstys cname optrecs) vty = do
   let useInfo1 = incCodeName (getCodeName cname) useInfo
-  (useInfo2, vs1) <- foldM fVs (useInfo1, []) vs
-  return (useInfo2, Closure vs1 tys cname optrecs)
+  (useInfo2, vs1) <- foldM fVs (useInfo1, []) (zip vs vstys)
+  return (useInfo2, Closure vs1 vstys cname optrecs)
 
   where
-    fVs (useInfo, vs) v = do
-      (useInfo', v') <- doValue useInfo v
+    fVs (useInfo, vs) (v, vty) = do
+      (useInfo', v') <- doValue useInfo v vty
       return (useInfo', vs ++ [v'])
 
-doValue useInfo (UnitM v) = do
-  (useInfo1, v1) <- doValue useInfo v
+doValue useInfo (UnitM v) (MonType vty) = do
+  (useInfo1, v1) <- doValue useInfo v vty
   return (useInfo1, UnitM v1)
 
-doValue useInfo (BindM bindDecls expr) = do
+doValue useInfo (BindM bindDecls expr) (MonType exprty) = do
   let savedInfo = save useInfo xs
 
   let useInfo0 = addVars xs useInfo
   (useInfo1, bindDecls1) <- foldM fBindDecl (useInfo0, []) bindDecls
-  (useInfo2, expr1) <- doExpr useInfo1 expr
+  (useInfo2, expr1) <- doExpr useInfo1 expr (MonType exprty)
   -------------------------------------
   -- This is where inlining is applied.
   -------------------------------------
-  value2 <- doSubstBindM useInfo2 bindDecls1 expr1
+  value2 <- doSubstBindM useInfo2 bindDecls1 expr1 (MonType exprty)
   -------------------------------------
   let useInfo3 = rmVars xs useInfo2
 
@@ -235,24 +246,24 @@ doValue useInfo (BindM bindDecls expr) = do
 
   where
     fBindDecl (useInfo, bindDecls) (Binding x ty bexpr) = do
-      (useInfo', bexpr') <- doExpr useInfo bexpr
+      (useInfo', bexpr') <- doExpr useInfo bexpr (MonType ty)
       return (useInfo', bindDecls ++ [Binding x ty bexpr'])
 
     xs = L.map (\(Binding x ty expr) -> x) bindDecls
 
-doValue useInfo (Req v ty arg) = do
-  (useInfo1, v1) <- doValue useInfo v
-  (useInfo2, arg1) <- doValue useInfo1 arg
+doValue useInfo (Req v ty@(CloType (FunType argty _ _)) arg) valty = do
+  (useInfo1, v1) <- doValue useInfo v ty
+  (useInfo2, arg1) <- doValue useInfo1 arg argty
   return (useInfo2, Req v1 ty arg1)
 
-doValue useInfo (Call v ty arg) = do
-  (useInfo1, v1) <- doValue useInfo v
-  (useInfo2, arg1) <- doValue useInfo1 arg
+doValue useInfo (Call v ty@(CloType (FunType argty _ _)) arg) valty = do
+  (useInfo1, v1) <- doValue useInfo v ty
+  (useInfo2, arg1) <- doValue useInfo1 arg argty
   return (useInfo2, Call v1 ty arg1)
 
-doValue useInfo (GenApp loc v ty arg) = do
-  (useInfo1, v1) <- doValue useInfo v
-  (useInfo2, arg1) <- doValue useInfo1 arg
+doValue useInfo (GenApp loc v ty@(CloType (FunType argty _ _))  arg) valty = do
+  (useInfo1, v1) <- doValue useInfo v ty
+  (useInfo2, arg1) <- doValue useInfo1 arg argty
   return (useInfo2, GenApp loc v1 ty arg1)
 
 --
@@ -263,34 +274,34 @@ doFunStore useInfo funStore =
   return funStore
 
 --
-doSubstLet :: Monad m => UseInfo -> [BindingDecl] -> Expr -> m Expr
-doSubstLet useInfo bindDecls expr = do 
-  (bindDecls1, expr1) <- doSubstBindDecls useInfo bindDecls expr
+doSubstLet :: Monad m => UseInfo -> [BindingDecl] -> Expr -> Type -> m Expr
+doSubstLet useInfo bindDecls expr exprty = do
+  (bindDecls1, expr1) <- doSubstBindDecls useInfo bindDecls expr exprty
   case bindDecls1 of
     [] -> return expr1
     _  -> return (Let bindDecls1 expr1)
 
-doSubstBindM :: Monad m => UseInfo -> [BindingDecl] -> Expr -> m Value
-doSubstBindM useInfo bindDecls expr = do 
-  (bindDecls1, expr1) <- doSubstBindDecls useInfo bindDecls expr
+doSubstBindM :: Monad m => UseInfo -> [BindingDecl] -> Expr -> Type -> m Value
+doSubstBindM useInfo bindDecls expr exprty@(MonType valty) = do
+  (bindDecls1, expr1) <- doSubstBindDecls useInfo bindDecls expr exprty
   case bindDecls1 of
---    [] -> return (BindM [Binding "$x" ty??? expr1] (ValExpr (Var "x"))) -- Todo: Should fix!!
+    [] -> return (BindM [Binding "$x" valty expr1] (ValExpr (UnitM (Var "$x"))))
     _  -> return (BindM bindDecls1 expr1)
 
 --
 doSubstBindDecls :: Monad m => UseInfo -> [BindingDecl]
-                     -> Expr -> m ([BindingDecl], Expr)
-doSubstBindDecls useInfo bindDecls expr = do
+                     -> Expr -> Type -> m ([BindingDecl], Expr)
+doSubstBindDecls useInfo bindDecls expr exprty = do
   (bindDecls1, expr1) <- foldM fBindDecl ([], expr) bindDecls
   return (bindDecls1, expr1)
 
   where
-    -- fBindDecl (bindDecls, expr) binding@(Binding x ty (ValExpr (UnitM v))) =
-    --   case H.lookup x (varUseInfo useInfo) of
-    --     Nothing  -> error "What?" -- return (bindDecls, expr)  -- dead code elimination
-    --     Just 0   -> return (bindDecls, expr)  -- dead code elimination
-    --     Just 1   -> return (bindDecls, doSubstExpr [(x,v)] expr)  -- inlining
-    --     Just cnt -> return (bindDecls++[binding], expr)  -- do nothing
+    fBindDecl (bindDecls, expr) binding@(Binding x ty (ValExpr (UnitM v))) =
+      case H.lookup x (varUseInfo useInfo) of
+        Nothing  -> error "What?" -- return (bindDecls, expr)  -- dead code elimination
+        Just 0   -> return (bindDecls, expr)  -- dead code elimination
+        Just 1   -> return (bindDecls, doSubstExpr [(x,v)] expr)  -- inlining
+        Just cnt -> return (bindDecls++[binding], expr)  -- do nothing
 
     fBindDecl (bindDecls, expr) binding =
       return (bindDecls++[binding], expr)

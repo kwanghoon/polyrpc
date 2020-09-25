@@ -352,6 +352,9 @@ calc :: PrimOp -> [Location] -> [Type] -> [Value] -> Mem -> IO (Value, Mem)
 calc MkRecOp locs tys [Closure vs fvtys codename [], Lit (StrLit f)] mem =
   return (Closure vs fvtys codename [f], mem)
 
+calc MkRecOp locs tys vs mem =
+  error $ "[MkRecOp]: Unexpected: "
+              ++ show locs ++ " " ++ show tys ++ " " ++ show vs
 
 calc PrimRefCreateOp [loc1] [ty] [v] mem =
   let (addr, mem1) = allocMem v mem in return (Addr addr, mem1)
@@ -383,8 +386,12 @@ calc PrimPrintOp [loc] [] [Lit (StrLit s)] mem = do
 
 
 calc primop locs tys vs mem =
-  return (Lit $ calc' primop locs tys (map (\ (Lit lit)-> lit) vs), mem)
+  return (Lit $ calc' primop locs tys (map getLit vs), mem)
 
+  where
+    getLit (Lit lit) = lit
+    getLit v = error $ "[Execute] calc-getLit: what? " ++ show v
+                       ++ "\n  in " ++ show (Prim primop locs tys vs)
 
 -- Primitives
 calc' :: PrimOp -> [Location] -> [Type] -> [Literal] -> Literal

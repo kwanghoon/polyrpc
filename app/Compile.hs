@@ -19,7 +19,7 @@ import Control.Monad
 
 compile :: Monad m =>
   SE.GlobalTypeInfo -> [SE.TopLevelDecl] -> m (TE.GlobalTypeInfo, TE.FunctionStore, TE.Expr)
-  
+
 compile s_gti s_topleveldecls = do
   let s_topleveldecls_with_basiclib =
         [SE.BindingTopLevel (SE.Binding x ty expr) | (x,ty,expr) <- basicLib] ++ s_topleveldecls
@@ -62,12 +62,12 @@ compConTypeInfo conTypeInfo = mapM compConTypeInfo' conTypeInfo
     compConTypeInfo' (cname, (argtys, dtname, locvars, tyvars)) = do
       target_argtys <- mapM compValType argtys
       return (cname, (target_argtys, dtname, locvars, tyvars))
-      
+
 compDataTypeInfo :: Monad m => SE.DataTypeInfo -> m TE.DataTypeInfo
 compDataTypeInfo dataTypeInfo = mapM compDataTypeInfo' dataTypeInfo
 
 compDataTypeInfo' (dtname, (locvars, tyvars, cnameArgtysList)) = do
-  target_cnameArgtysList <- 
+  target_cnameArgtysList <-
      mapM (\ (cname,argtys)-> do target_argtys <- mapM compValType argtys
                                  return (cname,target_argtys)) cnameArgtysList
   return (dtname, (locvars, tyvars, target_cnameArgtysList))
@@ -88,7 +88,7 @@ compValType (ST.TypeVarType s) = return (TT.TypeVarType s)
 compValType (ST.TupleType tys) = do
   t_tys <- mapM compValType tys
   return (TT.TupleType t_tys)
-  
+
 compValType (ST.FunType ty1 loc ty2) = do
   t_ty1 <- compValType ty1
   t_ty2 <- compType ty2
@@ -130,7 +130,7 @@ compTopLevels s_gti funStore (toplevel:toplevels) = do
 compTopLevel :: Monad m =>
   SE.GlobalTypeInfo -> TE.FunctionStore ->
   SE.TopLevelDecl -> m (TE.FunctionStore, TE.LibInfo, [TE.BindingDecl], SE.GlobalTypeInfo)
-  
+
 compTopLevel s_gti funStore (SE.LibDeclTopLevel x ty) = do
   target_ty <- compValType ty
   return (funStore, [(x, target_ty)], [], s_gti)
@@ -154,7 +154,7 @@ compTopLevel s_gti funStore (SE.BindingTopLevel bindingDecl@(SE.Binding x ty exp
 compBindingDecl :: Monad m =>
   SE.GlobalTypeInfo -> SE.Env -> Location ->
   TE.FunctionStore -> SE.BindingDecl -> m (TE.FunctionStore, TE.BindingDecl)
-  
+
 compBindingDecl s_gti env loc funStore (SE.Binding x ty expr) = do
   target_ty <- compValType ty
   (funStore1, target_expr) <- compExpr s_gti env loc ty funStore expr
@@ -176,8 +176,8 @@ compBindingDecl s_gti env loc funStore (SE.Binding x ty expr) = do
 compExpr :: Monad m =>
   SE.GlobalTypeInfo -> SE.Env -> Location -> ST.Type ->
   TE.FunctionStore -> SE.Expr -> m (TE.FunctionStore, TE.Expr)   -- Ending with 'ValExpr Expr'??
-  
-compExpr s_gti env loc s_ty funStore (SE.Var x) = 
+
+compExpr s_gti env loc s_ty funStore (SE.Var x) =
   return (funStore, TE.ValExpr $ TE.UnitM (TE.Var x))
 
 compExpr s_gti env loc (ST.TypeAbsType tyvars0 s_ty) funStore (SE.TypeAbs tyvars1 expr) = do
@@ -215,7 +215,7 @@ compExpr s_gti env loc (ST.FunType s_argty s_loc s_resty) funStore (SE.Abs xtylo
   t_argty <- compValType s_argty
   t_resty <- compType s_resty
   let target_ty = TT.FunType t_argty s_loc t_resty
-  let s_xtys = [(x,ty) | (x,ty,_) <- xtylocs] 
+  let s_xtys = [(x,ty) | (x,ty,_) <- xtylocs]
   t_xtys <- mapM (\(x,ty) -> do { t_ty <- compValType ty; return (x,t_ty) }) s_xtys
   let env1 = env {SE._varEnv = (s_xtys ++ SE._varEnv env)}
   (funStore1, target_expr) <- compExpr s_gti env1 s_loc s_resty funStore expr
@@ -223,7 +223,7 @@ compExpr s_gti env loc (ST.FunType s_argty s_loc s_resty) funStore (SE.Abs xtylo
 
   (funStore2, closure) <- mkClosure env s_loc funStore1 target_ty opencode
   return (funStore2, TE.ValExpr $ TE.UnitM closure)
-  
+
 compExpr s_gti env loc s_ty funStore (SE.Abs xtylocs expr) = do
   error $ "[compExpr] Not abstraction type: " ++ show s_ty ++ ", " ++ show (SE.Abs xtylocs expr)
 
@@ -242,7 +242,7 @@ compExpr s_gti env loc (ST.TupleType tys) funStore (SE.Tuple exprs) = do
 compExpr s_gti env loc s_ty funStore (SE.Tuple exprs) = do
   error $ "[compExpr]: Not tuple type: " ++ show s_ty
 
-compExpr s_gti env loc s_ty funStore (SE.Lit lit) = 
+compExpr s_gti env loc s_ty funStore (SE.Lit lit) =
   return (funStore, TE.ValExpr $ TE.UnitM (TE.Lit lit))
 
 compExpr s_gti env loc s_ty funStore (SE.Constr cname locs argtys exprs tys) = do
@@ -270,7 +270,7 @@ compExpr s_gti env loc s_ty funStore (SE.Let bindingDecls expr) = do
           (reverse bindingDecls)
   (funStore3, t_expr) <- compExpr s_gti env1 loc s_ty funStore2 expr
   return (funStore3, TE.singleBindM $ TE.BindM t_bindingDecls t_expr)
-   
+
 compExpr s_gti env loc s_ty funStore (SE.Case expr (Just case_ty) alts) = do
   let (x, funStore0) = TE.newVar funStore
   target_case_ty <- compValType case_ty
@@ -285,7 +285,7 @@ compExpr s_gti env loc s_ty funStore (SE.Case expr (Just case_ty) alts) = do
                                 TE.BindM [ TE.Binding x target_case_ty target_expr ]
                                  (TE.Case (TE.Var x) target_case_ty target_alts))
         [] -> error $ "[compExpr] invalid constructor type: " ++ tyconName
- 
+
     ST.TupleType tys -> do
       (funStore3, target_alts) <- compAlts s_gti env loc [] [] tys [] [] s_ty funStore1 alts
       return (funStore3, TE.ValExpr $
@@ -317,7 +317,7 @@ compExpr s_gti env loc s_ty funStore (SE.App left (Just (ST.FunType argty locfun
 
 compExpr s_gti env loc s_ty funStore (SE.App left Nothing right maybeLoc) = do
    error $ "[compExpr] App"
-   
+
 
 compExpr s_gti env loc s_ty funStore (SE.TypeApp expr (Just left_s_ty) tys) = do
    let (f, funStore1) = TE.newVar funStore
@@ -359,7 +359,7 @@ compExpr s_gti env loc s_ty funStore (SE.Prim primop op_locs op_tys exprs) = do
                h (TE.Let [TE.Binding y target_retty
                             (TE.Prim primop op_locs target_op_tys (map TE.Var xs))]
                          (TE.ValExpr (TE.UnitM (TE.Var y)))))
-      
+
     [] -> error $ "[compExpr] Not found Prim " ++ show primop
 
 
@@ -378,7 +378,7 @@ compAlts s_gti env loc locs locvars tys tyvars tycondecls s_ty funStore (alt:alt
   (funStore1, target_alt)  <- compAlt  s_gti env loc substLoc substTy tycondecls [] s_ty funStore  alt
   (funStore2, target_alts) <- compAlts s_gti env loc locs locvars tys tyvars tycondecls s_ty funStore1 alts
   return (funStore2, target_alt:target_alts)
-  
+
 
 compAlt s_gti env loc substLoc substTy tycondecls externTys s_ty funStore (SE.Alternative con args expr) = do
 -- externTys only for TupleAlternative
@@ -393,7 +393,7 @@ compAlt s_gti env loc substLoc substTy tycondecls externTys s_ty funStore (SE.Al
               return (funStore1, TE.Alternative con args target_expr)
       else error $ "[compAlt]: invalid arg length: " ++ con ++ show args
 
-compAlt s_gti env loc substLoc substTy tycondecls externTys s_ty funStore (SE.TupleAlternative args expr) = do 
+compAlt s_gti env loc substLoc substTy tycondecls externTys s_ty funStore (SE.TupleAlternative args expr) = do
 -- substTy==[], tycondecls==[]
   let varEnv  = SE._varEnv env
   let varEnv' = zip args externTys ++ varEnv
@@ -408,8 +408,8 @@ mkClosure env loc funStore target_ty opencode = do
   let (fname,funStore1) = TE.newName funStore
   let locvars = SE._locVarEnv env
   let tyvars  = SE._typeVarEnv env
-  
-  -- let (_freevars, _freetys) = unzip $ SE._varEnv env 
+
+  -- let (_freevars, _freetys) = unzip $ SE._varEnv env
 
   let freevars = Set.toList (TE.fvOpenCode opencode)
   let freetys = [ty | x <- freevars
@@ -420,10 +420,10 @@ mkClosure env loc funStore target_ty opencode = do
                                               ++ show opencode ++ "\n"
                                               ++ show freevars ++ "\n"
                                               ++ show (SE._varEnv env)]
-  
+
   let target_freevars = map TE.Var freevars
 
-  
+
   target_freetys <- mapM compValType freetys
   let codename = TE.CodeName fname (map LocVar locvars) (map TT.TypeVarType tyvars)
   let codety = TT.CodeType locvars tyvars target_freetys target_ty
@@ -438,5 +438,3 @@ noDupAppend xs (y:ys) =
   case List.find (y==) xs of
     Just _ -> noDupAppend xs ys
     Nothing -> noDupAppend (xs ++ [y]) ys
-
-    
