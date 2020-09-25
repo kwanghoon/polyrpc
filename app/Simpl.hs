@@ -266,6 +266,9 @@ doValue useInfo (GenApp loc v ty@(CloType (FunType argty _ _))  arg) valty = do
   (useInfo2, arg1) <- doValue useInfo1 arg argty
   return (useInfo2, GenApp loc v1 ty arg1)
 
+doValue useInfo val valty =
+  error $ "[Simpl] doValue " ++ show val ++ " : " ++ show valty
+
 --
 doSubstLet :: Monad m => UseInfo -> [BindingDecl] -> Expr -> Type -> m Expr
 doSubstLet useInfo bindDecls expr exprty = do
@@ -316,14 +319,16 @@ doFunStore useInfo funStore = do
 
 doCode :: Monad m => UseInfo -> (CodeType, Code) -> m (UseInfo, (CodeType, Code))
 doCode useInfo (CodeType as1 ls1 tys ty, Code ls2 as2 vs opencode) = do
-  (useInfo1, opencode1) <- doOpenCode useInfo opencode
+  (useInfo1, opencode1) <- doOpenCode useInfo opencode ty
   return (useInfo1, (CodeType as1 ls1 tys ty, Code ls2 as2 vs opencode1))
 
-
-doOpenCode :: Monad m => UseInfo -> OpenCode -> m (UseInfo, OpenCode)
-doOpenCode useInfo (CodeAbs xTys expr) = do
-  return (useInfo, CodeAbs xTys expr)
-doOpenCode useInfo (CodeTypeAbs tyvars expr) = do
-  return (useInfo, CodeTypeAbs tyvars expr)
-doOpenCode useInfo (CodeLocAbs locvars expr) = do
-  return (useInfo, CodeLocAbs locvars expr)
+doOpenCode :: Monad m => UseInfo -> OpenCode -> Type -> m (UseInfo, OpenCode)
+doOpenCode useInfo (CodeAbs xTys expr) (FunType _ _ resty) = do
+  (useInfo1, expr1) <- doExpr useInfo expr resty
+  return (useInfo1, CodeAbs xTys expr1)
+doOpenCode useInfo (CodeTypeAbs tyvars expr) (TypeAbsType _ bodyty) = do
+  (useInfo1, expr1) <- doExpr useInfo expr bodyty
+  return (useInfo1, CodeTypeAbs tyvars expr1)
+doOpenCode useInfo (CodeLocAbs locvars expr) (LocAbsType _ bodyty) = do
+  (useInfo1, expr1) <- doExpr useInfo expr bodyty
+  return (useInfo1, CodeLocAbs locvars expr1)
