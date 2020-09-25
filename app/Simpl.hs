@@ -12,6 +12,8 @@ import Data.HashMap.Strict as H
 import Data.List as L
 import Data.Maybe as M
 
+import Debug.Trace
+
 ---------------------------------------------------------------------------
 -- Simplification:
 --
@@ -29,11 +31,12 @@ initUseInfo = UseInfo { cNameUseInfo = empty, varUseInfo = empty }
 
 addVar :: String -> UseInfo -> UseInfo
 addVar x useInfo =
-  useInfo { varUseInfo = H.insert x 0 (varUseInfo useInfo) }
+  useInfo { varUseInfo = H.insert x 1 (varUseInfo useInfo) }
 
-addVars :: [String] -> UseInfo -> UseInfo
-addVars xs useInfo =
-  foldl (\useInfo x -> addVar x useInfo) useInfo xs
+initVars :: [String] -> UseInfo -> UseInfo
+initVars xs useInfo =
+  foldl (\useInfo x ->
+    useInfo { varUseInfo = H.insert x 0 (varUseInfo useInfo) }) useInfo xs
 
 rmVar :: String -> UseInfo -> UseInfo
 rmVar x useInfo =
@@ -66,14 +69,12 @@ restore xUseList useInfo =
     fXUseList hashmap (x,count) = H.insert x count hashmap
 
 
-addCodeName :: String -> UseInfo -> UseInfo
-addCodeName x useInfo =
-  useInfo { cNameUseInfo = H.insert x 0 (cNameUseInfo useInfo) }
-
 incCodeName :: String -> UseInfo -> UseInfo
 incCodeName x useInfo =
   case H.lookup x (cNameUseInfo useInfo) of
-    Nothing -> addCodeName x useInfo
+    Nothing ->
+      let cNameUseInfo' = H.insert x 1 (cNameUseInfo useInfo) in
+        useInfo { cNameUseInfo = cNameUseInfo' }
     Just count ->
       let cNameUseInfo' = H.insert x (count+1) (cNameUseInfo useInfo) in
         useInfo { cNameUseInfo = cNameUseInfo' }
@@ -87,16 +88,28 @@ simpl :: Monad m => GlobalTypeInfo -> FunctionStore -> Expr
 simpl gti funStore mainexpr = do
   let initUseInfo = initUseInfoFrom funStore
   (useInfo, mainexpr') <-doExpr initUseInfo mainexpr (MonType unit_type)
-  funStore' <- doFunStore useInfo funStore
-  return (gti, funStore', mainexpr')
+  (useInfo1, funStore') <- doFunStore useInfo funStore
+
+  trace (show (cNameUseInfo useInfo1) ++ "\n")
+    (if isNoChange funStore funStore'
+     then return (gti, funStore', mainexpr')
+     else simpl gti funStore' mainexpr')
+
+  where
+    isNoChange funStore1 funStore2 =
+          length (_clientstore funStore1) == length (_clientstore funStore2)
+       && length (_serverstore funStore1) == length (_serverstore funStore2)
 
 initUseInfoFrom :: FunctionStore -> UseInfo
 initUseInfoFrom funStore = UseInfo
-  { cNameUseInfo =
-      foldl (\hash x -> H.insert x 0 hash) empty
-       ([ codeName | (codeName, _) <- _clientstore funStore ] ++
-        [ codeName | (codeName, _) <- _serverstore funStore ])
-  , varUseInfo = empty }
+     { cNameUseInfo = empty, varUseInfo = empty }
+
+-- initUseInfoFrom funStore = UseInfo
+--   { cNameUseInfo =
+--       foldl (\hash x -> H.insert x 0 hash) empty
+--        ([ codeName | (codeName, _) <- _clientstore funStore ] ++
+--         [ codeName | (codeName, _) <- _serverstore funStore ])
+--   , varUseInfo = empty }
 
 --
 doExpr :: Monad m => UseInfo -> Expr -> Type -> m (UseInfo, Expr)
@@ -107,7 +120,7 @@ doExpr useInfo (ValExpr v) exprty = do
 doExpr useInfo (Let bindDecls expr) exprty = do
   let savedInfo = save useInfo xs
 
-  let useInfo0 = addVars xs useInfo
+  let useInfo0 = initVars xs useInfo
   (useInfo1, bindDecls1) <- foldM fBindDecl (useInfo0, []) bindDecls
   (useInfo2, expr1) <- doExpr useInfo1 expr exprty
 
@@ -138,7 +151,7 @@ doExpr useInfo (Case v ty alts) exprty = do
     fAlt (useInfo, alts) (Alternative cname xs expr) = do
       let savedInfo = save useInfo xs
 
-      let useInfo0 = addVars xs useInfo
+      let useInfo0 = initVars xs useInfo
       (useInfo1, expr1) <- doExpr useInfo0 expr exprty
       let useInfo2 = rmVars xs useInfo1
 
@@ -148,7 +161,7 @@ doExpr useInfo (Case v ty alts) exprty = do
     fAlt (useInfo, alts) (TupleAlternative xs expr) = do
       let savedInfo = save useInfo xs
 
-      let useInfo0 = addVars xs useInfo
+      let useInfo0 = initVars xs useInfo
       (useInfo1, expr1) <- doExpr useInfo0 expr exprty
       let useInfo2 = rmVars xs useInfo1
 
@@ -231,7 +244,7 @@ doValue useInfo (UnitM v) (MonType vty) = do
 doValue useInfo (BindM bindDecls expr) (MonType exprty) = do
   let savedInfo = save useInfo xs
 
-  let useInfo0 = addVars xs useInfo
+  let useInfo0 = initVars xs useInfo
   (useInfo1, bindDecls1) <- foldM fBindDecl (useInfo0, []) bindDecls
   (useInfo2, expr1) <- doExpr useInfo1 expr (MonType exprty)
   -------------------------------------
@@ -303,19 +316,31 @@ doSubstBindDecls useInfo bindDecls expr exprty = do
       return (bindDecls++[binding], expr)
 
 --
-doFunStore :: Monad m => UseInfo -> FunctionStore -> m FunctionStore
+doFunStore :: Monad m => UseInfo -> FunctionStore -> m (UseInfo, FunctionStore)
 doFunStore useInfo funStore = do
   -- 1. do Use analysis
   (useInfo1, clientstore) <- foldM fStore (useInfo, []) (_clientstore funStore)
-  (useInfo2, serverstore) <- foldM fStore (useInfo, []) (_serverstore funStore)
+  (useInfo2, serverstore) <- foldM fStore (useInfo1, []) (_serverstore funStore)
 
   -- 2. Do deadcode elimination
-  return (funStore {_clientstore=clientstore} {_serverstore=serverstore})
+  let elim = fElim useInfo2
+
+  clientstore1 <- foldM elim [] (_clientstore funStore)
+  serverstore1 <- foldM elim [] (_serverstore funStore)
+
+  -- error $ "Deadcode elimination: " ++ show (cNameUseInfo useInfo2)
+  return (useInfo2, funStore {_clientstore=clientstore1} {_serverstore=serverstore1})
 
   where
     fStore (useInfo, store) (name, codeTypeCode) = do
       (useInfo1, codeTypeCode1) <- doCode useInfo codeTypeCode
-      return (useInfo1, store++[(name,codeTypeCode1)])
+      return (useInfo1, store++[(name, codeTypeCode1)])
+
+    fElim useInfo store namedCode@(name, _) =
+      case H.lookup name (cNameUseInfo useInfo) of
+        Nothing -> return store
+        Just 0  -> return store
+        Just _  -> return $ store ++ [namedCode]
 
 doCode :: Monad m => UseInfo -> (CodeType, Code) -> m (UseInfo, (CodeType, Code))
 doCode useInfo (CodeType as1 ls1 tys ty, Code ls2 as2 vs opencode) = do

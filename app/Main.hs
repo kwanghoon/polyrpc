@@ -115,16 +115,16 @@ print_cs cmd file funStore t_expr = do
   -- else return ()
 
   if _flag_print_cs_json cmd
-  then print_cs_json file funStore t_expr
+  then print_cs_json (prefixOf file) funStore t_expr
   else return ()
 
 print_inlined_cs cmd file funStore t_expr = do
   if _flag_print_inlined_cs_json cmd
-  then print_cs_json file funStore t_expr
+  then print_cs_json (prefixOf file ++ "_inlined") funStore t_expr
   else return ()
 
-print_cs_json file funStore t_expr = do
-  let jsonfile = prefixOf file ++ "_cs.json"
+print_cs_json fileName funStore t_expr = do
+  let jsonfile = fileName ++ "_cs.json"
   putStrLn $ "Writing to " ++ jsonfile
   writeFile jsonfile $ render
       $ pp_value $ toJSON (funStore :: TE.FunctionStore, t_expr :: TE.Expr)

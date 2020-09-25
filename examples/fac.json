@@ -59,7 +59,7 @@
                                {"Case": [{"Prim": ["LePrimOp", [{"Location": "client"}], [],
                                                    [{"Var": "n"}, {"Lit": {"IntLit": 0}}]]},
                                          {"Just": {"ConType": ["Bool", [], []]}},
-                                         [{"Alternative": ["True", [], {"Lit": {"IntLit": 0}}]},
+                                         [{"Alternative": ["True", [], {"Lit": {"IntLit": 1}}]},
                                           {"Alternative": ["False", [],
                                                            {"Prim": ["MulPrimOp",
                                                                      [{"Location": "client"}], [],

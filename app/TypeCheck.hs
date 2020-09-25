@@ -18,14 +18,14 @@ typeCheck toplevelDecls = do
 
   -- 2. collect all types, builtin or user-defined ones
   typeInfo <- collectDataTypeDecls datatypeDecls
-  
+
   -- 3. elaborate data types
   elab_datatypeDecls <- elabDataTypeDecls typeInfo datatypeDecls
   dataTypeInfo <- collectDataTypeInfo elab_datatypeDecls
-  
+
   -- 4. elaborate constructor types
   conTypeInfo <- elabConTypeDecls elab_datatypeDecls
-  
+
   -- 5. elaborate types declared in the bindings
   partial_elab_bindingDecls <- elabBindingTypes typeInfo [] [] bindingDecls
 
@@ -33,20 +33,20 @@ typeCheck toplevelDecls = do
 -- for fully recursive bindings:
 --------------------------------
   bindingTypeInfo <- bindingTypes partial_elab_bindingDecls
-                          
+
   -- 6. elaborate bindings
   let basicLibTypeInfo = [(x,ty) | (x,ty,expr)<-basicLib]
-  
+
   let gti = GlobalTypeInfo
               { _typeInfo=typeInfo
               , _conTypeInfo=conTypeInfo
               , _dataTypeInfo=dataTypeInfo
--------------------------------              
+-------------------------------
 -- for fully recursive bindings
 -------------------------------
 --              , _bindingTypeInfo=basicLibTypeInfo ++ bindingTypeInfo }
               , _bindingTypeInfo=basicLibTypeInfo }
-              
+
   let initEnv = (emptyEnv{_varEnv=_bindingTypeInfo gti ++ bindingTypeInfo})
   elab_bindingDecls <- elaborate gti initEnv partial_elab_bindingDecls
 
@@ -56,7 +56,7 @@ typeCheck toplevelDecls = do
                        ++ [ BindingTopLevel bd | bd <- elab_bindingDecls]
 
   let gti1 = gti {_bindingTypeInfo=basicLibTypeInfo ++ bindingTypeInfo}
-        
+
   return (gti1, elab_toplevels)
 
 ----------------------------------------------------------------------------
@@ -80,14 +80,14 @@ splitTopLevelDecl (DataTypeTopLevel datatypeDecl) = return ([], [datatypeDecl])
 -- 2. Collect bultin types and user-defined datatyps
 ----------------------------------------------------------------------------
 
--- type TypeInfo = [(String, [String], [String])] 
+-- type TypeInfo = [(String, [String], [String])]
 
 lookupTypeCon :: Monad m => TypeInfo -> String -> m ([String], [String])
 lookupTypeCon typeInfo x = do
   let found = [(locvars,tyvars) | (name, locvars, tyvars) <- typeInfo, x==name]
-  if found /= [] 
+  if found /= []
     then return (head found)
-    else error $ "lookupConstr: Not found construct : " ++ x 
+    else error $ "lookupConstr: Not found construct : " ++ x
 
 builtinDatatypes :: [DataTypeDecl]
 builtinDatatypes = [
@@ -95,11 +95,11 @@ builtinDatatypes = [
     (DataType intType    [] [] []), -- data Int
     (DataType boolType   [] []      -- data Bool = { True | False }
       [ TypeCon trueLit  []
-      , TypeCon falseLit [] ]), 
+      , TypeCon falseLit [] ]),
     (DataType stringType [] [] []), -- data String
     (DataType refType ["l"] ["a"] [])  -- data Ref
   ]
-  
+
 
 collectDataTypeDecls :: Monad m => [DataTypeDecl] -> m TypeInfo
 collectDataTypeDecls datatypeDecls = do
@@ -141,7 +141,7 @@ elabTypeConDecl typeInfo locvars tyvars (TypeCon con tys) = do
 -- 4. Elaboration of constructor types
 ----------------------------------------------------------------------------
 
--- type ConTypeInfo = [(String, ([Type], String, [String], [String]))] 
+-- type ConTypeInfo = [(String, ([Type], String, [String], [String]))]
 
 -- lookupConstr :: GlobalTypeInfo -> String -> [([Type], String, [String], [String])]
 -- lookupConstr gti x = [z | (con, z) <- _conTypeInfo gti, x==con]
@@ -224,7 +224,7 @@ elabType typeInfo tyvars locvars (FunType ty1 (Location loc) ty2) = do
   let loc0 = if loc `elem` locvars
              then LocVar loc else Location loc
   return (FunType elab_ty1 loc0 elab_ty2)
-  
+
 elabType typeInfo tyvars locvars (FunType ty1 (LocVar _) ty2) =
   error $ "[TypeCheck] elabType: FunType: LocVar"
 
@@ -295,11 +295,11 @@ mkLocAbs loc cname tyname locvars tyvars argtys =
       , singleLocAbsType (LocAbsType locvars tyabsTy))
 
 mkTypeAbs loc cname tyname locvars [] argtys = mkAbs loc cname tyname locvars [] argtys
-mkTypeAbs loc cname tyname locvars tyvars argtys = 
+mkTypeAbs loc cname tyname locvars tyvars argtys =
   let (abs, absTy) = mkAbs loc cname tyname locvars tyvars argtys
   in  (singleTypeAbs (TypeAbs tyvars abs)
       , singleTypeAbsType (TypeAbsType tyvars absTy))
-  
+
 mkAbs loc cname tyname locvars tyvars [] =
   let locs = map LocVar locvars
       tys  = map TypeVarType tyvars
@@ -320,15 +320,15 @@ elabExpr :: Monad m =>
 elabExpr gti env loc (Var x)
   | isConstructorName x =    -- if it is a constructor
   case lookupConstr gti x  of
-        ((argtys, tyname, locvars, tyvars):_) -> return $ mkLocAbs loc x tyname locvars tyvars argtys 
+        ((argtys, tyname, locvars, tyvars):_) -> return $ mkLocAbs loc x tyname locvars tyvars argtys
 
         [] -> error $ "[TypeCheck] elabExpr: Not found constructor " ++ x
-  
+
   | otherwise =    --  isBindingName x =        -- if it is a term variable
   case lookupVar env x of    -- try to find it in the local var env or
     (x_ty:_) -> return (Var x, x_ty)
     [] -> error $ "[TypeCheck] elabExpr: Not found variable " ++ x
-        
+
 elabExpr gti env loc (TypeAbs tyvars expr) = do
   let typeVarEnv = _typeVarEnv env
   let typeVarEnv' = reverse tyvars ++ typeVarEnv
@@ -347,7 +347,7 @@ elabExpr gti env loc_0 (Abs [(var,argty,loc)] expr)  = do
   let varEnv = _varEnv env
   let varEnv' = (var,elab_argty):varEnv
   (elab_expr, ret_ty) <- elabExpr gti (env{_varEnv=varEnv'}) elab_loc expr
-  return (Abs [(var,elab_argty,elab_loc)] elab_expr, FunType elab_argty elab_loc ret_ty)  
+  return (Abs [(var,elab_argty,elab_loc)] elab_expr, FunType elab_argty elab_loc ret_ty)
 
 elabExpr gti env loc_0 (Abs ((var,argty,loc):varTypeLocList) expr)  = do
   elab_argty <- elabType (_typeInfo gti) (_typeVarEnv env) (_locVarEnv env) argty
@@ -367,17 +367,17 @@ elabExpr gti env loc (Let letBindingDecls expr) = do
      <- elabBindingTypes typeInfo (_typeVarEnv env) (_locVarEnv env) letBindingDecls
 
 --------------------------------
--- for fully recursive bindings:  
+-- for fully recursive bindings:
 --------------------------------
 --  letBindingTypeInfo <- bindingTypes partial_elab_letBindingDecls
- 
+
 --  let letBindingTypeInfo' = letBindingTypeInfo ++ _bindingTypeInfo gti
 --  let gti1 = gti {_bindingTypeInfo=letBindingTypeInfo'}
   let gti1 = gti
   elab_letBindingDecls <- elaborate gti1 env partial_elab_letBindingDecls
 
   letBindingTypeInfo <- bindingTypes partial_elab_letBindingDecls -- for let body
-  
+
   let varEnv' = letBindingTypeInfo ++ _varEnv env
   (elab_expr, elab_ty) <- elabExpr gti (env {_varEnv=varEnv'}) loc expr
   return (Let elab_letBindingDecls elab_expr, elab_ty)
@@ -398,7 +398,7 @@ elabExpr gti env loc (Case expr _ alts) = do
     TupleType tys -> do
       (elab_alts, altty) <- elabAlts gti env loc [] [] tys [] [] alts
       return (Case elab_caseexpr (Just casety) elab_alts, altty)
-    
+
     _ -> error $ "[TypeCheck] elabExpr: case expr not constructor type"
 
 elabExpr gti env loc (App left_expr maybe right_expr l) = do
@@ -421,11 +421,11 @@ elabExpr gti env loc (TypeApp expr maybe tys) = do
       if length tyvars == length elab_tys
       then return (singleTypeApp (TypeApp elab_expr (Just elab_ty) elab_tys), doSubst (zip tyvars elab_tys) ty0)
       else error $ "[TypeCheck] elabExpr: not equal length of arg types in type app: "
-    _ -> error $ "[TypeCheck] elabExpr: not type-abstraction type in type app: " ++ "\n" 
+    _ -> error $ "[TypeCheck] elabExpr: not type-abstraction type in type app: " ++ "\n"
                    ++ show elab_ty ++ "\n"
                    ++ show (TypeApp expr maybe tys) ++ "\n"
 
-elabExpr gti env loc (LocApp expr maybe locs) = 
+elabExpr gti env loc (LocApp expr maybe locs) =
   let f (Location loc0) = if loc0 `elem` (_locVarEnv env) then LocVar loc0 else Location loc0
       f (LocVar x)      = error $ "[TypeCheck] elabExpr: LocApp: LocVar: " ++ x
   in do
@@ -452,7 +452,7 @@ elabExpr gti env loc (Prim op op_locs op_tys exprs) = do
   elabExprTyList <- mapM (elabExpr gti env loc) exprs
   let (elab_exprs, tys) = unzip elabExprTyList
   case op of
-    EqIntPrimOp -> overloaded elab_op_locs elab_op_tys elab_exprs tys 
+    EqIntPrimOp -> overloaded elab_op_locs elab_op_tys elab_exprs tys
     _           -> do
        match <- nonoverloaded elab_op_locs elab_op_tys elab_exprs tys op
        case match of
@@ -473,30 +473,30 @@ elabExpr gti env loc (Prim op op_locs op_tys exprs) = do
                 case matchString of
                   Left expr -> return expr
                   Right err -> error $ err
-          
-     nonoverloaded elab_op_locs elab_op_tys elab_exprs tys  op = 
+
+     nonoverloaded elab_op_locs elab_op_tys elab_exprs tys  op =
        case lookupPrimOpType op of
          ((locvars, tyvars, argtys, retty):_) -> do
            let substTy  = zip tyvars op_tys
            let substLoc = zip locvars op_locs
            let substed_argtys = map (doSubstLoc substLoc . doSubst substTy) argtys
-      
+
            if length tys==length argtys
               && and (map (uncurry equalType) (zip substed_argtys tys))
               && length locvars==length op_locs
               && length tyvars==length op_tys
- 
+
            then return $ Left $ (Prim op elab_op_locs elab_op_tys elab_exprs, retty)
-      
+
            else return $ Right $ "[TypeCheck] elabExpr: incorrect arg types in Prim op: "
                                   ++ show tys ++ " != " ++ show substed_argtys
-      
+
          [] -> return $ Right $ "[TypeCheck] elabExpr: type not found type in Prim op: "
                                   ++ show op
 
 elabExpr gti env loc (Lit literal) = return (Lit literal, typeOfLiteral literal)
 
-elabExpr gti env loc (Constr conname locs contys exprs _argtys) = do 
+elabExpr gti env loc (Constr conname locs contys exprs _argtys) = do
   elab_locs <- mapM (elabLocation (_locVarEnv env)) locs
   elab_contys <- mapM (elabType (_typeInfo gti) (_typeVarEnv env) (_locVarEnv env)) contys
   elabExprTyList <- mapM (elabExpr gti env loc) exprs
@@ -509,7 +509,7 @@ elabExpr gti env loc (Constr conname locs contys exprs _argtys) = do
                    (map (doSubst subst) elab_tys)
                  , doSubst subst (ConType tyname (map LocVar locvars) (map TypeVarType tyvars)))
         (Nothing) -> error $ "[TypeCheck] elabExpr: constructor arg types incorrect: " ++ conname
-            
+
     [] -> error $ "[TypeCheck] elabExpr: constructor not found: " ++ conname
 
 -- elabExpr gti env loc expr = error $ "[TypeCheck] elabExpr: " ++ show expr
@@ -520,7 +520,7 @@ elabAlts gti env loc locs locvars tys tyvars tycondecls [alt] = do
   let substTy = zip tyvars tys
   (elab_alt, elab_ty) <- elabAlt gti env loc substLoc substTy tycondecls tys alt
   return ([elab_alt], elab_ty)
-  
+
 elabAlts gti env loc locs locvars tys tyvars tycondecls (alt:alts) = do
   let substLoc = zip locvars locs
   let substTy = zip tyvars tys
@@ -539,7 +539,7 @@ elabAlts gti env loc locs locvars tys tyvars tycondecls (alt:alts) = do
 elabAlt gti env loc substLoc substTy tycondecls externTys (Alternative con args expr) = do
 -- externTys only for TupleAlternative
   case lookupCon tycondecls con of
-    (tys:_) -> 
+    (tys:_) ->
       if length tys==length args
       then do let tys' = map (doSubst substTy) (map (doSubstLoc substLoc) tys)
               let varEnv = _varEnv env
@@ -547,7 +547,7 @@ elabAlt gti env loc substLoc substTy tycondecls externTys (Alternative con args 
               (elab_expr, elab_ty) <- elabExpr gti (env {_varEnv=varEnv'}) loc expr
               return (Alternative con args elab_expr, elab_ty)
       else error $ "[TypeCheck] elabAlt: invalid arg length: " ++ con ++ show args
-      
+
     [] -> error $ "[TypeCheck] elabAlt: constructor not found"
 
 elabAlt gti env loc substLoc substTy tycondecls externTys (TupleAlternative args expr) = do
