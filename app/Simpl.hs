@@ -33,12 +33,12 @@ addVar :: String -> UseInfo -> UseInfo
 addVar x useInfo =
   useInfo { varUseInfo = H.insert x 1 (varUseInfo useInfo) }
 
-initVars :: [String] -> UseInfo -> UseInfo
-initVars xs useInfo =
-  foldl (\useInfo x ->
-    let initCount = if x=="main" then 2 else 0
+initVars :: [(String, Bool)] -> UseInfo -> UseInfo
+initVars xIsTops useInfo =
+  foldl (\useInfo (x,istop) ->
+    let initCount = if istop then 2 else 0
         _varUseInfo = H.insert x initCount (varUseInfo useInfo)
-    in  useInfo { varUseInfo = _varUseInfo }) useInfo xs
+    in  useInfo { varUseInfo = _varUseInfo }) useInfo xIsTops
 
 rmVar :: String -> UseInfo -> UseInfo
 rmVar x useInfo =
@@ -88,9 +88,9 @@ incCodeName x useInfo =
 simpl :: Monad m => GlobalTypeInfo -> FunctionStore -> Expr
                      -> m (GlobalTypeInfo, FunctionStore, Expr)
 simpl gti funStore mainexpr =
-  return (gti, funStore, mainexpr)
+  -- return (gti, funStore, mainexpr)
   -- trace (show mainexpr ++ "\n")
-  -- _simpl gti funStore mainexpr 1000  -- To prevent the infinite loop!
+  _simpl gti funStore mainexpr 1000  -- To prevent the infinite loop!
 
 _simpl gti funStore mainexpr 0 = do
   return (gti, funStore, mainexpr)
@@ -127,7 +127,7 @@ doExpr useInfo (ValExpr v) exprty = do
 doExpr useInfo (Let bindDecls expr) exprty = do
   let savedInfo = save useInfo xs
 
-  let useInfo0 = initVars xs useInfo
+  let useInfo0 = initVars xIsTops useInfo
   (useInfo1, bindDecls1, changed1) <- foldM fBindDecl (useInfo0, [], False) bindDecls
   (useInfo2, expr1, changed2) <- doExpr useInfo1 expr exprty
 
@@ -147,7 +147,8 @@ doExpr useInfo (Let bindDecls expr) exprty = do
       (useInfo', bexpr', changed') <- doExpr useInfo bexpr ty
       return (useInfo', bindDecls ++ [Binding istop x ty bexpr'], changed || changed')
 
-    xs = L.map (\(Binding istop x ty expr) -> x) bindDecls
+    xIsTops = L.map (\(Binding istop x ty expr) -> (x,istop)) bindDecls
+    xs = L.map fst xIsTops
 
 doExpr useInfo (Case v ty alts) exprty = do
   (useInfo1, v1, changed1) <- doValue useInfo v ty
@@ -158,7 +159,7 @@ doExpr useInfo (Case v ty alts) exprty = do
     fAlt (useInfo, alts, changed) (Alternative c xs expr) = do
       let savedInfo = save useInfo xs
 
-      let useInfo0 = initVars xs useInfo
+      let useInfo0 = initVars (zip xs (repeat False)) useInfo
       (useInfo1, expr1, changed1) <- doExpr useInfo0 expr exprty
       let useInfo2 = rmVars xs useInfo1
 
@@ -168,7 +169,7 @@ doExpr useInfo (Case v ty alts) exprty = do
     fAlt (useInfo, alts, changed) (TupleAlternative xs expr) = do
       let savedInfo = save useInfo xs
 
-      let useInfo0 = initVars xs useInfo
+      let useInfo0 = initVars (zip xs (repeat False)) useInfo
       (useInfo1, expr1, changed1) <- doExpr useInfo0 expr exprty
       let useInfo2 = rmVars xs useInfo1
 
@@ -251,7 +252,7 @@ doValue useInfo (UnitM v) (MonType vty) = do
 doValue useInfo (BindM bindDecls expr) (MonType exprty) = do
   let savedInfo = save useInfo xs
 
-  let useInfo0 = initVars xs useInfo
+  let useInfo0 = initVars xIsTops useInfo
   (useInfo1, bindDecls1, changed1) <- foldM fBindDecl (useInfo0, [], False) bindDecls
   (useInfo2, expr1, changed2) <- doExpr useInfo1 expr (MonType exprty)
   -------------------------------------
@@ -269,7 +270,8 @@ doValue useInfo (BindM bindDecls expr) (MonType exprty) = do
       (useInfo', bexpr', changed') <- doExpr useInfo bexpr (MonType ty)
       return (useInfo', bindDecls ++ [Binding istop x ty bexpr'], changed || changed')
 
-    xs = L.map (\(Binding istop x ty expr) -> x) bindDecls
+    xIsTops = L.map (\(Binding istop x ty expr) -> (x,istop)) bindDecls
+    xs = L.map fst xIsTops
 
 doValue useInfo (Req v ty@(CloType (FunType argty _ _)) arg) valty = do
   (useInfo1, v1, changed1) <- doValue useInfo v ty

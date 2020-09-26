@@ -141,7 +141,7 @@ parserSpec = ParserSpec
 
       {- TopLevel -}
       ("TopLevel -> Binding",
-        \rhs -> toASTTopLevelDeclSeq [BindingTopLevel (fromASTBindingDecl (get rhs 1 ))] ),
+        \rhs -> toASTTopLevelDeclSeq [BindingTopLevel (setTop (fromASTBindingDecl (get rhs 1 )))] ),
 
       ("TopLevel -> Binding ; TopLevel",
         \rhs -> toASTTopLevelDeclSeq
