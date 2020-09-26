@@ -21,16 +21,33 @@ compile :: Monad m =>
   SE.GlobalTypeInfo -> [SE.TopLevelDecl] -> m (TE.GlobalTypeInfo, TE.FunctionStore, TE.Expr)
 
 compile s_gti s_topleveldecls = do
+  let s_basiclib_topleveldecls =
+        [SE.BindingTopLevel (SE.Binding x ty expr) | (x,ty,expr) <- basicLib]
   let s_topleveldecls_with_basiclib =
         [SE.BindingTopLevel (SE.Binding x ty expr) | (x,ty,expr) <- basicLib] ++ s_topleveldecls
   let basicLibTypeInfo = [(x,ty) | (x,ty,expr)<-basicLib]
 
   let s_gti1 = s_gti {SE._bindingTypeInfo = basicLibTypeInfo}
+
+  (funStore1, t_libs1, t_bindingDecls1, s_gti2) <-
+    compTopLevels s_gti1 TE.initFunctionStore s_basiclib_topleveldecls
+
+  (funStore2, t_libs2, t_bindingDecls2, s_gti3) <-
+    compTopLevels s_gti2 funStore1 s_topleveldecls
+
+  t_gti <- compileGTI s_gti (t_libs1 ++ t_libs2)
+
+  let main = TE.ValExpr (TE.UnitM (TE.Lit UnitLit))
+  return (t_gti, funStore2
+         , TE.singleBindM $ TE.BindM (t_bindingDecls1 ++ t_bindingDecls2) main)
+
+{-
   (funStore, t_libs, t_bindingDecls, s_gti2) <-
     compTopLevels s_gti1 TE.initFunctionStore s_topleveldecls_with_basiclib
   t_gti <- compileGTI s_gti t_libs
   let main = TE.ValExpr (TE.UnitM (TE.Lit UnitLit))
   return (t_gti, funStore, TE.singleBindM $ TE.BindM t_bindingDecls main)
+-}
 
 
 -----
