@@ -22,9 +22,9 @@ compile :: Monad m =>
 
 compile s_gti s_topleveldecls = do
   let s_basiclib_topleveldecls =
-        [SE.BindingTopLevel (SE.Binding x ty expr) | (x,ty,expr) <- basicLib]
-  let s_topleveldecls_with_basiclib =
-        [SE.BindingTopLevel (SE.Binding x ty expr) | (x,ty,expr) <- basicLib] ++ s_topleveldecls
+        [SE.BindingTopLevel (SE.Binding False x ty expr) | (x,ty,expr) <- basicLib]
+  -- let s_topleveldecls_with_basiclib =
+  --       [SE.BindingTopLevel (SE.Binding False x ty expr) | (x,ty,expr) <- basicLib] ++ s_topleveldecls
   let basicLibTypeInfo = [(x,ty) | (x,ty,expr)<-basicLib]
 
   let s_gti1 = s_gti {SE._bindingTypeInfo = basicLibTypeInfo}
@@ -155,7 +155,7 @@ compTopLevel s_gti funStore (SE.LibDeclTopLevel x ty) = do
 compTopLevel s_gti funStore (SE.DataTypeTopLevel
                (SE.DataType dtname locvars tyvars tycondecls)) = return (funStore, [], [], s_gti)
 
-compTopLevel s_gti funStore (SE.BindingTopLevel bindingDecl@(SE.Binding x ty expr)) = do
+compTopLevel s_gti funStore (SE.BindingTopLevel bindingDecl@(SE.Binding _ x ty expr)) = do
   let env = SE.initEnv {SE._varEnv = (x,ty):SE._bindingTypeInfo s_gti}
 --  let env1 = env {SE._varEnv = SE._bindingTypeInfo s_gti  ++ SE._varEnv env}  -- TODO: Need to be optimized!!
   (funStore1, t_bindingDecl) <- compBindingDecl s_gti env clientLoc funStore bindingDecl
@@ -166,13 +166,13 @@ compTopLevel s_gti funStore (SE.BindingTopLevel bindingDecl@(SE.Binding x ty exp
 -- Compile binding declarations
 -------------------------------
 --
--- Note: InterTE.Binding x ty expr as do x:ty <- expr
+-- Note: InterTE.Binding toporinside x ty expr as do x:ty <- expr
 --
 compBindingDecl :: Monad m =>
   SE.GlobalTypeInfo -> SE.Env -> Location ->
   TE.FunctionStore -> SE.BindingDecl -> m (TE.FunctionStore, TE.BindingDecl)
 
-compBindingDecl s_gti env loc funStore (SE.Binding x ty expr) = do
+compBindingDecl s_gti env loc funStore (SE.Binding istop x ty expr) = do
   target_ty <- compValType ty
   (funStore1, target_expr) <- compExpr s_gti env loc ty funStore expr
   let recursion = Set.member x (TE.fvExpr target_expr)
@@ -180,14 +180,14 @@ compBindingDecl s_gti env loc funStore (SE.Binding x ty expr) = do
     do let (y, funStore2) = TE.newVar funStore1
        let (z, funStore3) = TE.newVar funStore2
        return (funStore3,
-               TE.Binding x target_ty
+               TE.Binding istop x target_ty
                  (TE.ValExpr
-                  (TE.BindM [TE.Binding y target_ty target_expr]
-                    (TE.Let [TE.Binding z target_ty
+                  (TE.BindM [TE.Binding False y target_ty target_expr]
+                    (TE.Let [TE.Binding False z target_ty
                               (TE.Prim MkRecOp [] [] [TE.Var y, TE.Lit (StrLit x)])]
                             (TE.ValExpr (TE.UnitM (TE.Var z)))))))
   else
-    return (funStore1, TE.Binding x target_ty target_expr)
+    return (funStore1, TE.Binding istop x target_ty target_expr)
 
 -- compExpr
 compExpr :: Monad m =>
@@ -251,7 +251,7 @@ compExpr s_gti env loc (ST.TupleType tys) funStore (SE.Tuple exprs) = do
      foldM (\ (funStore0, f) -> \ (x, s_ty, expr) -> do
        (funStore1, target_expr) <- compExpr s_gti env loc s_ty funStore0 expr
        t_ty <- compValType s_ty
-       let g = TE.BindM [TE.Binding x t_ty target_expr] . TE.ValExpr . f
+       let g = TE.BindM [TE.Binding False x t_ty target_expr] . TE.ValExpr . f
        return (funStore1, g)) (funStore1, \x->x) (reverse (zip3 xs tys exprs))
   return (funStore2, TE.ValExpr $ h (TE.UnitM (TE.Tuple (map TE.Var xs))))
 
@@ -270,12 +270,12 @@ compExpr s_gti env loc s_ty funStore (SE.Constr cname locs argtys exprs tys) = d
      foldM (\ (funStore0, f) -> \ (x, s_ty, expr) -> do
        (funStore1, target_expr) <- compExpr s_gti env loc s_ty funStore0 expr
        t_ty <- compValType s_ty
-       let g = TE.BindM [TE.Binding x t_ty target_expr] . TE.ValExpr . f
+       let g = TE.BindM [TE.Binding False x t_ty target_expr] . TE.ValExpr . f
        return (funStore1, g)) (funStore1, \x->x) (reverse (zip3 xs tys exprs))
   return (funStore2, TE.ValExpr $ h $ TE.UnitM $ TE.Constr cname locs t_argtys (map TE.Var xs) t_tys)
 
 compExpr s_gti env loc s_ty funStore (SE.Let bindingDecls expr) = do
-  let bindingTypeInfo = [(x,ty) | SE.Binding x ty expr <- bindingDecls]
+  let bindingTypeInfo = [(x,ty) | SE.Binding istop x ty expr <- bindingDecls]
   let bindingTypeInfo1 = (bindingTypeInfo ++ SE._varEnv env)
   let env1 = env { SE._varEnv=bindingTypeInfo1 }
   (funStore2, t_bindingDecls) <-
@@ -299,14 +299,14 @@ compExpr s_gti env loc s_ty funStore (SE.Case expr (Just case_ty) alts) = do
            (funStore2, target_alts) <-
               compAlts s_gti env loc locs locvars tys tyvars tycondecls s_ty funStore1 alts
            return (funStore2, TE.ValExpr $
-                                TE.BindM [ TE.Binding x target_case_ty target_expr ]
+                                TE.BindM [ TE.Binding False x target_case_ty target_expr ]
                                  (TE.Case (TE.Var x) target_case_ty target_alts))
         [] -> error $ "[compExpr] invalid constructor type: " ++ tyconName
 
     ST.TupleType tys -> do
       (funStore3, target_alts) <- compAlts s_gti env loc [] [] tys [] [] s_ty funStore1 alts
       return (funStore3, TE.ValExpr $
-                           TE.BindM [ TE.Binding x target_case_ty target_expr ]
+                           TE.BindM [ TE.Binding False x target_case_ty target_expr ]
                              (TE.Case (TE.Var x) target_case_ty target_alts))
 
 compExpr s_gti env loc s_ty funStore (SE.Case expr maybe alternatives) = do
@@ -327,9 +327,9 @@ compExpr s_gti env loc s_ty funStore (SE.App left (Just (ST.FunType argty locfun
              else
                 TE.ValExpr $ TE.GenApp locfun (TE.Var f) target_funty (TE.Var x)
    return (funStore3,
-           TE.ValExpr $ TE.BindM [TE.Binding f target_funty target_left]
+           TE.ValExpr $ TE.BindM [TE.Binding False f target_funty target_left]
                           (TE.ValExpr
-                            (TE.BindM [TE.Binding x target_argty target_right]
+                            (TE.BindM [TE.Binding False x target_argty target_right]
                              app)))
 
 compExpr s_gti env loc s_ty funStore (SE.App left Nothing right maybeLoc) = do
@@ -342,7 +342,7 @@ compExpr s_gti env loc s_ty funStore (SE.TypeApp expr (Just left_s_ty) tys) = do
    target_left_s_ty <- compValType left_s_ty
    target_tys <- mapM compValType tys
    return (funStore2,
-           TE.ValExpr $ TE.BindM [TE.Binding f target_left_s_ty target_expr]
+           TE.ValExpr $ TE.BindM [TE.Binding False f target_left_s_ty target_expr]
                          (TE.TypeApp (TE.Var f) target_left_s_ty target_tys))
 
 compExpr s_gti env loc s_ty funStore (SE.TypeApp expr Nothing tys) =
@@ -353,7 +353,7 @@ compExpr s_gti env loc s_ty funStore (SE.LocApp expr (Just left_s_ty) locs) = do
    (funStore2, target_expr) <- compExpr s_gti env loc left_s_ty funStore1 expr
    target_left_s_ty <- compValType left_s_ty
    return (funStore2,
-           TE.ValExpr $ TE.BindM [TE.Binding f target_left_s_ty target_expr]
+           TE.ValExpr $ TE.BindM [TE.Binding False f target_left_s_ty target_expr]
                          (TE.LocApp (TE.Var f) target_left_s_ty locs))
 
 compExpr s_gti env loc s_ty funStore (SE.LocApp expr Nothing locs) =
@@ -369,11 +369,11 @@ compExpr s_gti env loc s_ty funStore (SE.Prim primop op_locs op_tys exprs) = do
         foldM (\ (funStore0, f) -> \ (x, s_ty, expr) -> do
           (funStore1, target_expr) <- compExpr s_gti env loc s_ty funStore0 expr
           t_ty <- compValType s_ty
-          let g = TE.ValExpr . TE.BindM [TE.Binding x t_ty target_expr] . f
+          let g = TE.ValExpr . TE.BindM [TE.Binding False x t_ty target_expr] . f
           return (funStore1, g)) (funStore1, \x->x) (reverse (zip3 xs argtys exprs))
       target_retty <- compValType retty
       return (funStore2,
-               h (TE.Let [TE.Binding y target_retty
+               h (TE.Let [TE.Binding False y target_retty
                             (TE.Prim primop op_locs target_op_tys (map TE.Var xs))]
                          (TE.ValExpr (TE.UnitM (TE.Var y)))))
 

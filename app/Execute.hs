@@ -109,13 +109,13 @@ clientExpr fun_store evctx (ValExpr v) client_stack mem_c server_stack mem_s =
   clientValue fun_store evctx v client_stack mem_c server_stack mem_s
 
 -- (E-Let)
-clientExpr fun_store evctx (Let [Binding x ty b@(ValExpr v)] expr) client_stack mem_c server_stack mem_s = do
+clientExpr fun_store evctx (Let [Binding istop x ty b@(ValExpr v)] expr) client_stack mem_c server_stack mem_s = do
   let subst = [(x,v)]
   return $ ClientConfig evctx (doSubstExpr subst expr) client_stack mem_c server_stack mem_s
 
 -- (let x = Elet[] in M)
-clientExpr fun_store evctx (Let [Binding x ty b@(_)] expr) client_stack mem_c server_stack mem_s = do
-  clientExpr fun_store ((\bexpr->Let [Binding x ty bexpr] expr):evctx) b client_stack mem_c server_stack mem_s
+clientExpr fun_store evctx (Let [Binding istop x ty b@(_)] expr) client_stack mem_c server_stack mem_s = do
+  clientExpr fun_store ((\bexpr->Let [Binding istop x ty bexpr] expr):evctx) b client_stack mem_c server_stack mem_s
 
 -- (E-Proj-i) or (E-Tuple)
 clientExpr fun_store evctx (Case (Tuple vs) casety [TupleAlternative xs expr]) client_stack mem_c server_stack mem_s = do
@@ -207,13 +207,13 @@ clientValue fun_store evctx (GenApp loc f funty arg) client_stack mem_c server_s
     error $ "[clientValue] GenApp: Unexpected location : " ++ show loc
 
 -- (E-Do)
-clientValue fun_store evctx (BindM [Binding x ty b@(ValExpr (UnitM v))] expr) client_stack mem_c server_stack mem_s = do
+clientValue fun_store evctx (BindM [Binding istop x ty b@(ValExpr (UnitM v))] expr) client_stack mem_c server_stack mem_s = do
   let subst = [(x,v)]
   return $ ClientConfig evctx (doSubstExpr subst expr) client_stack mem_c server_stack mem_s
 
 -- ( do x<-E[] in M )
-clientValue fun_store evctx (BindM [Binding x ty b@(_)] expr) client_stack mem_c server_stack mem_s = do
-  clientExpr fun_store ((\bexpr->ValExpr (BindM [Binding x ty bexpr] expr)):evctx) b client_stack mem_c server_stack mem_s
+clientValue fun_store evctx (BindM [Binding istop x ty b@(_)] expr) client_stack mem_c server_stack mem_s = do
+  clientExpr fun_store ((\bexpr->ValExpr (BindM [Binding istop x ty bexpr] expr)):evctx) b client_stack mem_c server_stack mem_s
 
 clientValue fun_store evctx v client_stack mem_c server_stack mem_s =
   error $ "[clientValue] Unexpected: " ++ show v ++ "\n" ++ show (applyEvCxt evctx (ValExpr v)) ++ "\n"
@@ -229,13 +229,13 @@ serverExpr fun_store client_stack mem_c evctx (ValExpr v) server_stack mem_s =
   serverValue fun_store client_stack mem_c evctx v server_stack mem_s
 
 -- (E-Let)
-serverExpr fun_store client_stack mem_c evctx (Let [Binding x ty b@(ValExpr v)] expr) server_stack mem_s = do
+serverExpr fun_store client_stack mem_c evctx (Let [Binding istop x ty b@(ValExpr v)] expr) server_stack mem_s = do
   let subst = [(x,v)]
   return $ ServerConfig client_stack mem_c evctx (doSubstExpr subst expr) server_stack mem_s
 
 -- (let x = Elet[] in M)
-serverExpr fun_store client_stack mem_c evctx (Let [Binding x ty b@(_)] expr) server_stack mem_s = do
-  serverExpr fun_store client_stack mem_c ((\bexpr->Let [Binding x ty bexpr] expr):evctx) b server_stack mem_s
+serverExpr fun_store client_stack mem_c evctx (Let [Binding istop x ty b@(_)] expr) server_stack mem_s = do
+  serverExpr fun_store client_stack mem_c ((\bexpr->Let [Binding istop x ty bexpr] expr):evctx) b server_stack mem_s
 
 -- (E-Proj-i) or (E-Tuple) or (E-if)
 serverExpr fun_store client_stack mem_c evctx (Case (Tuple vs) casety [TupleAlternative xs expr]) server_stack mem_s = do
@@ -330,13 +330,13 @@ serverValue fun_store client_stack mem_c evctx (GenApp loc f funty arg) server_s
     error $ "[serverValue] GenApp: Unexpected location : " ++ show loc
 
 -- (E-Do)
-serverValue fun_store client_stack mem_c evctx (BindM [Binding x ty b@(ValExpr (UnitM v))] expr) server_stack mem_s = do
+serverValue fun_store client_stack mem_c evctx (BindM [Binding istop x ty b@(ValExpr (UnitM v))] expr) server_stack mem_s = do
   let subst = [(x,v)]
   return $ ServerConfig client_stack mem_c evctx (doSubstExpr subst expr) server_stack mem_s
 
 -- ( do x<-E[] in M ) : b is one of BindM, Call, and GenApp.
-serverValue fun_store client_stack mem_c evctx (BindM [Binding x ty b@(_)] expr) server_stack mem_s = do
-  serverExpr fun_store client_stack mem_c ((\bexpr->ValExpr (BindM [Binding x ty bexpr] expr)):evctx) b server_stack mem_s
+serverValue fun_store client_stack mem_c evctx (BindM [Binding istop x ty b@(_)] expr) server_stack mem_s = do
+  serverExpr fun_store client_stack mem_c ((\bexpr->ValExpr (BindM [Binding istop x ty bexpr] expr)):evctx) b server_stack mem_s
 
 serverValue fun_store client_stack mem_c evctx v server_stack mem_s = do
   error $ "[serverValue]: Unexpected: " ++ show v ++ "\n"

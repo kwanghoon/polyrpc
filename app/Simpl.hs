@@ -18,7 +18,7 @@ import Debug.Trace
 -- Simplification:
 --
 --   (1) simplify bound unit values
---      : BindM [ Binding x ty (ValExpr (UnitM v)) ] expr  ===>  expr [v/x]
+--      : BindM [ Binding False x ty (ValExpr (UnitM v)) ] expr  ===>  expr [v/x]
 --   (2) delete unused bound variables and function names
 ---------------------------------------------------------------------------
 
@@ -143,11 +143,11 @@ doExpr useInfo (Let bindDecls expr) exprty = do
   return (useInfo4, expr2, changed1 || changed2 || changed3)
 
   where
-    fBindDecl (useInfo, bindDecls, changed) (Binding x ty bexpr) = do
+    fBindDecl (useInfo, bindDecls, changed) (Binding istop x ty bexpr) = do
       (useInfo', bexpr', changed') <- doExpr useInfo bexpr ty
-      return (useInfo', bindDecls ++ [Binding x ty bexpr'], changed || changed')
+      return (useInfo', bindDecls ++ [Binding istop x ty bexpr'], changed || changed')
 
-    xs = L.map (\(Binding x ty expr) -> x) bindDecls
+    xs = L.map (\(Binding istop x ty expr) -> x) bindDecls
 
 doExpr useInfo (Case v ty alts) exprty = do
   (useInfo1, v1, changed1) <- doValue useInfo v ty
@@ -265,11 +265,11 @@ doValue useInfo (BindM bindDecls expr) (MonType exprty) = do
   return (useInfo4, value2, changed1 || changed2 || changed3)
 
   where
-    fBindDecl (useInfo, bindDecls, changed) (Binding x ty bexpr) = do
+    fBindDecl (useInfo, bindDecls, changed) (Binding istop x ty bexpr) = do
       (useInfo', bexpr', changed') <- doExpr useInfo bexpr (MonType ty)
-      return (useInfo', bindDecls ++ [Binding x ty bexpr'], changed || changed')
+      return (useInfo', bindDecls ++ [Binding istop x ty bexpr'], changed || changed')
 
-    xs = L.map (\(Binding x ty expr) -> x) bindDecls
+    xs = L.map (\(Binding istop x ty expr) -> x) bindDecls
 
 doValue useInfo (Req v ty@(CloType (FunType argty _ _)) arg) valty = do
   (useInfo1, v1, changed1) <- doValue useInfo v ty
@@ -304,7 +304,7 @@ doSubstBindM useInfo bindDecls expr exprty@(MonType valty) = do
     [] ->
      case expr1 of
        ValExpr val -> return (val, changed1)
-       _ -> return (BindM [Binding "$x" valty expr1]  --Todo: infinite loop!!
+       _ -> return (BindM [Binding False "$x" valty expr1]  --Todo: infinite loop!!
                      (ValExpr (UnitM (Var "$x")))
                    , changed1)
     _  -> return (BindM bindDecls1 expr1, changed1)
@@ -317,7 +317,7 @@ doSubstBindDecls useInfo bindDecls expr exprty = do
   return (bindDecls1, expr1, changed1)
 
   where
-    fBindDecl (bindDecls, expr, changed) binding@(Binding x ty (ValExpr (UnitM v))) =
+    fBindDecl (bindDecls, expr, changed) binding@(Binding istop x ty (ValExpr (UnitM v))) =
       case H.lookup x (varUseInfo useInfo) of
         Nothing  -> error "What?" -- return (bindDecls, expr)  -- dead code elimination
         Just 0   -> return (bindDecls, expr, True)  -- dead code elimination

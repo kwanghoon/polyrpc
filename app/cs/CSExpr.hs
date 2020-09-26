@@ -38,8 +38,9 @@ data Value =
   deriving (Show, Typeable, Data)
 
 data BindingDecl =
-    Binding String Type Expr
+    Binding Bool String Type Expr    -- isTop?
     deriving (Show, Typeable, Data)
+
 
 data DataTypeDecl =
     DataType String [String] [TypeConDecl]
@@ -249,8 +250,8 @@ fvValue (Constr cname _ _ vs _) = Set.unions (map fvValue vs)
 fvValue (Closure vs _ codename _) = Set.unions (map fvValue vs)
 fvValue (UnitM v) = fvValue v
 fvValue (BindM bindingDecls expr) =
-  (Set.unions (map (\(Binding _ _ expr) -> fvExpr expr) bindingDecls) `Set.union` fvExpr expr)
-  `Set.difference` (Set.fromList (map (\(Binding x _ _) -> x) bindingDecls))
+  (Set.unions (map (\(Binding _ _ _ expr) -> fvExpr expr) bindingDecls) `Set.union` fvExpr expr)
+  `Set.difference` (Set.fromList (map (\(Binding _ x _ _) -> x) bindingDecls))
 fvValue (Req left _ right) = fvValue left `Set.union` fvValue right
 fvValue (Call left _ right) = fvValue left `Set.union` fvValue right
 fvValue (GenApp _ left _ right) = fvValue left `Set.union` fvValue right

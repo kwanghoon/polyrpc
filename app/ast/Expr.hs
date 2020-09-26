@@ -5,10 +5,11 @@ module Expr(Expr(..), AST(..), BindingDecl(..), DataTypeDecl(..)
   , TopLevelDecl(..), TypeConDecl(..), Alternative(..)
   , TypeInfo, ConTypeInfo, BindingTypeInfo, DataTypeInfo
   , GlobalTypeInfo(..), Env(..)
-  , lookupConstr, lookupCon, lookupDataTypeName, lookupPrimOpType 
+  , lookupConstr, lookupCon, lookupDataTypeName, lookupPrimOpType
   , mainName, primOpTypes
   , singleTypeAbs, singleLocAbs, singleAbs
   , singleTypeApp, singleLocApp
+  , setTop
   , toASTExprSeq, toASTExpr
   , toASTIdSeq, toASTId
   , toASTTypeSeq, toASTType
@@ -45,7 +46,7 @@ data Expr =
   | Prim PrimOp [Location] [Type] [Expr]
   | Lit Literal
   | Constr String [Location] [Type] [Expr] [Type]
--- For aeson  
+-- For aeson
 --  deriving (Show, Generic)
   deriving (Show, Typeable, Data)
 
@@ -96,27 +97,30 @@ skimLocAbsType (Just (LocAbsType (locvar:locvars) ty)) = Just (LocAbsType locvar
 skimLocAbsType maybe = error $ "[skimLocAbsType]: " ++ show maybe
 
 data BindingDecl =
-    Binding String Type Expr
--- For aeson  
+    Binding Bool String Type Expr -- isTop?
+-- For aeson
 --  deriving (Show, Generic)
     deriving (Show, Typeable, Data)
+
+setTop :: BindingDecl -> BindingDecl
+setTop (Binding _ x ty expr) = Binding True x ty expr
 
 --
 -- The four forms of data type declarations supported now.
 --
 --  data D =                             C1 | ... | Cn
---  data D = [a1 ... ak]               . C1 | ... | Cn 
---  data D = {l1 ... li}               . C1 | ... | Cn 
+--  data D = [a1 ... ak]               . C1 | ... | Cn
+--  data D = {l1 ... li}               . C1 | ... | Cn
 --  data D = {l1 ... li} . [a1 ... ak] . C1 | ... | Cn
 --
 data DataTypeDecl =
-    DataType String [LocationVar] [TypeVar] [TypeConDecl] -- 
+    DataType String [LocationVar] [TypeVar] [TypeConDecl] --
     deriving (Show, Typeable, Data)
 
 data TopLevelDecl =
     BindingTopLevel BindingDecl
   | DataTypeTopLevel DataTypeDecl
-  | LibDeclTopLevel String Type 
+  | LibDeclTopLevel String Type
   deriving (Show, Typeable, Data)
 
 data TypeConDecl =
@@ -143,7 +147,7 @@ data Alternative =
 -- For type-checker
 
 -- [(Name, Location Vars, Type Vars)]
-type TypeInfo = [(String, [String], [String])] 
+type TypeInfo = [(String, [String], [String])]
 
 -- [(ConName, (ConArgTypes, DTName, LocationVars, TypeVars))]
 type ConTypeInfo = [(String, ([Type], String, [String], [String]))]
@@ -163,7 +167,7 @@ data GlobalTypeInfo = GlobalTypeInfo
        , _dataTypeInfo :: DataTypeInfo
        , _bindingTypeInfo :: BindingTypeInfo }
     deriving (Show, Typeable, Data)
-       
+
 data Env = Env
        { _locVarEnv  :: [String]
        , _typeVarEnv :: [String]
@@ -181,30 +185,30 @@ data AST =
   | ASTType    { fromASTType    :: Type  }
   | ASTLocationSeq { fromASTLocationSeq :: [Location] }
   | ASTLocation    { fromASTLocation    :: Location  }
-  
+
   | ASTBindingDeclSeq { fromASTBindingDeclSeq :: [BindingDecl] }
   | ASTBindingDecl    { fromASTBindingDecl    :: BindingDecl  }
 
   | ASTDataTypeDecl { fromASTDataTypeDecl :: DataTypeDecl }
 
   | ASTTopLevelDeclSeq { fromASTTopLevelDeclSeq :: [TopLevelDecl] }
-  
+
   | ASTTypeConDeclSeq { fromASTTypeConDeclSeq :: [TypeConDecl] }
   | ASTTypeConDecl { fromASTTypeConDecl :: TypeConDecl }
-  
+
   | ASTIdTypeLocSeq { fromASTIdTypeLocSeq :: [(String,Type,Location)] }
   | ASTIdTypeLoc { fromASTIdTypeLoc :: (String,Type,Location) }
-  
+
   | ASTAlternativeSeq { fromASTAlternativeSeq :: [Alternative] }
   | ASTAlternative { fromASTAlternative :: Alternative }
-  
+
   | ASTLit { fromASTLit :: Literal }
 
   | ASTTriple { fromASTTriple :: ([String], [String], [TypeConDecl]) }
 
 instance Show AST where
   showsPrec p _ = (++) "AST ..."
-  
+
 toASTExprSeq exprs = ASTExprSeq exprs
 toASTExpr expr     = ASTExpr expr
 toASTIdSeq   ids   = ASTIdSeq ids
@@ -274,18 +278,18 @@ primOpTypes =
 
   , (PrimRefCreateOp,
       let l1 = "l1" in
-      let a  = "a"  in                 
+      let a  = "a"  in
       let tyvar_a = TypeVarType a in
       let locvar_l1 = LocVar l1 in
         ([l1], [a], [tyvar_a], ConType refType [locvar_l1] [tyvar_a]))
-    
+
   , (PrimRefReadOp,
       let l1 = "l1" in
       let a  = "a"  in
       let tyvar_a = TypeVarType a in
       let locvar_l1 = LocVar l1 in
         ([l1], [a], [ConType refType [locvar_l1] [tyvar_a]], tyvar_a))
-    
+
   , (PrimRefWriteOp,
      let l1 = "l1" in
      let a  = "a"  in
@@ -321,7 +325,7 @@ isRec name (Abs xTyLocs expr) =
   else isRec name expr
 
 isRec name (Let bindingDecls expr) =
-  let xTyExprs = [(x,ty,expr) | Binding x ty expr<-bindingDecls] 
+  let xTyExprs = [(x,ty,expr) | Binding istop x ty expr<-bindingDecls]
       (xs,tys, exprs) = unzip3 xTyExprs
   in
   if name `elem` xs then False
@@ -348,4 +352,3 @@ isRec name (Prim op locs tys exprs) = or (map (isRec name) exprs)
 isRec name (Lit lit) = False
 
 isRec name (Constr cname locs tys exprs argtys) = or (map (isRec name) exprs)
-

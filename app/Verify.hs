@@ -173,7 +173,7 @@ verifyExpr :: Monad m => GlobalInfo -> Location -> Env -> Type -> Expr -> m ()
 verifyExpr gtigci loc env ty (ValExpr v) = verifyValue gtigci loc env ty v
 
 verifyExpr gtigci loc env ty (Let bindingDecls expr) = do
-  let (xtys, exprs) =  unzip [((x,ty), expr) | Binding x ty expr <- bindingDecls]
+  let (xtys, exprs) =  unzip [((x,ty), expr) | Binding istop x ty expr <- bindingDecls]
   let (xs, tys) = unzip xtys
   let env1 = env {_varEnv = xtys ++ _varEnv env}
   mapM_ (\ (vty, expr) -> verifyExpr gtigci loc env1 vty expr) $ zip tys exprs
@@ -312,7 +312,7 @@ verifyValue gtigci loc env (CloType ty) (Closure vs tys codeName recf) = do
 verifyValue gtigci loc env (MonType ty) (UnitM v) = verifyValue gtigci loc env ty v
 
 verifyValue gtigci loc env (MonType ty) (BindM bindingDecls expr) = do
-  let (xtys, exprs) =  unzip [((x,ty), expr) | Binding x ty expr <- bindingDecls]
+  let (xtys, exprs) =  unzip [((x,ty), expr) | Binding istop x ty expr <- bindingDecls]
   let (xs, tys) = unzip xtys
   let env1 = env {_varEnv = xtys ++ _varEnv env}
   let monadic_tys = map MonType tys

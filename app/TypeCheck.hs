@@ -166,13 +166,13 @@ elabConTypeDecl (DataType name locvars tyvars typeConDecls) = do
 
 elabBindingTypes :: Monad m => TypeInfo -> [String] -> [String] -> [BindingDecl] -> m [BindingDecl]
 elabBindingTypes typeInfo tyvars locvars bindingDecls =
-  mapM (\(Binding f ty expr)-> do
+  mapM (\(Binding istop f ty expr)-> do
            elab_ty <- elabType typeInfo tyvars locvars ty
-           return (Binding f elab_ty expr)) bindingDecls
+           return (Binding istop f elab_ty expr)) bindingDecls
 
 bindingTypes :: Monad m => [BindingDecl] -> m [(String,Type)]
 bindingTypes partial_elab_bindingDecls =
-  mapM (\(Binding f ty _) -> return (f,ty)) partial_elab_bindingDecls
+  mapM (\(Binding _ f ty _) -> return (f,ty)) partial_elab_bindingDecls
 
 ----------------------------------------------------------------------------
 -- 6. Elaboration of bindings
@@ -186,18 +186,18 @@ bindingTypes partial_elab_bindingDecls =
 
 elaborate :: Monad m => GlobalTypeInfo -> Env -> [BindingDecl] -> m [BindingDecl]
 elaborate gti env [] =  return []
-elaborate gti env (bindingDecl@(Binding f ty _):bindingDecls) = do
+elaborate gti env (bindingDecl@(Binding _ f ty _):bindingDecls) = do
   let gti1 = gti {_bindingTypeInfo = (f,ty):_bindingTypeInfo gti}   -- for self-recursion
   elab_bindingDecl <- elabBindingDecl gti1 env bindingDecl
   elab_bindingDecls <- elaborate gti1 env bindingDecls
   return (elab_bindingDecl:elab_bindingDecls)
 
 elabBindingDecl :: Monad m => GlobalTypeInfo -> Env -> BindingDecl -> m BindingDecl
-elabBindingDecl gti env (Binding name ty expr) = do
+elabBindingDecl gti env (Binding istop name ty expr) = do
   -- let env = emptyEnv{_varEnv=_bindingTypeInfo gti}
   (elab_expr,elab_ty) <- elabExpr gti env clientLoc expr
   if equalType elab_ty ty
-  then return (Binding name ty elab_expr)
+  then return (Binding istop name ty elab_expr)
   else error $ "[TypeCheck] elabBindingDecl: Incorrect types: " ++ name ++ "\n" ++ show elab_ty ++ "\n" ++ show ty
 
 ----------------------------------------------------------------------------

@@ -13,7 +13,7 @@ parserSpec :: ParserSpec Token AST
 parserSpec = ParserSpec
   {
     startSymbol = "TopLevel'",
-    
+
     parserSpecList =
     [
       ("TopLevel' -> TopLevel", \rhs -> get rhs 1),
@@ -69,7 +69,7 @@ parserSpec = ParserSpec
 
       {- LocFunType -}
       ("LocFunType -> AppType", \rhs -> get rhs 1),
-      
+
       ("LocFunType -> AppType LocFun LocFunType", \rhs ->
           let locfun = getText rhs 2
               loc = init (init (tail locfun))  -- extract Loc from -Loc-> ( a bit hard-coded!!)
@@ -86,7 +86,7 @@ parserSpec = ParserSpec
           let locs = fromASTLocationSeq (get rhs 3) in
           case fromASTType (get rhs 1) of
             ConType name [] [] -> toASTType (ConType name locs [])
-            ConType name [] tys -> 
+            ConType name [] tys ->
               error $ "[Parser] Not supported: types and then locations: " ++ show locs ++ " " ++ show tys
             ConType name locs' tys ->
               error $ "[Parser] Not supported: multiple locations" ++ name ++ " " ++ show locs' ++ " " ++ show locs
@@ -111,7 +111,7 @@ parserSpec = ParserSpec
       ("AtomicType -> ( Type )", \rhs -> get rhs 2 ),
 
       ("AtomicType -> identifier", \rhs -> toASTType (TypeVarType (getText rhs 1)) ),
-      
+
 
       {- TupleType -}
       ("TupleType -> ( Type , TypeSeq )",
@@ -145,7 +145,7 @@ parserSpec = ParserSpec
 
       ("TopLevel -> Binding ; TopLevel",
         \rhs -> toASTTopLevelDeclSeq
-            $ BindingTopLevel (fromASTBindingDecl (get rhs 1)) : fromASTTopLevelDeclSeq (get rhs 3) ),
+            $ BindingTopLevel (setTop (fromASTBindingDecl (get rhs 1))) : fromASTTopLevelDeclSeq (get rhs 3) ),
 
       ("TopLevel -> DataTypeDecl",
         \rhs -> toASTTopLevelDeclSeq [DataTypeTopLevel (fromASTDataTypeDecl (get rhs 1))] ),
@@ -178,9 +178,9 @@ parserSpec = ParserSpec
            let tyvars = fromASTIdSeq (get rhs 2) in
            case fromASTTriple (get rhs 5) of
              ([], [], tycondecls) -> toASTTriple ([], tyvars, tycondecls)
-             (locvars, [], tycondecls) -> 
+             (locvars, [], tycondecls) ->
                error $ "Not supported yet: types and then locations abstractions: "
-                           ++ show tyvars ++ " " ++ show locvars 
+                           ++ show tyvars ++ " " ++ show locvars
              (locvars, tyvars', tycondecls) ->
                error $ "Not supported yet: multiple type abstractions: "
                            ++ show tyvars' ++ " " ++ show tyvars ),
@@ -203,7 +203,7 @@ parserSpec = ParserSpec
       {- Binding -}
       ("Binding -> identifier : Type = LExpr",
         \rhs -> toASTBindingDecl (
-                  Binding (getText rhs 1) (fromASTType (get rhs 3)) (fromASTExpr (get rhs 5))) ),
+                  Binding False (getText rhs 1) (fromASTType (get rhs 3)) (fromASTExpr (get rhs 5))) ),
 
 
       {- Bindings -}
@@ -397,16 +397,16 @@ parserSpec = ParserSpec
       ("Term -> string", \rhs ->
           let str = read (getText rhs 1) :: String
           in  toASTExpr (Lit (StrLit str)) ),
-      
+
       ("Term -> boolean", \rhs -> toASTExpr (Lit (BoolLit (read (getText rhs 1)))) ),
 
       ("Term -> ( )", \rhs -> toASTExpr (Lit UnitLit) ),
 
       ("Term -> ( LExpr )", \rhs -> get rhs 2 )
     ],
-    
+
     baseDir = "./",
-    actionTblFile = "action_table.txt",  
+    actionTblFile = "action_table.txt",
     gotoTblFile = "goto_table.txt",
     grammarFile = "prod_rules.txt",
     parserSpecFile = "mygrammar.grm",
