@@ -36,7 +36,9 @@ addVar x useInfo =
 initVars :: [String] -> UseInfo -> UseInfo
 initVars xs useInfo =
   foldl (\useInfo x ->
-    useInfo { varUseInfo = H.insert x 0 (varUseInfo useInfo) }) useInfo xs
+    let initCount = if x=="main" then 2 else 0
+        _varUseInfo = H.insert x initCount (varUseInfo useInfo)
+    in  useInfo { varUseInfo = _varUseInfo }) useInfo xs
 
 rmVar :: String -> UseInfo -> UseInfo
 rmVar x useInfo =
@@ -85,21 +87,25 @@ incCodeName x useInfo =
 
 simpl :: Monad m => GlobalTypeInfo -> FunctionStore -> Expr
                      -> m (GlobalTypeInfo, FunctionStore, Expr)
-simpl gti funStore mainexpr = 
+simpl gti funStore mainexpr =
   return (gti, funStore, mainexpr)
   -- trace (show mainexpr ++ "\n")
-  --  (_simpl gti funStore mainexpr)
+  -- _simpl gti funStore mainexpr 1000  -- To prevent the infinite loop!
 
-_simpl gti funStore mainexpr = do
+_simpl gti funStore mainexpr 0 = do
+  return (gti, funStore, mainexpr)
+
+_simpl gti funStore mainexpr n = do
   let initUseInfo = initUseInfoFrom funStore
   (useInfo, mainexpr', changed1) <- doExpr initUseInfo mainexpr (MonType unit_type)
   (useInfo1, funStore', changed2) <- doFunStore useInfo funStore
 
-  trace (show (cNameUseInfo useInfo1) ++ "\n") 
-   (trace (show changed1 ++ " " ++ show changed2 ++ "\n" ++ show mainexpr' ++ "\n")
-    (if changed1 || changed2 
-     then simpl gti funStore' mainexpr'
-     else return (gti, funStore', mainexpr')))
+  -- trace (show (cNameUseInfo useInfo1) ++ "\n")
+  --  (trace (show changed1 ++ " " ++ show changed2 ++ "\n" ++ show mainexpr' ++ "\n")
+  --   (trace (show funStore' ++ "\n"))
+  (if changed1 || changed2
+      then _simpl gti funStore' mainexpr' (n-1)
+      else return (gti, funStore', mainexpr'))
 
 initUseInfoFrom :: FunctionStore -> UseInfo
 initUseInfoFrom funStore = UseInfo
@@ -288,15 +294,19 @@ doSubstLet :: Monad m => UseInfo -> [BindingDecl] -> Expr -> Type -> m (Expr, Bo
 doSubstLet useInfo bindDecls expr exprty = do
   (bindDecls1, expr1, changed1) <- doSubstBindDecls useInfo bindDecls expr exprty
   case bindDecls1 of
-    [] -> return (expr1, changed1 || not (L.null bindDecls))
+    [] -> return (expr1, changed1) -- not L.null bindDecls ??
     _  -> return (Let bindDecls1 expr1, changed1)
 
 doSubstBindM :: Monad m => UseInfo -> [BindingDecl] -> Expr -> Type -> m (Value, Bool)
 doSubstBindM useInfo bindDecls expr exprty@(MonType valty) = do
   (bindDecls1, expr1, changed1) <- doSubstBindDecls useInfo bindDecls expr exprty
   case bindDecls1 of
-    [] -> return (BindM [Binding "$x" valty expr1] (ValExpr (UnitM (Var "$x")))
-                 , changed1 || not (L.null bindDecls))
+    [] ->
+     case expr1 of
+       ValExpr val -> return (val, changed1)
+       _ -> return (BindM [Binding "$x" valty expr1]  --Todo: infinite loop!!
+                     (ValExpr (UnitM (Var "$x")))
+                   , changed1)
     _  -> return (BindM bindDecls1 expr1, changed1)
 
 --
