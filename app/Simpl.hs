@@ -302,14 +302,12 @@ doSubstLet useInfo bindDecls expr exprty = do
 doSubstBindM :: Monad m => UseInfo -> [BindingDecl] -> Expr -> Type -> m (Value, Bool)
 doSubstBindM useInfo bindDecls expr exprty@(MonType valty) = do
   (bindDecls1, expr1, changed1) <- doSubstBindDecls useInfo bindDecls expr exprty
-  case bindDecls1 of
-    [] ->
-     case expr1 of
-       ValExpr val -> return (val, changed1)
-       _ -> return (BindM [Binding False "$x" valty expr1]  --Todo: infinite loop!!
-                     (ValExpr (UnitM (Var "$x")))
-                   , changed1)
-    _  -> return (BindM bindDecls1 expr1, changed1)
+  case (bindDecls1, expr1) of
+    ([], ValExpr val) -> return (val, changed1)
+    ([], _) -> return (BindM [Binding False "$x" valty expr1]  --Todo: infinite loop!!
+                      (ValExpr (UnitM (Var "$x")))
+                      , changed1)
+    (_ , _) -> return (BindM bindDecls1 expr1, changed1)
 
 --
 doSubstBindDecls :: Monad m => UseInfo -> [BindingDecl]
@@ -320,33 +318,38 @@ doSubstBindDecls useInfo bindDecls expr exprty = do
 
   where
     fBindDecl (bindDecls, expr, changed) binding@(Binding istop x ty (ValExpr (UnitM v))) =
-      case H.lookup x (varUseInfo useInfo) of
+      -- trace (let z = (fromJust (H.lookup x (varUseInfo useInfo)))
+      --        in  if z <= 1
+      --            then ("[1st] " ++ show z ++ " : " ++ x ++ " = " ++ show binding ++ "\n\t" ++ show (doSubstExpr [(x,v)] expr))
+      --            else "")
+      (case H.lookup x (varUseInfo useInfo) of
         Nothing  -> error "What?" -- return (bindDecls, expr)  -- dead code elimination
         Just 0   -> return (bindDecls, expr, True)  -- dead code elimination
         Just 1   -> return (bindDecls, doSubstExpr [(x,v)] expr, True)  -- inlining
-        Just cnt -> return (bindDecls++[binding], expr, changed)  -- do nothing
+        Just cnt -> return (bindDecls++[binding], expr, changed))  -- do nothing
 
-    fBindDecl (bindDecls, expr, changed) binding =
+    fBindDecl (bindDecls, expr, changed) binding@(Binding istop x ty _) =
+      -- trace (if (fromJust (H.lookup x (varUseInfo useInfo)) <= 1) then ("[2nd]" ++ x ++ " = " ++ show binding) else "")
       return (bindDecls++[binding], expr, changed)
 
 --
 doFunStore :: Monad m => UseInfo -> FunctionStore -> m (UseInfo, FunctionStore, Bool)
 doFunStore useInfo funStore = do
   -- 1. do Use analysis
-  (useInfo1, clientstore, changed1)
+  (useInfo1, clientstore1, changed1)
      <- foldM fStore (useInfo, [], False) (_clientstore funStore)
-  (useInfo2, serverstore, changed2)
+  (useInfo2, serverstore1, changed2)
      <- foldM fStore (useInfo1, [], False) (_serverstore funStore)
 
   -- 2. Do deadcode elimination
   let elim = fElim useInfo2
 
-  (clientstore1, changed3) <- foldM elim ([], False) (_clientstore funStore)
-  (serverstore1, changed4) <- foldM elim ([], False) (_serverstore funStore)
+  (clientstore2, changed3) <- foldM elim ([], False) clientstore1
+  (serverstore2, changed4) <- foldM elim ([], False) serverstore1
 
   -- error $ "Deadcode elimination: " ++ show (cNameUseInfo useInfo2)
   return (useInfo2
-         , funStore {_clientstore=clientstore1} {_serverstore=serverstore1}
+         , funStore {_clientstore=clientstore2} {_serverstore=serverstore2}
          , changed1 || changed2 || changed3 || changed4)
 
   where
