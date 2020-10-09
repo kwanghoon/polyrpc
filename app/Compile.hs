@@ -176,18 +176,27 @@ compBindingDecl s_gti env loc funStore (SE.Binding istop x ty expr) = do
   target_ty <- compValType ty
   (funStore1, target_expr) <- compExpr s_gti env loc ty funStore expr
   let recursion = Set.member x (TE.fvExpr target_expr)
-  if recursion then
-    do let (y, funStore2) = TE.newVar funStore1
-       let (z, funStore3) = TE.newVar funStore2
-       return (funStore3,
-               TE.Binding istop x target_ty
-                 (TE.ValExpr
-                  (TE.BindM [TE.Binding False y target_ty target_expr]
-                    (TE.Let [TE.Binding False z target_ty
-                              (TE.Prim MkRecOp [] [] [TE.Var y, TE.Lit (StrLit x)])]
-                            (TE.ValExpr (TE.UnitM (TE.Var z)))))))
-  else
-    return (funStore1, TE.Binding istop x target_ty target_expr)
+  compRecBindingDecl recursion target_expr funStore1 target_ty
+  -- if recursion then
+  --   do let (y, funStore2) = TE.newVar funStore1
+  --      let (z, funStore3) = TE.newVar funStore2
+  --      return (funStore3,
+  --              TE.Binding istop x target_ty
+  --                (TE.ValExpr
+  --                 (TE.BindM [TE.Binding False y target_ty target_expr]
+  --                   (TE.Let [TE.Binding False z target_ty
+  --                             (TE.Prim MkRecOp [] [] [TE.Var y, TE.Lit (StrLit x)])]
+  --                           (TE.ValExpr (TE.UnitM (TE.Var z)))))))
+  -- else
+  --   return (funStore1, TE.Binding istop x target_ty target_expr)
+  where
+    compRecBindingDecl recursion target_expr funStore1 target_ty=
+      case (recursion, target_expr) of
+        (True, TE.ValExpr (TE.UnitM (TE.Closure vs fvtys codename []))) -> do  --Todo: Ugly: ValExpr o UnitM
+             return (funStore1, TE.Binding istop x target_ty
+                                  (TE.ValExpr (TE.UnitM (TE.Closure vs fvtys codename [x]))))
+        (True, _) -> error $ "[compRecBindingDecl] Not closure: " ++ show target_expr
+        _ -> return (funStore1, TE.Binding istop x target_ty target_expr)
 
 -- compExpr
 compExpr :: Monad m =>

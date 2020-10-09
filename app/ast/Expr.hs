@@ -303,52 +303,52 @@ lookupPrimOpType primop =
   | (primop1,(locvars, tyvars, tys,ty)) <- primOpTypes, primop==primop1]
 
 --
-recursive = "$rec"
+-- recursive = "$rec"
 
 
-isRecName :: String -> Bool
+-- isRecName :: String -> Bool
 
-isRecName name = reverse (take 4 (reverse name)) == recursive
+-- isRecName name = reverse (take 4 (reverse name)) == recursive
 
 
-isRec :: String -> Expr -> Bool
+-- isRec :: String -> Expr -> Bool
 
-isRec name (Var x) = name==x
+-- isRec name (Var x) = name==x
 
-isRec name (TypeAbs tyvars expr) = isRec name expr
+-- isRec name (TypeAbs tyvars expr) = isRec name expr
 
-isRec name (LocAbs locvars expr) = isRec name expr
+-- isRec name (LocAbs locvars expr) = isRec name expr
 
-isRec name (Abs xTyLocs expr) =
-  let (xs,tys,locs) = unzip3 xTyLocs in
-  if name `elem` xs then False
-  else isRec name expr
+-- isRec name (Abs xTyLocs expr) =
+--   let (xs,tys,locs) = unzip3 xTyLocs in
+--   if name `elem` xs then False
+--   else isRec name expr
 
-isRec name (Let bindingDecls expr) =
-  let xTyExprs = [(x,ty,expr) | Binding istop x ty expr<-bindingDecls]
-      (xs,tys, exprs) = unzip3 xTyExprs
-  in
-  if name `elem` xs then False
-  else or (isRec name expr : map (isRec name) exprs)
+-- isRec name (Let bindingDecls expr) =
+--   let xTyExprs = [(x,ty,expr) | Binding istop x ty expr<-bindingDecls]
+--       (xs,tys, exprs) = unzip3 xTyExprs
+--   in
+--   if name `elem` xs then False
+--   else or (isRec name expr : map (isRec name) exprs)
 
-isRec name (Case expr casety [TupleAlternative xs alt_expr]) =
-  isRec name expr || if name `elem` xs then False else isRec name alt_expr
+-- isRec name (Case expr casety [TupleAlternative xs alt_expr]) =
+--   isRec name expr || if name `elem` xs then False else isRec name alt_expr
 
-isRec name (Case expr casety alts) =
-  isRec name expr
-  || or (map (\(Alternative cname xs alt_expr) ->
-                if name `elem` xs then False else isRec name alt_expr) alts)
+-- isRec name (Case expr casety alts) =
+--   isRec name expr
+--   || or (map (\(Alternative cname xs alt_expr) ->
+--                 if name `elem` xs then False else isRec name alt_expr) alts)
 
-isRec name (App expr maybefunty arg maybloc) = isRec name expr || isRec name arg
+-- isRec name (App expr maybefunty arg maybloc) = isRec name expr || isRec name arg
 
-isRec name (TypeApp expr maybefunty tys) = isRec name expr
+-- isRec name (TypeApp expr maybefunty tys) = isRec name expr
 
-isRec name (LocApp expr maybefunty locs) = isRec name expr
+-- isRec name (LocApp expr maybefunty locs) = isRec name expr
 
-isRec name (Tuple exprs) = or (map (isRec name) exprs)
+-- isRec name (Tuple exprs) = or (map (isRec name) exprs)
 
-isRec name (Prim op locs tys exprs) = or (map (isRec name) exprs)
+-- isRec name (Prim op locs tys exprs) = or (map (isRec name) exprs)
 
-isRec name (Lit lit) = False
+-- isRec name (Lit lit) = False
 
-isRec name (Constr cname locs tys exprs argtys) = or (map (isRec name) exprs)
+-- isRec name (Constr cname locs tys exprs argtys) = or (map (isRec name) exprs)

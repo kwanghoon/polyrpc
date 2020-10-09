@@ -193,7 +193,7 @@ elaborate gti env (bindingDecl@(Binding _ f ty _):bindingDecls) = do
   return (elab_bindingDecl:elab_bindingDecls)
 
 elabBindingDecl :: Monad m => GlobalTypeInfo -> Env -> BindingDecl -> m BindingDecl
-elabBindingDecl gti env (Binding istop name ty expr) = do
+elabBindingDecl gti env (Binding istop name ty expr) = do -- ToDo: When name is recursive, expr must be lambda abstraction!
   -- let env = emptyEnv{_varEnv=_bindingTypeInfo gti}
   (elab_expr,elab_ty) <- elabExpr gti env clientLoc expr
   if equalType elab_ty ty
