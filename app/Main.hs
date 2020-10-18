@@ -8,6 +8,7 @@ import Token
 import Lexer
 import Terminal
 import Parser
+import qualified ParserBidi as PB
 import Type
 import Expr
 import qualified CSType as TT
@@ -47,8 +48,11 @@ doProcess cmd file = do
   verbose (_flag_debug_lex cmd) $ mapM_ (putStrLn) (map terminalToString terminalList)
 
 
-  putStrLn "[Parsing]"
-  exprSeqAst <- parsing parserSpec terminalList
+  -- putStrLn "[Parsing]"
+  -- exprSeqAst <- parsing parserSpec terminalList
+  
+  putStrLn "[Parsing-Surface syntax]"
+  exprSeqAst <- parsing PB.parserSpec terminalList
 
   verbose (_flag_debug_parse cmd) $ putStrLn "Dumping..."
   verbose (_flag_debug_parse cmd) $ putStrLn $ show $ fromASTTopLevelDeclSeq exprSeqAst

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: d20bab1caed0214a353f1ddddf88965187d5858dd0862167fd9e8186c5dd5093
+-- hash: a57c28d4c162d86d375a06e7a05f7c01b30d65142888fa8a3b56d3f91f006ace
 
 name:           polyrpc
 version:        0.1.0.0
@@ -34,6 +34,7 @@ executable polyrpc
       Execute
       Lexer
       Parser
+      ParserBidi
       Simpl
       Token
       TypeCheck
