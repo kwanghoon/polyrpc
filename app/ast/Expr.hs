@@ -36,7 +36,7 @@ data Expr =
     Var String
   | TypeAbs [String] Expr
   | LocAbs [String] Expr
-  | Abs [(String, Type, Location)] Expr
+  | Abs [(String, Maybe Type, Location)] Expr
   | Let [BindingDecl] Expr
   | Case Expr (Maybe Type) [Alternative]
   | App Expr (Maybe Type) Expr (Maybe Location)
@@ -196,8 +196,8 @@ data AST =
   | ASTTypeConDeclSeq { fromASTTypeConDeclSeq :: [TypeConDecl] }
   | ASTTypeConDecl { fromASTTypeConDecl :: TypeConDecl }
 
-  | ASTIdTypeLocSeq { fromASTIdTypeLocSeq :: [(String,Type,Location)] }
-  | ASTIdTypeLoc { fromASTIdTypeLoc :: (String,Type,Location) }
+  | ASTIdTypeLocSeq { fromASTIdTypeLocSeq :: [(String,Maybe Type,Location)] }
+  | ASTIdTypeLoc { fromASTIdTypeLoc :: (String,Maybe Type,Location) }
 
   | ASTAlternativeSeq { fromASTAlternativeSeq :: [Alternative] }
   | ASTAlternative { fromASTAlternative :: Alternative }

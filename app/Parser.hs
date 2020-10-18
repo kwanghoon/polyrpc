@@ -247,7 +247,7 @@ parserSpec = ParserSpec
 
       {- IdTypeLoc -}
       ("IdTypeLoc -> identifier : Type @ Location",
-        \rhs -> toASTIdTypeLoc (getText rhs 1, fromASTType (get rhs 3), fromASTLocation (get rhs 5)) ),
+        \rhs -> toASTIdTypeLoc (getText rhs 1, Just (fromASTType (get rhs 3)), fromASTLocation (get rhs 5)) ),
 
 
       {- Alternatives -}

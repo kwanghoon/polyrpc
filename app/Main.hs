@@ -59,7 +59,7 @@ doProcess cmd file = do
 
   let toplevelDecls = fromASTTopLevelDeclSeq exprSeqAst
 
-
+{-
   putStrLn "[Type checking]"
   (gti, elab_toplevelDecls) <- typeCheck toplevelDecls
   verbose (_flag_debug_typecheck cmd) $ putStrLn "Dumping..."
@@ -97,7 +97,7 @@ doProcess cmd file = do
   putStrLn "[Executing codes]"
   v <- execute (_flag_debug_run cmd) t_gti funStore t_expr
   verbose (_flag_debug_run cmd) $ putStrLn $ "[Result]\n" ++ show v
-
+-}
   putStrLn "[Success]"
 
 
