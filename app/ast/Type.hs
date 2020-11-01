@@ -18,7 +18,7 @@ data Type =
   | TypeAbsType [TypeVar] Type
   | LocAbsType [LocationVar] Type
   | ConType String [Location] [Type]
-  deriving (Show, Typeable, Data)
+  deriving (Show, Typeable, Data, Eq)
 
 type TypeVar = String
 
