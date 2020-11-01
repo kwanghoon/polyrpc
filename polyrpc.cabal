@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: a57c28d4c162d86d375a06e7a05f7c01b30d65142888fa8a3b56d3f91f006ace
+-- hash: 1c9158b047e179e4f497dcc7d18aabe3e698a934514c158c091a03ae90069b03
 
 name:           polyrpc
 version:        0.1.0.0
@@ -45,6 +45,8 @@ executable polyrpc
       Location
       Prim
       Type
+      NameGen
+      TypeInf
       CSExpr
       CSSubst
       CSType
@@ -52,6 +54,7 @@ executable polyrpc
   hs-source-dirs:
       app
       app/ast
+      app/bidi
       app/cs
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
@@ -61,6 +64,7 @@ executable polyrpc
     , bytestring
     , containers >=0.6.0 && <0.7
     , json >=0.10 && <0.11
+    , mtl >=2.2.2 && <=2.2.2
     , pretty >=1.1.3 && <1.2
     , prettyprinter >=1.6.1 && <1.7
     , regex-tdfa
@@ -83,6 +87,7 @@ test-suite polyrpc-test
     , bytestring
     , containers >=0.6.0 && <0.7
     , json >=0.10 && <0.11
+    , mtl >=2.2.2 && <=2.2.2
     , polyrpc
     , pretty >=1.1.3 && <1.2
     , prettyprinter >=1.6.1 && <1.7

@@ -1,4 +1,4 @@
-module TypeCheck(typeCheck) where
+module TypeInf(typeInf) where
 
 import Data.Either
 
@@ -9,8 +9,10 @@ import Prim
 import Expr
 import BasicLib
 
-typeCheck :: Monad m => [TopLevelDecl] -> m (GlobalTypeInfo, [TopLevelDecl])
-typeCheck toplevelDecls = do
+import NameGen
+
+typeInf :: Monad m => [TopLevelDecl] -> m (GlobalTypeInfo, [TopLevelDecl])
+typeInf toplevelDecls = do
   -- 1. split
   (bindingDecls, userDatatypes) <- splitTopLevelDecls toplevelDecls
 

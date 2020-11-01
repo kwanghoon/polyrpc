@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable, DeriveGeneric #-}
 
-module Expr(Expr(..), AST(..), BindingDecl(..), DataTypeDecl(..)
+module Expr(Expr(..), ExprVar, AST(..), BindingDecl(..), DataTypeDecl(..)
   , initEnv
   , TopLevelDecl(..), TypeConDecl(..), Alternative(..)
   , TypeInfo, ConTypeInfo, BindingTypeInfo, DataTypeInfo
@@ -33,10 +33,10 @@ import Text.JSON.Generic
 
 --
 data Expr =
-    Var String
+    Var ExprVar
   | TypeAbs [String] Expr
   | LocAbs [String] Expr
-  | Abs [(String, Maybe Type, Location)] Expr
+  | Abs [(ExprVar, Maybe Type, Location)] Expr
   | Let [BindingDecl] Expr
   | Case Expr (Maybe Type) [Alternative]
   | App Expr (Maybe Type) Expr (Maybe Location)
@@ -49,6 +49,8 @@ data Expr =
 -- For aeson
 --  deriving (Show, Generic)
   deriving (Show, Typeable, Data)
+
+type ExprVar = String
 
 --
 lookupDataTypeName gti x = [info | (y,info) <- _dataTypeInfo gti, x==y]
@@ -97,7 +99,7 @@ skimLocAbsType (Just (LocAbsType (locvar:locvars) ty)) = Just (LocAbsType locvar
 skimLocAbsType maybe = error $ "[skimLocAbsType]: " ++ show maybe
 
 data BindingDecl =
-    Binding Bool String Type Expr -- isTop?
+    Binding Bool ExprVar Type Expr -- isTop?
 -- For aeson
 --  deriving (Show, Generic)
     deriving (Show, Typeable, Data)

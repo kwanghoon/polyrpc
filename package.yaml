@@ -31,6 +31,7 @@ dependencies:
 - yapb           >= 0.1.0 && <= 0.1.0
 - containers     >= 0.6.0 && < 0.7
 - unordered-containers >= 0.2.10.0 && <= 0.2.12.0
+- mtl            >= 2.2.2 && <= 2.2.2
 
 # library:
 #  source-dirs: src
@@ -41,6 +42,7 @@ executables:
     source-dirs:
     - app
     - app/ast
+    - app/bidi
     - app/cs
 
     ghc-options:
