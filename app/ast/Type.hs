@@ -9,6 +9,8 @@ import Data.Char
 -- import Data.Aeson
 import Text.JSON.Generic
 
+import Naming
+import Pretty
 import Location
 
 data Type =
@@ -187,3 +189,32 @@ unifyTypes (ty1:tys1) (ty2:tys2) =
         Nothing -> Nothing
         Just subst2 -> Just (subst1 ++ subst2)
         
+-- Pretty
+
+instance Pretty Type where
+  bpretty d typ = case typ of
+    TypeVarType v ->
+      if cExists v
+      then showParen (d > exists_prec) $
+           showString "∃ " . bpretty exists_prec v
+      else bpretty d v
+    TupleType tys ->
+      showString "(" . showTuple tys . showString ")"
+    FunType t1 loc t2 -> showParen (d > fun_prec) $
+      bpretty (fun_prec + 1) t1 .
+      showString " -" . bpretty d loc  . showString "-> " .
+      bpretty fun_prec t2
+    TypeAbsType vs t -> showParen (d > forall_prec) $
+      showString "∀ " . bpretty (forall_prec + 1) vs .
+      showString ". "      . bpretty forall_prec t
+    LocAbsType ls t -> showParen (d > forall_prec) $
+      showString "∀ " . bpretty (forall_prec + 1) ls .
+      showString ". "      . bpretty forall_prec t
+    ConType c ls tys ->
+      showString c. showSpace (null ls) (showLocs ls). showTys tys
+    where
+      exists_prec = 10
+      forall_prec :: Int
+      forall_prec = 1
+      fun_prec    = 1
+

@@ -11,7 +11,7 @@ import Location
 import Type
 import Expr
 import Naming
--- import Pretty
+import Pretty
 
 --------------------------------------------------------------------------------
 data ContextKind = Complete | Incomplete
@@ -172,17 +172,17 @@ wf (Context gamma) = case gamma of
 -- well-formed
 checkwf :: Context -> x -> x
 checkwf gamma x | wf gamma  = x
-                | otherwise = error $ "Malformed context: " -- ++ pretty gamma -- Todo!!
+                | otherwise = error $ "Malformed context: " ++ pretty gamma
 
 checkwftype :: Context -> Type -> x -> x
 checkwftype gamma a x | typewf gamma a = checkwf gamma x
                       | otherwise      = error $ "Malformed type: "
-                                       -- ++ pretty (a, gamma)  -- Todo!!
+                                         ++ pretty (a, gamma)
 
 checkwfloc :: Context -> Location -> x -> x
 checkwfloc gamma a x | locwf gamma a = checkwf gamma x
                      | otherwise     = error $ "Malformed location: "
-                                     -- ++ pretty (a, gamma) -- Todo!!
+                                       ++ pretty (a, gamma) -- Todo!!
 
 -- | findSolved (ΓL,α^ = τ,ΓR) α = Just τ
 findSolved :: Context -> TypeVar -> Maybe Type
@@ -249,3 +249,33 @@ lordered gamma l1 l2 =
   let gammaL = dropMarker (CLExists l2) gamma
    in l1 `elem` lexistentials gammaL
       
+-- Pretty
+instance Pretty (GContext a) where
+  bpretty d (Context xs) = bpretty d $ reverse xs
+
+instance Pretty (ContextElem a) where
+  bpretty d cxte = case cxte of
+    CForall v  -> bpretty d v
+    CVar v t -> showParen (d > hastype_prec) $
+      bpretty (hastype_prec + 1) v . showString " : " . bpretty hastype_prec t
+    CExists v -> showParen (d > exists_prec) $
+      showString "∃ " . bpretty exists_prec v
+    CExistsSolved v t -> showParen (d > exists_prec) $
+      showString "∃ " . bpretty exists_prec v .
+      showString " = " . bpretty exists_prec t
+    CMarker v -> showParen (d > app_prec) $
+      showString "▶ " . bpretty (app_prec + 1) v
+
+    CLForall l -> bpretty d l
+    CLExists l -> showParen (d > exists_prec) $
+      showString "∃ " . bpretty exists_prec l
+    CLExistsSolved l loc -> showParen (d > exists_prec) $
+      showString "∃ " . bpretty exists_prec l .
+      showString " = " . bpretty exists_prec loc
+    CLMarker l -> showParen (d > app_prec) $
+      showString "▶ " . bpretty (app_prec + 1) l
+
+    where
+      exists_prec = 1
+      hastype_prec = 1
+      app_prec     = 10

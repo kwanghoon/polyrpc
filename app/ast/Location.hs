@@ -4,6 +4,9 @@ module Location where
 
 import Text.JSON.Generic
 
+import Naming
+import Pretty
+
 data Location =
     Location String
   | LocVar LocationVar
@@ -62,3 +65,10 @@ doSubstLocOverLocs [] loc0 = loc0
 doSubstLocOverLocs ((x,loc):substLoc) loc0 =
   doSubstLocOverLocs substLoc (doSubstLocOverLoc x loc loc0)
   
+-- Pretty
+instance Pretty Location where
+  bpretty _ (Location locstr) = showString locstr
+  bpretty d (LocVar lvar)
+    | clExists lvar = showString "∃ " . bpretty d lvar
+    | otherwise     = bpretty d lvar
+

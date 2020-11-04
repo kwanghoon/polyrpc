@@ -2,12 +2,6 @@
 -- | Pretty printing
 module Pretty where
 
-import Naming
-import Location
-import Type
-import Context
--- import AST
-
 pretty :: Pretty a => a -> String
 pretty x = bpretty 0 x ""
 
@@ -71,39 +65,6 @@ showTuple_ (x:xs) = bpretty 0 x . showString "," . showTuple_ xs
 showSpace True f  = showString " " . f . showString " "
 showSpace False f = f
 
-instance Pretty Location where
-  bpretty _ (Location locstr) = showString locstr
-  bpretty d (LocVar lvar)
-    | clExists lvar = showString "∃ " . bpretty d lvar
-    | otherwise     = bpretty d lvar
-
-instance Pretty Type where
-  bpretty d typ = case typ of
-    TypeVarType v ->
-      if cExists v
-      then showParen (d > exists_prec) $
-           showString "∃ " . bpretty exists_prec v
-      else bpretty d v
-    TupleType tys ->
-      showString "(" . showTuple tys . showString ")"
-    FunType t1 loc t2 -> showParen (d > fun_prec) $
-      bpretty (fun_prec + 1) t1 .
-      showString " -" . bpretty d loc  . showString "-> " .
-      bpretty fun_prec t2
-    TypeAbsType vs t -> showParen (d > forall_prec) $
-      showString "∀ " . bpretty (forall_prec + 1) vs .
-      showString ". "      . bpretty forall_prec t
-    LocAbsType ls t -> showParen (d > forall_prec) $
-      showString "∀ " . bpretty (forall_prec + 1) ls .
-      showString ". "      . bpretty forall_prec t
-    ConType c ls tys ->
-      showString c. showSpace (null ls) (showLocs ls). showTys tys
-    where
-      exists_prec = 10
-      forall_prec :: Int
-      forall_prec = 1
-      fun_prec    = 1
-
 -- instance Pretty Expr where
 --   bpretty d expr = case expr of
 --     EVar v       -> bpretty d v
@@ -126,32 +87,3 @@ instance Pretty Type where
 --       app_prec  = 10
 --       anno_prec = 1
 
-instance Pretty (GContext a) where
-  bpretty d (Context xs) = bpretty d $ reverse xs
-
-instance Pretty (ContextElem a) where
-  bpretty d cxte = case cxte of
-    CForall v  -> bpretty d v
-    CVar v t -> showParen (d > hastype_prec) $
-      bpretty (hastype_prec + 1) v . showString " : " . bpretty hastype_prec t
-    CExists v -> showParen (d > exists_prec) $
-      showString "∃ " . bpretty exists_prec v
-    CExistsSolved v t -> showParen (d > exists_prec) $
-      showString "∃ " . bpretty exists_prec v .
-      showString " = " . bpretty exists_prec t
-    CMarker v -> showParen (d > app_prec) $
-      showString "▶ " . bpretty (app_prec + 1) v
-
-    CLForall l -> bpretty d l
-    CLExists l -> showParen (d > exists_prec) $
-      showString "∃ " . bpretty exists_prec l
-    CLExistsSolved l loc -> showParen (d > exists_prec) $
-      showString "∃ " . bpretty exists_prec l .
-      showString " = " . bpretty exists_prec loc
-    CLMarker l -> showParen (d > app_prec) $
-      showString "▶ " . bpretty (app_prec + 1) l
-
-    where
-      exists_prec = 1
-      hastype_prec = 1
-      app_prec     = 10
