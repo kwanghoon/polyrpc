@@ -10,6 +10,7 @@ import Data.Semigroup
 import Location
 import Type
 import Expr
+import Naming
 -- import Pretty
 
 --------------------------------------------------------------------------------
@@ -32,14 +33,6 @@ deriving instance Eq (ContextElem a)
 deriving instance Show (ContextElem a)
 
 --
-existential = '^'
-
-cExists str  = exists str
-
-clExists str = exists str
-
-exists str   = last str == existential
-
 newtype GContext a   = Context [ContextElem a]
 type CompleteContext = GContext Complete
 type Context         = GContext Incomplete

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 79d387ad02725fd7258809d54c4b7d08d92ba40dd2f48d25415cf7fcc295f3a1
+-- hash: 509249fe752b7a8cb17c274f2ca750b1eada364cde3b69193324cb199b90de94
 
 name:           polyrpc
 version:        0.1.0.0
@@ -47,6 +47,8 @@ executable polyrpc
       Type
       Context
       NameGen
+      Naming
+      Pretty
       TypeInf
       CSExpr
       CSSubst
