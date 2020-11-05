@@ -30,6 +30,7 @@ import Type
 -- import GHC.Generics
 -- import Data.Aeson
 import Text.JSON.Generic
+import Pretty
 
 --
 data Expr =
@@ -354,3 +355,82 @@ lookupPrimOpType primop =
 -- isRec name (Lit lit) = False
 
 -- isRec name (Constr cname locs tys exprs argtys) = or (map (isRec name) exprs)
+
+-----
+instance Pretty Expr where
+  bpretty d expr = case expr of
+    Var v       -> bpretty d v
+    TypeAbs vs e -> showParen (d > abs_prec) $
+      showTyVars vs . showString ". " . bpretty abs_prec e
+    LocAbs ls e -> showParen (d > abs_prec) $
+      showLocVars ls . showString ". " . bpretty abs_prec e
+    Abs varMaybeTyLocs e -> showParen (d >abs_prec) $
+      showString "\\" . showVarMaybeTyLocs varMaybeTyLocs .
+      showString ". " . bpretty abs_prec e
+    Let bindDecls e -> showParen (d > 0) $
+      showString "let { " .
+      foldl (\f bindDecl ->
+               f . fb bindDecl . showString "; ")
+            (\x->x) (init bindDecls) .
+      fb (last bindDecls) .
+      showString " } " .
+      bpretty 0 e .
+      showString "end"
+      where
+         fb (Binding istop x ty e) =
+           showString x . showString " : " .
+           bpretty 0 ty . showString " = " .
+           bpretty 0 e
+
+    Case e maybeTy alts -> showParen (d > 0) $
+      showString "case " .
+      bpretty 0 e .
+      showString " { " .
+      foldl (\f alt ->
+               f . fa alt . showString "; ")
+            (\x->x) (init alts) .
+      fa (last alts) .
+      showString " } "
+      where
+        fa (Alternative c xs e) =
+          showString c . showString " " .
+          showVars xs . showString " -> " .
+          bpretty 0 e 
+        fa (TupleAlternative xs e) =
+          showTuple xs . showString " -> ".
+          bpretty 0 e
+          
+    App e1 maybeTy e2 maybeLoc -> showParen (d > app_prec) $    
+      bpretty app_prec e1 . showString " " . bpretty (app_prec + 1) e2
+    TypeApp e1 maybeTy tys -> showParen (d > app_prec) $
+      bpretty app_prec e1 . showString " " . showTys tys
+    LocApp e1 maybeTy locs -> showParen (d > app_prec) $
+      bpretty app_prec e1 . showString " " . showLocs locs
+    Tuple es -> showTuple es
+    Prim op locs tys es -> showParen (d > 0) $
+      showString (show op) .
+      showString " " . showLocs locs .
+      showString " " . showLocs tys .
+      foldl (\f e -> f . showString " " . bpretty (app_prec +1) e) (\x -> x) es
+    Lit lit -> showString (show lit)
+    Constr c locs tys es argtys ->
+      showString c .
+      showString " " . showLocs locs .
+      showString " " . showLocs tys .
+      foldl (\f e -> f . showString " " . bpretty (app_prec +1) e) (\x -> x) es
+    where
+      abs_prec  = 1
+      app_prec  = 10
+      anno_prec = 1
+
+      
+--     EApp e1 e2   -> showParen (d > app_prec) $
+--       bpretty app_prec e1 . showString " " . bpretty (app_prec + 1) e2
+--     ELocApp e loc   -> showParen (d > app_prec) $
+--       bpretty app_prec e . showString " " . bpretty (app_prec + 1) loc
+--     EAnno e t -> showParen (d > anno_prec) $
+--       bpretty (anno_prec + 1) e . showString " : " . bpretty anno_prec t
+--     where
+--       abs_prec  = 1
+--       app_prec  = 10
+--       anno_prec = 1

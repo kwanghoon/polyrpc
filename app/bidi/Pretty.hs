@@ -50,40 +50,35 @@ instance Pretty LVar where
   bpretty _ (LocVar v) = showString v
 -}
 
+showVars [] = \x -> x
+showVars xs = showTuple_ "" xs 
+
+showTyVars [] = \x -> x
+showTyVars xs = showString "[" . showTuple_ "" xs . showString "]"
+
+showLocVars [] = \x -> x
+showLocVars xs = showString "{" . showTuple_ "" xs . showString "}"
+
+showVarMaybeTyLocs [] = \x -> x
+showVarMaybeTyLocs [(x,maybeTy,loc)] =
+  showString x . showString "@" . bpretty 0 loc
+showVarMaybeTyLocs ((x,maybeTy,loc):xmls) =
+  showString x . showString "@" . bpretty 0 loc . showString " " .
+  showVarMaybeTyLocs xmls
+
 showLocs [] = \x -> x
-showLocs xs = showString "{" . showTuple_ xs . showString "}"
+showLocs xs = showString "{" . showTuple_ "," xs . showString "}"
 
 showTys [] = \x -> x
-showTys xs = showString "[" . showTuple_ xs . showString "]"
+showTys xs = showString "[" . showTuple_ "," xs . showString "]"
 
-showTuple xs = showString "(" . showTuple_ xs . showString ")"
+showTuple xs = showString "(" . showTuple_ "," xs . showString ")"
 
-showTuple_ []     = showString ""
-showTuple_ [x]    = bpretty 0 x
-showTuple_ (x:xs) = bpretty 0 x . showString "," . showTuple_ xs
+showTuple_ deli []     = showString ""
+showTuple_ deli [x]    = bpretty 0 x
+showTuple_ deli (x:xs) = bpretty 0 x . showString deli . showTuple_ deli xs
 
 showSpace True f  = showString " " . f . showString " "
 showSpace False f = f
 
--- instance Pretty Expr where
---   bpretty d expr = case expr of
---     EVar v       -> bpretty d v
---     EUnit        -> showString "()"
---     EAbs v loc e -> showParen (d > abs_prec) $
---       showString "λ" . bpretty (abs_prec + 1) v .
---       showString " @ " . bpretty (abs_prec + 1) loc .
---       showString ". " . bpretty abs_prec e
---     ELocAbs l e -> showParen (d > abs_prec) $
---       showString "Λ" . bpretty (abs_prec + 1) l .
---       showString ". " . bpretty abs_prec e
---     EApp e1 e2   -> showParen (d > app_prec) $
---       bpretty app_prec e1 . showString " " . bpretty (app_prec + 1) e2
---     ELocApp e loc   -> showParen (d > app_prec) $
---       bpretty app_prec e . showString " " . bpretty (app_prec + 1) loc
---     EAnno e t -> showParen (d > anno_prec) $
---       bpretty (anno_prec + 1) e . showString " : " . bpretty anno_prec t
---     where
---       abs_prec  = 1
---       app_prec  = 10
---       anno_prec = 1
 
