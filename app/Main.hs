@@ -14,6 +14,7 @@ import Expr
 import qualified CSType as TT
 import qualified CSExpr as TE
 import TypeCheck
+import TypeInf
 import Compile
 import Simpl
 import Verify
@@ -58,6 +59,9 @@ doProcess cmd file = do
   verbose (_flag_debug_parse cmd) $ putStrLn $ show $ fromASTTopLevelDeclSeq exprSeqAst
 
   let toplevelDecls = fromASTTopLevelDeclSeq exprSeqAst
+
+  putStrLn "[Type checking bidirectionally]"
+  () <- typeInf toplevelDecls
 
 {-
   putStrLn "[Type checking]"

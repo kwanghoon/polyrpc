@@ -1,6 +1,7 @@
 module TypeInf(typeInf) where
 
 import Data.Either
+import Data.Maybe
 
 import Location
 import Type
@@ -9,9 +10,13 @@ import Prim
 import Expr
 import BasicLib
 
+import Naming
 import NameGen
+import Context
+import Pretty
 
-typeInf :: Monad m => [TopLevelDecl] -> m (GlobalTypeInfo, [TopLevelDecl])
+-- typeInf :: Monad m => [TopLevelDecl] -> m (GlobalTypeInfo, [TopLevelDecl])
+typeInf :: Monad m => [TopLevelDecl] -> m ()
 typeInf toplevelDecls = do
   -- 1. split
   (bindingDecls, userDatatypes) <- splitTopLevelDecls toplevelDecls
@@ -49,17 +54,18 @@ typeInf toplevelDecls = do
 --              , _bindingTypeInfo=basicLibTypeInfo ++ bindingTypeInfo }
               , _bindingTypeInfo=basicLibTypeInfo }
 
-  let initEnv = (emptyEnv{_varEnv=_bindingTypeInfo gti ++ bindingTypeInfo})
-  elab_bindingDecls <- elaborate gti initEnv partial_elab_bindingDecls
+  -- let initEnv = (emptyEnv{_varEnv=_bindingTypeInfo gti ++ bindingTypeInfo})
+  -- elab_bindingDecls <- elaborate gti initEnv partial_elab_bindingDecls
 
   -- 7. return elaborated data types and bindings
-  let elab_toplevels = [ LibDeclTopLevel x ty | (x,ty) <- basicLibTypeInfo]
-                       ++ [ DataTypeTopLevel dt | dt <- elab_datatypeDecls]
-                       ++ [ BindingTopLevel bd | bd <- elab_bindingDecls]
+  -- let elab_toplevels = [ LibDeclTopLevel x ty | (x,ty) <- basicLibTypeInfo]
+  --                      ++ [ DataTypeTopLevel dt | dt <- elab_datatypeDecls]
+  --                      ++ [ BindingTopLevel bd | bd <- elab_bindingDecls]
 
-  let gti1 = gti {_bindingTypeInfo=basicLibTypeInfo ++ bindingTypeInfo}
+  -- let gti1 = gti {_bindingTypeInfo=basicLibTypeInfo ++ bindingTypeInfo}
 
-  return (gti1, elab_toplevels)
+  -- return (gti1, elab_toplevels)
+  return ()
 
 ----------------------------------------------------------------------------
 -- 1. Split toplevel declarations into datatypes and bindings
@@ -566,3 +572,87 @@ elabAlt gti env loc substLoc substTy tycondecls externTys (TupleAlternative args
 allUnique [] = []
 allUnique (x:xs) =
   if elem x xs then [x] else allUnique xs
+
+----------------------------------------------------------------------------
+-- For bidirectional typechecking
+----------------------------------------------------------------------------
+
+{-
+-- | Algorithmic sublocation:
+subloc :: Context -> Loc -> Loc -> NameGen Context
+subloc gamma loc1 loc2 =
+  traceNS "subloc" (gamma, loc1, loc2) $
+  checkwfloc gamma loc1 $ checkwfloc gamma loc2 $
+    case (loc1, loc2) of
+    -- <:Loc
+    -- (Client, Client) -> return gamma
+    -- (Server, Server) -> return gamma
+    (Location c1, Location c2) | c1 == c2 -> return gamma
+
+--> Stop here!!
+
+    -- <:LVar
+    (Unknown l1, Unknown l2) | l1 == l2 -> return gamma
+    -- <:ExLVar
+    (UnknownExists l1, UnknownExists l2) | l1 == l2 -> return gamma
+    (UnknownExists l, loc) | l `S.notMember` freeLVarsIn loc ->
+      instantiateLocL gamma l loc
+    (loc, UnknownExists l) | l `S.notMember` freeLVarsIn loc ->
+      instantiateLocR gamma loc l
+
+
+    _ -> error $ "subloc, don't know what to do with: "
+                          ++ pretty (gamma, loc1, loc2)
+
+-}
+
+-- | Algorithmic instantiation location (left):
+--   instantiateLocL Γ l loc = Δ <=> Γ |- l^ :=< loc -| Δ
+instantiateLocL gamma l loc
+  | clExists l =
+    traceNS "instantiateLocL" (gamma, l, loc) $
+    checkwfloc gamma loc $ checkwfloc gamma (LocVar l) $
+    case lsolve gamma l loc of
+    -- InstLSolve
+    Just gamma' -> return gamma'
+    Nothing -> case loc of
+      -- InstLReach
+      LocVar l'
+        | clExists l' ->
+            if lordered gamma l l' then
+               return $ fromJust $ lsolve gamma l' (LocVar l)
+            else
+               return $ fromJust $ lsolve gamma l (LocVar l')
+        | otherwise ->
+            error $ "instantiateLocL: not ended with ^: " ++ l'
+      _ -> error $ "The impossible happened! instantiateLocL: "
+                ++ pretty (gamma, l, loc)
+
+  | otherwise =
+    error $ "instantiateLocL: not ended with ^: " ++ l
+
+
+-- | Algorithmic instantiation location (right):
+--   instantiateLocR Γ loc l = Δ <=> Γ |- loc =:< l -| Δ
+instantiateLocR gamma loc l
+  | clExists l =
+    traceNS "instantiateLocR" (gamma, loc, l) $
+    checkwfloc gamma loc $ checkwfloc gamma (LocVar l) $
+    case lsolve gamma l loc of
+      Just gamma' -> return gamma'
+      Nothing -> case loc of
+        -- InstRReach
+        LocVar l'
+          | clExists l' ->
+             if lordered gamma l l' then
+                return $ fromJust $ lsolve gamma l' (LocVar l)
+             else
+                return $ fromJust $ lsolve gamma l (LocVar l')
+          | otherwise ->
+              error $ "instantiateLocR: not ended with ^: " ++ l'
+
+        _ -> error $ "The impossible happened! instantiateLocR: "
+                  ++ pretty (gamma, loc, l)
+
+  | otherwise =
+    error $ "instantiateLocR: not ended with ^: " ++ l
