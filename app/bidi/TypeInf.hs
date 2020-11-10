@@ -2,6 +2,7 @@ module TypeInf(typeInf) where
 
 import Data.Either
 import Data.Maybe
+import qualified Data.Set as S
 
 import Location
 import Type
@@ -577,9 +578,8 @@ allUnique (x:xs) =
 -- For bidirectional typechecking
 ----------------------------------------------------------------------------
 
-{-
 -- | Algorithmic sublocation:
-subloc :: Context -> Loc -> Loc -> NameGen Context
+subloc :: Context -> Location -> Location -> NameGen Context
 subloc gamma loc1 loc2 =
   traceNS "subloc" (gamma, loc1, loc2) $
   checkwfloc gamma loc1 $ checkwfloc gamma loc2 $
@@ -589,22 +589,47 @@ subloc gamma loc1 loc2 =
     -- (Server, Server) -> return gamma
     (Location c1, Location c2) | c1 == c2 -> return gamma
 
---> Stop here!!
-
+    (LocVar l1, LocVar l2)
+    
     -- <:LVar
-    (Unknown l1, Unknown l2) | l1 == l2 -> return gamma
+    -- (Unknown l1, Unknown l2) | l1 == l2 -> return gamma
+    
+      | (not (clExists l1)) && (not (clExists l2)) && l1 == l2 -> return gamma
+      
     -- <:ExLVar
-    (UnknownExists l1, UnknownExists l2) | l1 == l2 -> return gamma
-    (UnknownExists l, loc) | l `S.notMember` freeLVarsIn loc ->
-      instantiateLocL gamma l loc
-    (loc, UnknownExists l) | l `S.notMember` freeLVarsIn loc ->
-      instantiateLocR gamma loc l
+    -- (UnknownExists l1, UnknownExists l2) | l1 == l2 -> return gamma
+    
+      | clExists l1 && clExists l2 && l1 == l2 -> return gamma
+      
+    -- (UnknownExists l, loc) | l `S.notMember` freeLVarsIn loc ->
+    --   instantiateLocL gamma l loc
 
+      | otherwise ->
+         error $ "subloc, don't know what to do with: "
+                          ++ pretty (gamma, loc1, loc2)
+
+    (LocVar l, loc) 
+      | clExists l && l `S.notMember` freeLVarsIn loc ->
+          instantiateLocL gamma l loc
+        
+      | otherwise ->
+         error $ "subloc, don't know what to do with: "
+                          ++ pretty (gamma, loc1, loc2)
+                          
+    -- (loc, UnknownExists l) | l `S.notMember` freeLVarsIn loc ->
+    --  instantiateLocR gamma loc l
+
+    (loc, LocVar l)
+      | clExists l && l `S.notMember` freeLVarsIn loc ->
+          instantiateLocR gamma loc l
+          
+      | otherwise ->
+         error $ "subloc, don't know what to do with: "
+                          ++ pretty (gamma, loc1, loc2)
 
     _ -> error $ "subloc, don't know what to do with: "
                           ++ pretty (gamma, loc1, loc2)
 
--}
 
 -- | Algorithmic instantiation location (left):
 --   instantiateLocL Γ l loc = Δ <=> Γ |- l^ :=< loc -| Δ

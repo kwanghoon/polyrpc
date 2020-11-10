@@ -2,6 +2,9 @@
 
 module Location where
 
+import Data.Set(Set)
+import qualified Data.Set as S
+
 import Text.JSON.Generic
 
 import Naming
@@ -72,3 +75,12 @@ instance Pretty Location where
     | clExists lvar = showString "∃ " . bpretty d lvar
     | otherwise     = bpretty d lvar
 
+
+--
+-- | The free location variables in a location
+freeLVarsIn :: Location -> Set LocationVar
+freeLVarsIn loc = case loc of
+  Location _ -> mempty
+  LocVar l   -> S.singleton l
+
+  
