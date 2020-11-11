@@ -681,3 +681,95 @@ instantiateLocR gamma loc l
 
   | otherwise =
     error $ "instantiateLocR: not ended with ^: " ++ l
+
+{-
+
+-- | Algorithmic instantiation (left):
+--   instantiateL Γ α A = Δ <=> Γ |- α^ :=< A -| Δ
+instantiateL :: Context -> TVar -> Polytype -> NameGen Context
+instantiateL gamma alpha a =
+  traceNS "instantiateL" (gamma, alpha, a) $
+  checkwftype gamma a $ checkwftype gamma (TExists alpha) $
+  case solve gamma alpha =<< monotype a of
+    -- InstLSolve
+    Just gamma' -> return gamma'
+    Nothing -> case a of
+      -- InstLReach
+      TExists beta 
+        | ordered gamma alpha beta ->
+            return $ fromJust $ solve gamma beta (TExists alpha)
+        | otherwise ->
+            return $ fromJust $ solve gamma alpha (TExists beta)
+      -- InstLArr
+      TFun a1 loc a2   -> do
+        alpha1 <- freshTVar
+        alpha2 <- freshTVar
+        l      <- freshLVar
+        theta <- instantiateR (insertAt gamma (CExists alpha) $ context
+                                [ CLExists l
+                                , CExists alpha2
+                                , CExists alpha1
+                                , CExistsSolved alpha $ TFun (TExists alpha1)
+                                                             (UnknownExists l)
+                                                             (TExists alpha2)
+                                ])
+                              a1 alpha1
+        delta <- instantiateL theta alpha2 (apply theta a2)
+        instantiateLocL delta l (lapply delta loc)
+      -- InstLAIIR
+      TForall beta b -> do
+        -- Do alpha conversion to avoid clashes
+        beta' <- freshTVar
+        dropMarker (CForall beta') <$>
+          instantiateL (gamma >++ [CForall beta'])
+                       alpha
+                       (typeSubst (TVar beta') beta b)
+      _ -> error $ "The impossible happened! instantiateL: "
+                ++ pretty (gamma, alpha, a)
+
+
+-- | Algorithmic instantiation (right):
+--   instantiateR Γ A α = Δ <=> Γ |- A =:< α -| Δ
+instantiateR :: Context -> Polytype -> TVar -> NameGen Context
+instantiateR gamma a alpha =
+  traceNS "instantiateR" (gamma, a, alpha) $
+  checkwftype gamma a $ checkwftype gamma (TExists alpha) $
+  case solve gamma alpha =<< monotype a of
+    Just gamma' -> return gamma'
+    Nothing -> case a of
+      -- InstRReach
+      TExists beta 
+        | ordered gamma alpha beta ->
+            return $ fromJust $ solve gamma beta (TExists alpha)
+        | otherwise ->
+            return $ fromJust $ solve gamma alpha (TExists beta)
+      -- InstRArr
+      TFun a1 loc a2   -> do
+        alpha1 <- freshTVar
+        alpha2 <- freshTVar
+        l      <- freshLVar
+        theta <- instantiateL (insertAt gamma (CExists alpha) $ context
+                                 [ CLExists l
+                                 , CExists alpha2
+                                 , CExists alpha1
+                                 , CExistsSolved alpha $ TFun (TExists alpha1)
+                                                              (UnknownExists l)
+                                                              (TExists alpha2)
+                                 ])
+                              alpha1
+                              a1
+        instantiateR theta (apply theta a2) alpha2
+      -- InstRAIIL
+      TForall beta b -> do
+        -- Do alpha conversion to avoid clashes
+        beta' <- freshTVar
+        dropMarker (CMarker beta') <$>
+          instantiateR (gamma >++ [CMarker beta', CExists beta'])
+                       (typeSubst (TExists beta') beta b)
+                       alpha
+      _ -> error $ "The impossible happened! instantiateR: "
+                ++ pretty (gamma, a, alpha)
+
+
+-}
+

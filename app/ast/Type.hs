@@ -188,6 +188,26 @@ unifyTypes (ty1:tys1) (ty2:tys2) =
       case unifyTypes (map (doSubst subst1) tys1) (map (doSubst subst1) tys2) of
         Nothing -> Nothing
         Just subst2 -> Just (subst1 ++ subst2)
+
+-- | Is the type a Monotype?
+monotype :: Type -> Maybe Type
+monotype typ = case typ of
+  TypeVarType v     -> Just $ TypeVarType v -- TVar and TExists
+  TupleType tys     -> TupleType <$> mapM monotype tys
+  FunType t1 loc t2 -> FunType <$> monotype t1 <*> Just loc <*> monotype t2
+  TypeAbsType _ _   -> Nothing
+  LocAbsType _ _    -> Nothing
+  ConType c locs tys -> ConType c <$> Just locs <*> mapM monotype tys
+
+-- | Any type is a Polytype since Monotype is a subset of Polytype
+polytype :: Type -> Type
+polytype typ = case typ of
+  TypeVarType v  -> TypeVarType v   -- TVar and TExists
+  TupleType tys  -> TupleType (map polytype tys)
+  FunType t1 loc t2 -> FunType (polytype t1) loc (polytype t2)
+  TypeAbsType v t    -> TypeAbsType v (polytype t)
+  LocAbsType loc t  -> LocAbsType loc (polytype t)
+  ConType c locs tys -> ConType c locs (map polytype tys)
         
 -- Pretty
 
