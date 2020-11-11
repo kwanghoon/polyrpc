@@ -238,3 +238,8 @@ instance Pretty Type where
       forall_prec = 1
       fun_prec    = 1
 
+-- | typeSubst A α B = [A/α]B
+typeSubst :: Type -> TypeVar -> Type -> Type
+typeSubst t' v typ = doSubstOne v t' typ
+
+

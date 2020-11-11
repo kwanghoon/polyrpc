@@ -2,6 +2,7 @@
 module NameGen where
 import Control.Monad.State
 
+import Naming
 import Location
 import Type
 import Expr
@@ -10,21 +11,21 @@ import Pretty
 import Debug.Trace
 
 data NameState = NameState
-  { varNames  :: [EVar]
-  , tvarNames :: [TVar]
-  , lvarNames :: [LVar]
+  { varNames  :: [ExprVar]
+  , tvarNames :: [TypeVar]
+  , lvarNames :: [LocationVar]
   , indent    :: Int -- This has no place here, but useful for debugging
   }
 
-data EVar = EVar ExprVar
-data TVar = TVar TypeVar
-data LVar = LVar LocationVar
+-- data EVar = EVar ExprVar
+-- data TVar = TVar TypeVar
+-- data LVar = LVar LocationVar
 
 initialNameState :: NameState
 initialNameState = NameState
-  { varNames  = map (EVar . ('$':)) namelist
-  , tvarNames = map (TVar . ('\'':)) namelist
-  , lvarNames = map (LVar . ("\'l_"++)) namelist
+  { varNames  = map ({- EVar . -} ('$':)) namelist
+  , tvarNames = map ({- TVar . -} ('\'':)) namelist
+  , lvarNames = map ({- LVar . -} ("\'l_"++)) namelist
   , indent    = 0
   }
   where
@@ -36,7 +37,7 @@ evalNameGen :: NameGen a -> a
 evalNameGen = flip evalState initialNameState
 
 -- | Create a fresh variable
-freshVar :: NameGen EVar
+freshVar :: NameGen ExprVar
 freshVar = do
   vvs <- gets varNames
   case vvs of
@@ -46,7 +47,7 @@ freshVar = do
     [] -> error "No fresh variable can be created."
 
 -- | Create a fresh type variable
-freshTypeVar :: NameGen TVar
+freshTypeVar :: NameGen TypeVar
 freshTypeVar = do
   vvs <- gets tvarNames
   case vvs of
@@ -55,8 +56,12 @@ freshTypeVar = do
       return v
     [] -> error "No fresh type variable can be created."
 
+freshExistsTypeVar = do
+  alpha <- freshTypeVar
+  return $ mkExists alpha
+
 -- | Create a fresh location variable
-freshLocationVar :: NameGen LVar
+freshLocationVar :: NameGen LocationVar
 freshLocationVar = do
   vvs <- gets lvarNames
   case vvs of
@@ -64,6 +69,10 @@ freshLocationVar = do
       modify $ \s -> s {lvarNames = vs}
       return v
     [] -> error "No fresh location variable can be created."
+
+freshExistsLocationVar = do
+  l <- freshLocationVar
+  return $ mkExists l
 
 -- | Print some debugging info
 traceNS :: (Pretty a, Pretty b) => String -> a -> NameGen b -> NameGen b

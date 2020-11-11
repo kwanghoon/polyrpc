@@ -8,3 +8,5 @@ clExists str = exists str
 
 exists str   = last str == existential
 
+mkExists str = str ++ [existential]
+
