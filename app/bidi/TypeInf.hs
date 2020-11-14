@@ -4,6 +4,8 @@ import Data.Either
 import Data.Maybe
 import qualified Data.Set as S
 
+import Control.Monad (replicateM)
+
 import Location
 import Type
 import Literal
@@ -682,7 +684,6 @@ instantiateLocR gamma loc l
   | otherwise =
     error $ "instantiateLocR: not ended with ^: " ++ l
 
-{-
 -- | Algorithmic instantiation (left):
 --   instantiateL Γ α A = Δ <=> Γ |- α^ :=< A -| Δ
 instantiateL :: Context -> TypeVar -> Type -> NameGen Context
@@ -695,7 +696,7 @@ instantiateL_ gamma alpha a =
   checkwftype gamma a $ checkwftype gamma (TypeVarType alpha) $
   case solve gamma alpha =<< monotype a of
     -- InstLSolve
-    Just gamma' -> return gamma'    -- Todo: ??? when a is beta^, which is tau as in InstLReach?
+    Just gamma' -> return gamma'
     Nothing -> case a of
       -- InstLReach
       TypeVarType beta
@@ -722,13 +723,14 @@ instantiateL_ gamma alpha a =
         delta <- instantiateL theta alpha2 (apply theta a2)
         instantiateLocL delta l (lapply delta loc)
       -- InstLAIIR
-      TypeAbsType beta b -> do   -- Should Fix: beta is a list!!
+      TypeAbsType betas b -> do
         -- Do alpha conversion to avoid clashes
-        beta' <- freshTypeVar
-        dropMarker (CForall beta') <$>
-          instantiateL (gamma >++ [CForall beta'])
+        betas' <- replicateM (length betas) freshTypeVar
+        dropMarker (CForall (last betas')) <$>
+          instantiateL (gamma >++ map CForall betas')
                        alpha
-                       (typeSubst (TypeVarType beta') beta b)
+                       (typeSubsts (map TypeVarType betas') betas b)
+                       
       _ -> error $ "The impossible happened! instantiateL: "
                 ++ pretty (gamma, alpha, a)
 
@@ -775,12 +777,12 @@ instantiateR_ gamma a alpha =
                               a1
         instantiateR theta (apply theta a2) alpha2
       -- InstRAIIL
-      TypeAbsType beta b -> do   -- Should Fix: beta is a list!!
+      TypeAbsType betas b -> do
         -- Do alpha conversion to avoid clashes
-        beta' <- freshTypeVar
-        dropMarker (CMarker beta') <$>
-          instantiateR (gamma >++ [CMarker beta', CExists beta'])
-                       (typeSubst (TypeVarType beta') beta b)
+        betas' <- replicateM (length betas) freshTypeVar
+        dropMarker (CMarker (last betas')) <$>
+          instantiateR (gamma >++ map CMarker betas' >++ map CExists betas')
+                       (typeSubsts (map TypeVarType betas') betas b)
                        alpha
       _ -> error $ "The impossible happened! instantiateR: "
                 ++ pretty (gamma, a, alpha)
@@ -789,4 +791,4 @@ instantiateR_ gamma a alpha =
       -- Should Fix: Tuple ???
       -- Should Fix: TypeCon ???
 
--}
+

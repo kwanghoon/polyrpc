@@ -242,4 +242,5 @@ instance Pretty Type where
 typeSubst :: Type -> TypeVar -> Type -> Type
 typeSubst t' v typ = doSubstOne v t' typ
 
-
+typeSubsts :: [Type] -> [TypeVar] -> Type -> Type
+typeSubsts ts' vs typ = doSubst (zip vs ts') typ
