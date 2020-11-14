@@ -4,7 +4,7 @@ import Data.Either
 import Data.Maybe
 import qualified Data.Set as S
 
-import Control.Monad (replicateM)
+import Control.Monad (replicateM, foldM)
 
 import Location
 import Type
@@ -731,12 +731,25 @@ instantiateL_ gamma alpha a =
                        alpha
                        (typeSubsts (map TypeVarType betas') betas b)
                        
+      -- InstLAIIL
+      -- LocAbsType locs b -> do  -- Should not be allowed!!
+
+      -- InstLTupleType
+      TupleType tys -> do
+        alphas <- replicateM (length tys) freshExistsTypeVar
+        foldM (\gamma (alphai, ai) ->
+                 instantiateL gamma alphai (apply gamma ai))
+               (gamma >++ map CExists alphas
+                      >++ [CExistsSolved alpha (TupleType (map TypeVarType alphas))])
+               (zip alphas tys)
+
+      -- InstLConstr
+      ConType c locs tys -> do        
+        error "instantiateL: ConType: Not implemented"
+
+        
       _ -> error $ "The impossible happened! instantiateL: "
                 ++ pretty (gamma, alpha, a)
-
-      -- Should Fix: LocAbsType locs b ???
-      -- Should Fix: Tuple ???
-      -- Should Fix: TypeCon ???
 
       
 -- | Algorithmic instantiation (right):
@@ -784,11 +797,24 @@ instantiateR_ gamma a alpha =
           instantiateR (gamma >++ map CMarker betas' >++ map CExists betas')
                        (typeSubsts (map TypeVarType betas') betas b)
                        alpha
+
+      -- InstLAIIR
+      -- LocAbsType locs b -> do  -- Should not be allowed!!
+        
+      -- InstRTupleType
+      TupleType tys -> do
+        alphas <- replicateM (length tys) freshExistsTypeVar
+        foldM (\gamma (alphai, ai) ->
+                 instantiateR gamma (apply gamma ai) alphai)
+               (gamma >++ map CExists alphas
+                      >++ [CExistsSolved alpha (TupleType (map TypeVarType alphas))])
+               (zip alphas tys)
+        
+      -- InstRConstr
+      ConType c locs tys -> do        
+        error "instantiateR: ConType: Not implemented"
+
       _ -> error $ "The impossible happened! instantiateR: "
                 ++ pretty (gamma, a, alpha)
-
-      -- Should Fix: LocAbsType locs b ???
-      -- Should Fix: Tuple ???
-      -- Should Fix: TypeCon ???
 
 
