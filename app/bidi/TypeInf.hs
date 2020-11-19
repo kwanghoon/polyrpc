@@ -693,7 +693,14 @@ subtype gamma typ1 typ2 =
           && alpha `S.notMember` freeTVars a -> instantiateR gamma a alpha
         
     -- <:TupleType
-    (TupleType tys1, TupleType tys2) -> error $ "subtype: not implemented yet"
+    (TupleType tys1, TupleType tys2) 
+      | length tys1 == length tys2 ->
+         foldM (\ g (maybety1,maybety2) ->
+                  case (maybety1, maybety2) of
+                    (Just ty1, Just ty2) -> subtype g ty1 ty2
+                    _ -> error $ "subtype: TupleType: not monotype: "
+                                    ++ pretty (gamma, typ1, typ2))
+           gamma (zip (map monotype tys1) (map monotype tys2))
     
     -- <:->
     (FunType a1 loc1 a2, FunType b1 loc2 b2) -> do
@@ -706,7 +713,8 @@ subtype gamma typ1 typ2 =
       -- Do alpha conversion to avoid clashes
       alphas' <- replicateM (length alphas) freshTypeVar
       dropMarker (CForall (head alphas')) <$>
-        subtype (gamma >++ map CForall alphas') a (typeSubsts (map TypeVarType alphas') alphas b)
+        subtype (gamma >++ map CForall alphas') a
+           (typeSubsts (map TypeVarType alphas') alphas b)
 
     -- <:forallL
     (TypeAbsType alphas a, b) -> do
@@ -731,8 +739,18 @@ subtype gamma typ1 typ2 =
                            ++ pretty (gamma, typ1, typ2)        
 
     -- <:ConType
-    (ConType c1 locs1 tys1, ConType c2 locs2 tys2) ->
-      error $ "subtype: not implemented yet"
+    (ConType c1 locs1 tys1, ConType c2 locs2 tys2)
+      | c1 /= c2 || length locs1 /= length locs2 || length tys1 /= length tys2 ->
+          error $ "subtype: ConType: different type constructors: "
+                  ++ pretty (gamma, typ1, typ2)
+      | otherwise -> do
+          delta <- foldM (\ g (loc1, loc2) -> subloc g loc1 loc2) gamma (zip locs1 locs2)
+          foldM (\ g (maybety1, maybety2) ->
+                   case (maybety1, maybety2) of
+                     (Just ty1, Just ty2) -> subtype g ty1 ty2
+                     _ -> error $ "subtype: ConType: not monotype: "
+                                     ++ pretty (gamma, typ1, typ2))
+            gamma (zip (map monotype tys1) (map monotype tys2))
     
     _ -> error $ "subtype, don't know what to do with: "
                            ++ pretty (gamma, typ1, typ2)
