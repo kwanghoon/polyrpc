@@ -904,3 +904,31 @@ instantiateR_ gamma a alpha =
                 ++ pretty (gamma, a, alpha)
 
 
+-- | Type checking:
+--   typecheck Γ loc e A = Δ <=> Γ |-_loc e <= A -| Δ
+typecheck :: Context -> Location -> Expr -> Type -> NameGen Context
+typecheck gamma loc expr typ =
+  traceNS "typecheck" (gamma, loc, expr, typ) $
+  error $ "typecheck: not implemented yet"
+
+-- | Type synthesising:
+--   typesynth Γ loc e = (A, Δ) <=> Γ |- e => A -| Δ
+typesynth :: Context -> Location -> Expr -> NameGen (Type, Context)
+typesynth gamma loc expr = traceNS "typesynth" (gamma, loc, expr) $ checkwf gamma $
+  error $ "typesynth: not implemented yet"
+
+
+-- | Type application synthesising
+--   typeapplysynth Γ loc A e = (C, Δ) <=> Γ |- A . e =>> C -| Δ
+typeapplysynth :: Context -> Location -> Type -> Expr -> NameGen (Type, Context)
+typeapplysynth gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, e) $
+  error $ "typeapplysynth: not implemented yet"
+
+
+-- | Location application synthesising
+--   locapplysynth Γ loc A loc0 = (C, Δ) <=> Γ |- A . loc0 =>> C -| Δ
+locapplysynth :: Context -> Location -> Type -> Location -> NameGen (Type, Context)
+locapplysynth gamma loc typ loc0 = traceNS "locapplysynth" (gamma, loc, typ, loc0) $
+  error $ "locapplysynth: not implemented yet"
+
+
