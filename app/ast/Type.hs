@@ -4,6 +4,8 @@ module Type where
 
 import Prim
 import Data.Char
+import Data.Set(Set)
+import qualified Data.Set as S
 -- For aeson
 -- import GHC.Generics
 -- import Data.Aeson
@@ -109,6 +111,12 @@ doSubstLoc :: [(String, Location)] -> Type -> Type
 doSubstLoc [] ty = ty
 doSubstLoc ((x,loc):substLoc) ty =
   doSubstLoc substLoc (doSubstLocOne x loc ty)
+
+locSubst :: Location -> LocationVar -> Type -> Type 
+locSubst loc l ty = doSubstLocOne l loc ty
+
+locSubsts :: [Location] -> [LocationVar] -> Type -> Type
+locSubsts locs ls ty = doSubstLoc (zip ls locs) ty
 
 --
 equalType :: Type -> Type -> Bool
@@ -244,3 +252,27 @@ typeSubst t' v typ = doSubstOne v t' typ
 
 typeSubsts :: [Type] -> [TypeVar] -> Type -> Type
 typeSubsts ts' vs typ = doSubst (zip vs ts') typ
+
+
+--
+-- | The free type variables in a type
+freeTVars :: Type -> Set TypeVar
+freeTVars typ = case typ of
+  TypeVarType v    -> S.singleton v
+  TupleType tys    -> foldl mappend mempty (map freeTVars tys)
+  FunType t1 _ t2  -> freeTVars t1 `mappend` freeTVars t2
+  TypeAbsType vs t -> foldl (\set v -> S.delete v set) (freeTVars t) vs
+  LocAbsType ls t  -> freeTVars t
+  ConType c ls tys -> foldl mappend mempty (map freeTVars tys)
+
+--
+-- | The free location variables in a type
+freeLVars :: Type -> Set LocationVar
+freeLVars typ = case typ of
+  TypeVarType v     -> mempty
+  TupleType tys     -> foldl mappend mempty (map freeLVars tys)
+  FunType t1 loc t2 -> freeLVars t1 `mappend` freeLVarsIn loc `mappend` freeLVars t2
+  TypeAbsType vs ty -> freeLVars ty
+  LocAbsType ls t   -> foldl (\set l -> S.delete l set) (freeTVars t) ls
+  ConType c ls tys  -> foldl mappend mempty (map freeLVarsIn ls)
+                         `mappend` foldl mappend mempty (map freeLVars tys)

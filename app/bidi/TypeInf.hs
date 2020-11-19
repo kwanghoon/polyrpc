@@ -587,25 +587,11 @@ subloc gamma loc1 loc2 =
   checkwfloc gamma loc1 $ checkwfloc gamma loc2 $
     case (loc1, loc2) of
     -- <:Loc
-    -- (Client, Client) -> return gamma
-    -- (Server, Server) -> return gamma
     (Location c1, Location c2) | c1 == c2 -> return gamma
 
     (LocVar l1, LocVar l2)
-    
-    -- <:LVar
-    -- (Unknown l1, Unknown l2) | l1 == l2 -> return gamma
-    
       | (not (clExists l1)) && (not (clExists l2)) && l1 == l2 -> return gamma
-      
-    -- <:ExLVar
-    -- (UnknownExists l1, UnknownExists l2) | l1 == l2 -> return gamma
-    
       | clExists l1 && clExists l2 && l1 == l2 -> return gamma
-      
-    -- (UnknownExists l, loc) | l `S.notMember` freeLVarsIn loc ->
-    --   instantiateLocL gamma l loc
-
       | otherwise ->
          error $ "subloc, don't know what to do with: "
                           ++ pretty (gamma, loc1, loc2)
@@ -613,18 +599,13 @@ subloc gamma loc1 loc2 =
     (LocVar l, loc) 
       | clExists l && l `S.notMember` freeLVarsIn loc ->
           instantiateLocL gamma l loc
-        
       | otherwise ->
          error $ "subloc, don't know what to do with: "
                           ++ pretty (gamma, loc1, loc2)
                           
-    -- (loc, UnknownExists l) | l `S.notMember` freeLVarsIn loc ->
-    --  instantiateLocR gamma loc l
-
     (loc, LocVar l)
       | clExists l && l `S.notMember` freeLVarsIn loc ->
           instantiateLocR gamma loc l
-          
       | otherwise ->
          error $ "subloc, don't know what to do with: "
                           ++ pretty (gamma, loc1, loc2)
@@ -684,6 +665,79 @@ instantiateLocR gamma loc l
   | otherwise =
     error $ "instantiateLocR: not ended with ^: " ++ l
 
+-- | Algorithmic subtyping:
+--   subtype Γ A B = Δ <=> Γ |- A <: B -| Δ
+subtype :: Context -> Type -> Type -> NameGen Context
+subtype gamma typ1 typ2 =
+  traceNS "subtype" (gamma, typ1, typ2) $
+  checkwftype gamma typ1 $ checkwftype gamma typ2 $
+    case (typ1, typ2) of
+    -- <:Var
+    (TypeVarType alpha, TypeVarType alpha')
+      | not (cExists alpha) && not (cExists alpha')
+          && alpha == alpha' -> return gamma
+      | cExists alpha && cExists alpha'
+          && alpha == alpha' && alpha `elem` existentials gamma -> return gamma
+      | otherwise ->
+          error $ "subtype(TypeVarType,TypeVarType), don't know what to do with: "
+                         ++ pretty (gamma, typ1, typ2)
+                         
+    (TypeVarType alpha, a)
+      | cExists alpha
+          && alpha `elem` existentials gamma
+          && alpha `S.notMember` freeTVars a -> instantiateL gamma alpha a
+
+    (a, TypeVarType alpha)
+      | cExists alpha
+          && alpha `elem` existentials gamma
+          && alpha `S.notMember` freeTVars a -> instantiateR gamma a alpha
+        
+    -- <:TupleType
+    (TupleType tys1, TupleType tys2) -> error $ "subtype: not implemented yet"
+    
+    -- <:->
+    (FunType a1 loc1 a2, FunType b1 loc2 b2) -> do
+      theta <- subtype gamma b1 a1
+      delta <- subtype theta (apply theta a2) (apply theta b2)
+      subloc delta (lapply delta loc1) (lapply delta loc2)
+      
+    -- <:forallR
+    (a, TypeAbsType alphas b) -> do
+      -- Do alpha conversion to avoid clashes
+      alphas' <- replicateM (length alphas) freshTypeVar
+      dropMarker (CForall (head alphas')) <$>
+        subtype (gamma >++ map CForall alphas') a (typeSubsts (map TypeVarType alphas') alphas b)
+
+    -- <:forallL
+    (TypeAbsType alphas a, b) -> do
+      -- Do alpha conversion to avoid clashes
+      alphas' <- replicateM (length alphas) freshExistsTypeVar
+      dropMarker (CMarker (head alphas')) <$>
+        subtype (gamma >++ map CMarker alphas' >++ map CExists alphas')
+                (typeSubsts (map TypeVarType alphas') alphas a)
+                b
+        
+    -- forallLoc
+    (LocAbsType locvars1 a, LocAbsType locvars2 b)
+      | locvars1 == locvars2 -> subtype gamma a b
+      | length locvars1 == length locvars2 -> do
+         locvars <- replicateM (length locvars1) freshLocationVar
+         dropMarker (CLMarker (head locvars)) <$>
+           subtype (gamma >++ map CLMarker locvars)
+                   (locSubsts (map LocVar locvars) locvars1 a)
+                   (locSubsts (map LocVar locvars) locvars2 a)
+      | otherwise ->
+         error $ "subtype: different length of location vars: "
+                           ++ pretty (gamma, typ1, typ2)        
+
+    -- <:ConType
+    (ConType c1 locs1 tys1, ConType c2 locs2 tys2) ->
+      error $ "subtype: not implemented yet"
+    
+    _ -> error $ "subtype, don't know what to do with: "
+                           ++ pretty (gamma, typ1, typ2)
+
+
 -- | Algorithmic instantiation (left):
 --   instantiateL Γ α A = Δ <=> Γ |- α^ :=< A -| Δ
 instantiateL :: Context -> TypeVar -> Type -> NameGen Context
@@ -706,6 +760,7 @@ instantiateL_ gamma alpha a =
             return $ fromJust $ solve gamma beta (TypeVarType alpha)
         | otherwise ->
             return $ fromJust $ solve gamma alpha (TypeVarType beta)
+
       -- InstLArr
       FunType a1 loc a2   -> do
         alpha1 <- freshExistsTypeVar
@@ -722,30 +777,36 @@ instantiateL_ gamma alpha a =
                               a1 alpha1
         delta <- instantiateL theta alpha2 (apply theta a2)
         instantiateLocL delta l (lapply delta loc)
+
       -- InstLAIIR
       TypeAbsType betas b -> do
         -- Do alpha conversion to avoid clashes
         betas' <- replicateM (length betas) freshTypeVar
-        dropMarker (CForall (last betas')) <$>
+        dropMarker (CForall (head betas')) <$> -- Todo: Ensure that betas is not null!
           instantiateL (gamma >++ map CForall betas')
                        alpha
                        (typeSubsts (map TypeVarType betas') betas b)
                        
+      -- Note: No polymorphic (location) abstraction is allowed. 
+      
       -- InstLAIIL
       -- LocAbsType locs b -> do  -- Should not be allowed!!
 
+      -- Note: TupleType and ConType should be monomorphic types that
+      --       will be handled above. 
+      
       -- InstLTupleType
-      TupleType tys -> do
-        alphas <- replicateM (length tys) freshExistsTypeVar
-        foldM (\gamma (alphai, ai) ->
-                 instantiateL gamma alphai (apply gamma ai))
-               (gamma >++ map CExists alphas
-                      >++ [CExistsSolved alpha (TupleType (map TypeVarType alphas))])
-               (zip alphas tys)
+      -- TupleType tys -> do
+      --   alphas <- replicateM (length tys) freshExistsTypeVar
+      --   foldM (\gamma (alphai, ai) ->
+      --            instantiateL gamma alphai (apply gamma ai))
+      --          (gamma >++ map CExists alphas
+      --                 >++ [CExistsSolved alpha (TupleType (map TypeVarType alphas))])
+      --          (zip alphas tys)
 
       -- InstLConstr
-      ConType c locs tys -> do        
-        error "instantiateL: ConType: Not implemented"
+      -- ConType c locs tys -> do        
+      --   error "instantiateL: ConType: Not implemented"
 
         
       _ -> error $ "The impossible happened! instantiateL: "
@@ -773,6 +834,7 @@ instantiateR_ gamma a alpha =
             return $ fromJust $ solve gamma beta (TypeVarType alpha)
         | otherwise ->
             return $ fromJust $ solve gamma alpha (TypeVarType beta)
+
       -- InstRArr
       FunType a1 loc a2   -> do
         alpha1 <- freshExistsTypeVar
@@ -786,33 +848,39 @@ instantiateR_ gamma a alpha =
                                                                  (LocVar l)
                                                                  (TypeVarType alpha2)
                                  ])
-                              alpha1
-                              a1
-        instantiateR theta (apply theta a2) alpha2
+                              alpha1 a1
+        delta <- instantiateR theta (apply theta a2) alpha2
+        instantiateLocR delta (lapply delta loc) l
+        
       -- InstRAIIL
       TypeAbsType betas b -> do
         -- Do alpha conversion to avoid clashes
         betas' <- replicateM (length betas) freshTypeVar
-        dropMarker (CMarker (last betas')) <$>
+        dropMarker (CMarker (head betas')) <$>
           instantiateR (gamma >++ map CMarker betas' >++ map CExists betas')
                        (typeSubsts (map TypeVarType betas') betas b)
                        alpha
 
+      -- Note: No polymorphic (location) abstraction is allowed. 
+      
       -- InstLAIIR
       -- LocAbsType locs b -> do  -- Should not be allowed!!
-        
+
+      -- Note: TupleType and ConType should be monomorphic types that
+      --       will be handled above. 
+      
       -- InstRTupleType
-      TupleType tys -> do
-        alphas <- replicateM (length tys) freshExistsTypeVar
-        foldM (\gamma (alphai, ai) ->
-                 instantiateR gamma (apply gamma ai) alphai)
-               (gamma >++ map CExists alphas
-                      >++ [CExistsSolved alpha (TupleType (map TypeVarType alphas))])
-               (zip alphas tys)
+      -- TupleType tys -> do
+      --   alphas <- replicateM (length tys) freshExistsTypeVar
+      --   foldM (\gamma (alphai, ai) ->
+      --            instantiateR gamma (apply gamma ai) alphai)
+      --          (gamma >++ map CExists alphas
+      --                 >++ [CExistsSolved alpha (TupleType (map TypeVarType alphas))])
+      --          (zip alphas tys)
         
       -- InstRConstr
-      ConType c locs tys -> do        
-        error "instantiateR: ConType: Not implemented"
+      -- ConType c locs tys -> do        
+      --   error "instantiateR: ConType: Not implemented"
 
       _ -> error $ "The impossible happened! instantiateR: "
                 ++ pretty (gamma, a, alpha)
