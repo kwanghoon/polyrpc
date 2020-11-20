@@ -227,7 +227,7 @@ bidiBindingDecls gti gamma loc (bindingDecl@(Binding _ f ty _):bindingDecls) = d
 
 bidiBindingDecl :: GlobalTypeInfo -> Context -> Location -> BindingDecl -> NameGen (Context, BindingDecl)
 bidiBindingDecl gti gamma loc (Binding istop name ty expr) = do -- ToDo: When name is recursive, expr must be lambda abstraction!
-  (delta, expr') <- bidiTypecheck gamma clientLoc expr ty
+  (delta, expr') <- typecheckExpr gamma clientLoc expr ty
   return (delta, Binding istop name ty expr')  -- apply delta to expr'???
 
 ----------------------------------------------------------------------------
@@ -925,29 +925,94 @@ instantiateR_ gamma a alpha =
 
 -- | Type checking:
 --   typecheck Γ loc e A = Δ <=> Γ |-_loc e <= A -| Δ
-bidiTypecheck :: Context -> Location -> Expr -> Type -> NameGen (Context, Expr)
-bidiTypecheck gamma loc expr typ =
+typecheckExpr :: Context -> Location -> Expr -> Type -> NameGen (Context, Expr)
+typecheckExpr gamma loc expr typ =
   traceNS "typecheck" (gamma, loc, expr, typ) $
   error $ "typecheck: not implemented yet"
 
 -- | Type synthesising:
 --   typesynth Γ loc e = (A, Δ) <=> Γ |- e => A -| Δ
-bidiTypesynth :: Context -> Location -> Expr -> NameGen (Type, Context, Expr)
-bidiTypesynth gamma loc expr = traceNS "typesynth" (gamma, loc, expr) $ checkwf gamma $
+typesynthExpr :: Context -> Location -> Expr -> NameGen (Type, Context, Expr)
+typesynthExpr gamma loc expr = traceNS "typesynth" (gamma, loc, expr) $ checkwf gamma $
   error $ "typesynth: not implemented yet"
 
 
 -- | Type application synthesising
 --   typeapplysynth Γ loc A e = (C, Δ) <=> Γ |- A . e =>> C -| Δ
-bidiTypeapplysynth :: Context -> Location -> Type -> Expr -> NameGen (Type, Context, Expr)
-bidiTypeapplysynth gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, e) $
-  error $ "typeapplysynth: not implemented yet"
+typeapplysynth :: Context -> Location -> Type -> Expr -> NameGen (Type, Context, Expr -> Expr)
+typeapplysynth gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, e) $
+  checkwftype gamma typ $
+  case typ of
+    -- ForallApp
+    TypeAbsType alphas a -> do
+      -- Do alpha conversion to avoid clashes
+      alphas' <- replicateM (length alphas) freshExistsTypeVar
+      (typ, delta, g)
+        <- typeapplysynth (gamma >++ map CExists alphas') loc
+                     (typeSubsts (map TypeVarType alphas') alphas a) e
+      return (typ, delta, g. \f -> TypeApp f (Just typ) (map TypeVarType alphas'))
+      
+    -- ForallApp: Not allowed without any explicit location applications
+    -- LForall l a -> do
+    --   -- Do alpha conversion to avoid clashes
+    --   l' <- freshLVar
+    --   typeapplysynth (gamma >: CLExists l') loc
+    --                  (locSubst (UnknownExists l') l a)
+    --                  e
+
+    -- alpha^App
+    TypeVarType alpha
+     | cExists alpha -> do  -- TExists alpha
+      alpha1 <- freshExistsTypeVar
+      alpha2 <- freshExistsTypeVar
+      l      <- freshExistsLocationVar
+      let loc' = LocVar l
+      (delta, e') <- typecheckExpr (insertAt gamma (CExists alpha) $ context
+                            [ CLExists l
+                            , CExists alpha2
+                            , CExists alpha1
+                            , CExistsSolved alpha
+                                 $ FunType (TypeVarType alpha1) loc' (TypeVarType alpha2)
+                            ])
+                         loc
+                         e
+                         (TypeVarType alpha1)
+      return (TypeVarType alpha2, delta, \f -> App f (Just typ) e' (Just loc'))
+
+    -- ->App
+    FunType a loc' c -> do
+      (delta, e') <- typecheckExpr gamma loc e a
+      return (c, delta, \f -> App f (Just typ) e' (Just loc'))
+
+
+    _ -> error $ "typeapplysynth: don't know what to do with: "
+              ++ pretty (gamma, loc, typ, e)
 
 
 -- | Location application synthesising
 --   locapplysynth Γ loc A loc0 = (C, Δ) <=> Γ |- A . loc0 =>> C -| Δ
-bidiLocapplysynth :: Context -> Location -> Type -> Location -> NameGen (Type, Context, Location)
-bidiLocapplysynth gamma loc typ loc0 = traceNS "locapplysynth" (gamma, loc, typ, loc0) $
-  error $ "locapplysynth: not implemented yet"
+locsapplysynth :: Context -> Location -> Type -> [Location] -> NameGen (Type, Context, Expr -> Expr)
+locsapplysynth gamma loc typ locs0 = traceNS "locsapplysynth" (gamma, loc, typ, locs0) $
+  checkwftype gamma typ $
+  case typ of
+    -- LForall LocApp
+    LocAbsType ls a ->  -- Todo: what happens when |locs0| != |ls|?
+      return (locSubsts locs0 ls a, gamma, \f -> LocApp f (Just typ) locs0)
+
+    -- TForall LocApp
+    TypeAbsType alphas a -> do
+      -- Do alpha conversion to avoid clashes
+      alphas' <- replicateM (length alphas) freshExistsTypeVar
+      (typ', delta, g) <-
+        locsapplysynth (gamma >++ map CExists alphas') loc
+                     (typeSubsts (map TypeVarType alphas') alphas a) locs0
+      return (typ', delta, g . \f -> TypeApp f (Just typ) (map TypeVarType alphas'))
+    
+    -- alpha^: Not allowed because alpha^ is a monomorphic type variable!
+    
+    _ -> error $ "locsapplysynth: don't know what to do with: "
+               ++ pretty (gamma, loc, typ, locs0)
+
+
 
 

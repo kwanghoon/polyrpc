@@ -39,6 +39,9 @@ instance (Pretty a, Pretty b, Pretty c, Pretty d) => Pretty (a, b, c, d) where
 instance Pretty Char where
   bpretty _ ch = showString [ch]
 
+instance (Pretty a, Pretty b) => Pretty (a -> b) where
+  bpretty _ f = showString "(...->...)"
+
 {-
 instance Pretty Var where
   bpretty _ (Var v) = showString v
