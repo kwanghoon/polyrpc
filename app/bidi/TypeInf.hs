@@ -58,7 +58,10 @@ typeInf toplevelDecls = do
               , _bindingTypeInfo=basicLibTypeInfo }
 
   -- let initEnv = (emptyEnv{_varEnv=_bindingTypeInfo gti ++ bindingTypeInfo})
-  -- elab_bindingDecls <- elaborate gti initEnv partial_elab_bindingDecls
+  -- elab_bindingDecls <- elaborate gti initEnv clientLoc partial_elab_bindingDecls
+
+  let initGamma = mempty >++ map (uncurry CVar) (_bindingTypeInfo gti ++ bindingTypeInfo)
+  let (elab_bindingDecls) = evalNameGen $ bidi gti initGamma clientLoc partial_elab_bindingDecls
 
   -- 7. return elaborated data types and bindings
   -- let elab_toplevels = [ LibDeclTopLevel x ty | (x,ty) <- basicLibTypeInfo]
@@ -195,21 +198,37 @@ bindingTypes partial_elab_bindingDecls =
 --        , _dataTypeInfo :: DataTypeInfo
 --        , _bindingTypeInfo :: BindingTypeInfo }
 
-elaborate :: Monad m => GlobalTypeInfo -> Env -> [BindingDecl] -> m [BindingDecl]
-elaborate gti env [] =  return []
-elaborate gti env (bindingDecl@(Binding _ f ty _):bindingDecls) = do
-  let gti1 = gti {_bindingTypeInfo = (f,ty):_bindingTypeInfo gti}   -- for self-recursion
-  elab_bindingDecl <- elabBindingDecl gti1 env bindingDecl
-  elab_bindingDecls <- elaborate gti1 env bindingDecls
-  return (elab_bindingDecl:elab_bindingDecls)
+-- elaborate :: Monad m => GlobalTypeInfo -> Env -> Location -> [BindingDecl] -> m [BindingDecl]
+-- elaborate gti env loc [] =  return []
+-- elaborate gti env loc (bindingDecl@(Binding _ f ty _):bindingDecls) = do
+--   let gti1 = gti {_bindingTypeInfo = (f,ty):_bindingTypeInfo gti}   -- for self-recursion
+--   elab_bindingDecl <- elabBindingDecl gti1 env loc bindingDecl
+--   elab_bindingDecls <- elaborate gti1 env loc bindingDecls
+--   return (elab_bindingDecl:elab_bindingDecls)
 
-elabBindingDecl :: Monad m => GlobalTypeInfo -> Env -> BindingDecl -> m BindingDecl
-elabBindingDecl gti env (Binding istop name ty expr) = do -- ToDo: When name is recursive, expr must be lambda abstraction!
-  -- let env = emptyEnv{_varEnv=_bindingTypeInfo gti}
-  (elab_expr,elab_ty) <- elabExpr gti env clientLoc expr
-  if equalType elab_ty ty
-  then return (Binding istop name ty elab_expr)
-  else error $ "[TypeCheck] elabBindingDecl: Incorrect types: " ++ name ++ "\n" ++ show elab_ty ++ "\n" ++ show ty
+-- elabBindingDecl :: Monad m => GlobalTypeInfo -> Env -> Location -> BindingDecl -> m BindingDecl
+-- elabBindingDecl gti env loc (Binding istop name ty expr) = do -- ToDo: When name is recursive, expr must be lambda abstraction!
+--   -- let env = emptyEnv{_varEnv=_bindingTypeInfo gti}
+--   (elab_expr,elab_ty) <- elabExpr gti env loc expr
+--   if equalType elab_ty ty
+--   then return (Binding istop name ty elab_expr)
+--   else error $ "[TypeCheck] elabBindingDecl: Incorrect types: " ++ name ++ "\n" ++ show elab_ty ++ "\n" ++ show ty
+
+bidi :: GlobalTypeInfo -> Context -> Location -> [BindingDecl] -> NameGen (Context, [BindingDecl])
+bidi gti gamma loc bindingDecls =  bidiBindingDecls gti gamma loc bindingDecls
+
+bidiBindingDecls :: GlobalTypeInfo -> Context -> Location -> [BindingDecl] -> NameGen (Context, [BindingDecl])
+bidiBindingDecls gti gamma loc [] =  return (gamma, [])
+bidiBindingDecls gti gamma loc (bindingDecl@(Binding _ f ty _):bindingDecls) = do
+  let gti1 = gti {_bindingTypeInfo = (f,ty):_bindingTypeInfo gti}   -- for self-recursion
+  (gamma1, elab_bindingDecl) <- bidiBindingDecl gti1 gamma loc bindingDecl
+  (gamma2, elab_bindingDecls) <- bidiBindingDecls gti1 gamma1 loc bindingDecls
+  return (gamma2, elab_bindingDecl:elab_bindingDecls)
+
+bidiBindingDecl :: GlobalTypeInfo -> Context -> Location -> BindingDecl -> NameGen (Context, BindingDecl)
+bidiBindingDecl gti gamma loc (Binding istop name ty expr) = do -- ToDo: When name is recursive, expr must be lambda abstraction!
+  (delta, expr') <- bidiTypecheck gamma clientLoc expr ty
+  return (delta, Binding istop name ty expr')  -- apply delta to expr'???
 
 ----------------------------------------------------------------------------
 -- [Common] Elaboration of types
@@ -326,6 +345,7 @@ mkAbs loc cname tyname locvars tyvars argtys =
   in  (singleAbs (Abs varTypeLocList (Constr cname locs tys vars argtys))
       , foldr ( \ ty ty0 -> FunType ty loc ty0) (ConType tyname locs tys) argtys)
 
+{-
 elabExpr :: Monad m =>
   GlobalTypeInfo -> Env -> Location -> Expr -> m (Expr, Type)
 elabExpr gti env loc (Var x)
@@ -385,7 +405,7 @@ elabExpr gti env loc (Let letBindingDecls expr) = do
 --  let letBindingTypeInfo' = letBindingTypeInfo ++ _bindingTypeInfo gti
 --  let gti1 = gti {_bindingTypeInfo=letBindingTypeInfo'}
   let gti1 = gti
-  elab_letBindingDecls <- elaborate gti1 env partial_elab_letBindingDecls
+  elab_letBindingDecls <- elaborate gti1 env loc partial_elab_letBindingDecls
 
   letBindingTypeInfo <- bindingTypes partial_elab_letBindingDecls -- for let body
 
@@ -567,7 +587,7 @@ elabAlt gti env loc substLoc substTy tycondecls externTys (TupleAlternative args
   let varEnv' = zip args externTys ++ varEnv
   (elab_expr, elab_ty) <- elabExpr gti (env {_varEnv=varEnv'}) loc expr
   return (TupleAlternative args elab_expr, elab_ty)
-
+-}
 
 ----------------------------------------------------------------------------
 -- Common Utils
@@ -903,32 +923,31 @@ instantiateR_ gamma a alpha =
       _ -> error $ "The impossible happened! instantiateR: "
                 ++ pretty (gamma, a, alpha)
 
-
 -- | Type checking:
 --   typecheck Γ loc e A = Δ <=> Γ |-_loc e <= A -| Δ
-typecheck :: Context -> Location -> Expr -> Type -> NameGen Context
-typecheck gamma loc expr typ =
+bidiTypecheck :: Context -> Location -> Expr -> Type -> NameGen (Context, Expr)
+bidiTypecheck gamma loc expr typ =
   traceNS "typecheck" (gamma, loc, expr, typ) $
   error $ "typecheck: not implemented yet"
 
 -- | Type synthesising:
 --   typesynth Γ loc e = (A, Δ) <=> Γ |- e => A -| Δ
-typesynth :: Context -> Location -> Expr -> NameGen (Type, Context)
-typesynth gamma loc expr = traceNS "typesynth" (gamma, loc, expr) $ checkwf gamma $
+bidiTypesynth :: Context -> Location -> Expr -> NameGen (Type, Context, Expr)
+bidiTypesynth gamma loc expr = traceNS "typesynth" (gamma, loc, expr) $ checkwf gamma $
   error $ "typesynth: not implemented yet"
 
 
 -- | Type application synthesising
 --   typeapplysynth Γ loc A e = (C, Δ) <=> Γ |- A . e =>> C -| Δ
-typeapplysynth :: Context -> Location -> Type -> Expr -> NameGen (Type, Context)
-typeapplysynth gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, e) $
+bidiTypeapplysynth :: Context -> Location -> Type -> Expr -> NameGen (Type, Context, Expr)
+bidiTypeapplysynth gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, e) $
   error $ "typeapplysynth: not implemented yet"
 
 
 -- | Location application synthesising
 --   locapplysynth Γ loc A loc0 = (C, Δ) <=> Γ |- A . loc0 =>> C -| Δ
-locapplysynth :: Context -> Location -> Type -> Location -> NameGen (Type, Context)
-locapplysynth gamma loc typ loc0 = traceNS "locapplysynth" (gamma, loc, typ, loc0) $
+bidiLocapplysynth :: Context -> Location -> Type -> Location -> NameGen (Type, Context, Location)
+bidiLocapplysynth gamma loc typ loc0 = traceNS "locapplysynth" (gamma, loc, typ, loc0) $
   error $ "locapplysynth: not implemented yet"
 
 
