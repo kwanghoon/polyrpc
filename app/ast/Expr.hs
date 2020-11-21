@@ -20,6 +20,7 @@ module Expr(Expr(..), ExprVar, AST(..), BindingDecl(..), DataTypeDecl(..)
   , toASTIdTypeLocSeq, toASTIdTypeLoc
   , toASTAlternativeSeq, toASTAlternative
   , toASTTriple, toASTLit
+  , subst, locExprSubst, locExprSubsts
   ) where
 
 import Location
@@ -434,3 +435,123 @@ instance Pretty Expr where
 --       abs_prec  = 1
 --       app_prec  = 10
 --       anno_prec = 1
+
+-- | subst e' x e = [e'/x]e
+subst :: Expr -> ExprVar -> Expr -> Expr
+subst e' x (Var y)
+  | x == y = e'
+  | otherwise = Var y
+
+subst e' x (TypeAbs xs e) = TypeAbs xs (subst e' x e)
+
+subst e' x (LocAbs xs e) = LocAbs xs (subst e' x e)
+
+subst e' x (Abs vTyLocs e)
+  | x `elem` (fmap fst3 vTyLocs) = Abs vTyLocs e
+  | otherwise = Abs vTyLocs (subst e' x e)
+  where
+    fst3 (x,y,z) = x
+
+subst e' x (Let bindingDecls e) =
+  Let (fmap f bindingDecls) (subst e' x e)
+  where
+    f (Binding b x ty e) = Binding b x ty (subst e' x e)
+
+subst e' x (Case e maybety alts) =
+  Case (subst e' x e) maybety (fmap f alts)
+  where
+    f (Alternative c xs e) = Alternative c xs (subst e' x e)
+    f (TupleAlternative xs e) = TupleAlternative xs (subst e' x e)
+
+subst e' x (App e1 maybety e2 maybeloc) =
+  App (subst e' x e1) maybety (subst e' x e2) maybeloc
+
+subst e' x (TypeApp e maybety tys) = TypeApp (subst e' x e) maybety tys
+
+subst e' x (LocApp e maybety locs) = LocApp (subst e' x e) maybety locs
+
+subst e' x (Tuple es) = Tuple (fmap (subst e' x) es)
+
+subst e' x (Prim p locs tys es) = Prim p locs tys (fmap (subst e' x) es)
+
+subst e' x (Lit lit) = Lit lit
+
+subst e' x (Constr c locs tys es argtys) =
+  Constr c locs tys (fmap (subst e' x) es) argtys
+  
+
+-- | locExprSubst loc l e = [loc/l]e
+locExprSubst loc' l (Var v) = Var v
+
+locExprSubst loc' l (TypeAbs vs e) = TypeAbs vs (locExprSubst loc' l e)
+
+locExprSubst loc' l (LocAbs vs e)
+  | l `elem` vs = LocAbs vs e
+  | otherwise = LocAbs vs (locExprSubst loc' l e)
+  
+locExprSubst loc' l (Abs vTyLocs e) =
+  Abs (fmap ftriple vTyLocs) (locExprSubst loc' l e)
+  where
+    ftriple (x, maybeTy, loc) =
+      (x, fmap (locSubst loc' l) maybeTy, locSubstOverLoc loc' l loc)
+
+locExprSubst loc' l (Let bindingDecls e) =
+  Let (fmap f bindingDecls) (locExprSubst loc' l e)
+  where
+    f (Binding b x ty e) =
+      Binding b x (locSubst loc' l ty) (locExprSubst loc' l e)
+      
+
+locExprSubst loc' l (Case e maybeTy alts) =
+  Case (locExprSubst loc' l e) (fmap (locSubst loc' l) maybeTy) (fmap f alts)
+  where
+    f (Alternative c xs e) = Alternative c xs (locExprSubst loc' l e)
+    f (TupleAlternative xs e) = TupleAlternative xs (locExprSubst loc' l e)
+
+locExprSubst loc' l (App e1 maybeTy e2 maybeLoc) =
+  App (locExprSubst loc' l e1) (fmap (locSubst loc' l) maybeTy)
+    (locExprSubst loc' l e2) (fmap (locSubstOverLoc loc' l) maybeLoc)
+
+locExprSubst loc' l (TypeApp e maybeTy tys) =
+  TypeApp (locExprSubst loc' l e)
+    (fmap (locSubst loc' l) maybeTy)
+      (fmap (locSubst loc' l) tys)
+
+locExprSubst loc' l (LocApp e maybeTy locs) =
+  LocApp (locExprSubst loc' l e)
+    (fmap (locSubst loc' l) maybeTy)
+      (fmap (locSubstOverLoc loc' l) locs)
+
+locExprSubst loc' l (Tuple es) =
+  Tuple (fmap (locExprSubst loc' l) es)
+
+locExprSubst loc' l (Prim p locs tys es) =
+  Prim p
+    (fmap (locSubstOverLoc loc' l) locs)
+      (fmap (locSubst loc' l) tys)
+         (fmap (locExprSubst loc' l) es)
+
+locExprSubst loc' l (Lit lit) = Lit lit
+
+locExprSubst loc' l (Constr c locs tys es argTys) =
+  Constr c
+    (fmap (locSubstOverLoc loc' l) locs)
+      (fmap (locSubst loc' l) tys)
+         (fmap (locExprSubst loc' l) es)
+            (fmap (locSubst loc' l) argTys)
+
+
+locExprSubsts locs' ls e =
+  foldl (\ e0 (loc', l) -> locExprSubst loc' l e0) e (zip locs' ls)
+
+{-
+  Var v -> Var v
+  EUnit -> EUnit
+  EAbs v loc0 e0 -> EAbs v (locLocSubst loc' l loc0) (locExprSubst loc' l e0)
+  ELocAbs l0 e0 | l0 == l   -> ELocAbs l0 e0
+                | otherwise -> ELocAbs l0 (locExprSubst loc' l e0)
+  EApp e1 e2     -> EApp (locExprSubst loc' l e1) (locExprSubst loc' l e2)
+  ELocApp e loc  -> ELocApp (locExprSubst loc' l e) (locLocSubst loc' l loc)
+  EAnno e ty     -> EAnno (locExprSubst loc' l e) (locSubst loc' l ty)
+-}
+

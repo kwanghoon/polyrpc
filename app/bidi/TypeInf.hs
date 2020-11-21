@@ -3,6 +3,7 @@ module TypeInf(typeInf) where
 import Data.Either
 import Data.Maybe
 import qualified Data.Set as S
+import Data.Tuple.HT(mapFst)
 
 import Control.Monad (replicateM, foldM)
 
@@ -227,7 +228,7 @@ bidiBindingDecls gti gamma loc (bindingDecl@(Binding _ f ty _):bindingDecls) = d
 
 bidiBindingDecl :: GlobalTypeInfo -> Context -> Location -> BindingDecl -> NameGen (Context, BindingDecl)
 bidiBindingDecl gti gamma loc (Binding istop name ty expr) = do -- ToDo: When name is recursive, expr must be lambda abstraction!
-  (delta, expr') <- typecheckExpr gamma clientLoc expr ty
+  (delta, expr') <- typecheckExpr gti gamma clientLoc expr ty
   return (delta, Binding istop name ty expr')  -- apply delta to expr'???
 
 ----------------------------------------------------------------------------
@@ -925,22 +926,102 @@ instantiateR_ gamma a alpha =
 
 -- | Type checking:
 --   typecheck Γ loc e A = Δ <=> Γ |-_loc e <= A -| Δ
-typecheckExpr :: Context -> Location -> Expr -> Type -> NameGen (Context, Expr)
-typecheckExpr gamma loc expr typ =
-  traceNS "typecheck" (gamma, loc, expr, typ) $
-  error $ "typecheck: not implemented yet"
+typecheckExpr :: GlobalTypeInfo -> Context -> Location -> Expr -> Type -> NameGen (Context, Expr)
+typecheckExpr gti gamma loc expr typ =
+  traceNS "typecheck" (gamma, loc, expr, typ) $ checkwftype gamma typ $
+  typecheckExpr_ gti gamma loc expr typ
+  
+typecheckExpr_ :: GlobalTypeInfo -> Context -> Location -> Expr -> Type -> NameGen (Context, Expr)
+
+-- ForallI
+typecheckExpr_ gti gamma loc e (TypeAbsType alphas a) = do
+  -- Do alpha conversion to avoid clashes
+  alphas' <- replicateM (length alphas) freshTypeVar
+  (gamma', e') <- mapFst (dropMarker (CForall (head alphas'))) <$>
+       typecheckExpr gti (gamma >++ map CForall alphas') loc e
+          (typeSubsts (map TypeVarType alphas') alphas a)
+  return (gamma', TypeAbs alphas' e')
+
+-- LForallI
+typecheckExpr_ gti gamma loc (LocAbs ls0 e) (LocAbsType ls1 a) = do  
+  ls' <- replicateM (length ls0) freshLocationVar
+  (gamma', e') <- mapFst (dropMarker (CLForall (head ls'))) <$>
+        typecheckExpr gti (gamma >++ map CLForall ls') loc
+          (locExprSubsts (map LocVar ls') ls0 e) (locSubsts (map LocVar ls') ls1 a)
+  return (gamma', LocAbs ls' e')
+
+-- ->I
+typecheckExpr_ gti gamma loc (Abs [] e) a = do
+  typecheckExpr_ gti gamma loc e a
+  
+typecheckExpr_ gti gamma loc (Abs [(x,mty,loc0)] e) (FunType a loc' b) = do
+  x' <- freshVar
+  gamma0 <- subloc gamma loc' loc0
+  (gamma1, e') <- mapFst (dropMarker (CVar x' a)) <$>
+        typecheckExpr_ gti (gamma0 >: CVar x' a) loc0 (subst (Var x') x e) b
+  return (gamma1, Abs [(x,mty, loc0)] e')
+                                                  
+typecheckExpr_ gti gamma loc (Abs ((x,mty,loc0):xmtyls) e) (FunType a loc' b) = do
+  x' <- freshVar
+  gamma0 <- subloc gamma loc' loc0
+  (gamma1, e') <- mapFst (dropMarker (CVar x' a)) <$>
+      typecheckExpr_ gti (gamma0 >: CVar x' a) loc0 (subst (Var x') x (Abs xmtyls e)) b
+  return (gamma1, Abs [(x,mty,loc0)] e')
+
+-- Sub
+typecheckExpr_ gti gamma loc e b = do
+  (a, theta, e') <- typesynthExpr gti gamma loc e
+  delta <- subtype theta (apply theta a) (apply theta b)
+  return (delta, e')
+  
+-- typecheckExpr_ gti gamma loc e typ = do
+--   error $ "typecheckExpr: not implemented yet"
+  
+{-
+    -- 1I
+    (EUnit, TUnit) -> return gamma
+
+    -- ForallI
+    (e, TForall alpha a) -> do
+      -- Do alpha conversion to avoid clashes
+      alpha' <- freshTVar
+      dropMarker (CForall alpha') <$>
+        typecheck (gamma >: CForall alpha') loc e (typeSubst (TVar alpha') alpha a)
+
+    -- LForallI
+    (ELocAbs l0 e, LForall l1 a) -> do
+      -- Do alpha conversion to avoid clashes
+      l' <- freshLVar
+      dropMarker (CLForall l') <$>
+        typecheck (gamma >: CLForall l') loc (locExprSubst (Unknown l') l0 e) (locSubst (Unknown l') l1 a)
+
+    -- ->I
+    (EAbs x loc0 e, TFun a loc' b) -> do
+      x' <- freshVar
+      gamma0 <- subloc gamma loc' loc0
+      dropMarker (CVar x' a) <$>
+        typecheck (gamma0 >: CVar x' a) loc0 (subst (EVar x') x e) b
+
+    -- Sub
+    (e, b) -> do
+      (a, theta) <- typesynth gamma loc e
+      subtype theta (apply theta a) (apply theta b)
+-}  
+
 
 -- | Type synthesising:
 --   typesynth Γ loc e = (A, Δ) <=> Γ |- e => A -| Δ
-typesynthExpr :: Context -> Location -> Expr -> NameGen (Type, Context, Expr)
-typesynthExpr gamma loc expr = traceNS "typesynth" (gamma, loc, expr) $ checkwf gamma $
-  error $ "typesynth: not implemented yet"
+typesynthExpr :: GlobalTypeInfo -> Context -> Location -> Expr -> NameGen (Type, Context, Expr)
+typesynthExpr gti gamma loc expr = traceNS "typesynth" (gamma, loc, expr) $ checkwf gamma $
+  typesynthExpr_ gti gamma loc expr
 
+typesynthExpr_ gti gamma loc expr = do
+  error $ "typesynth: not implemented yet"
 
 -- | Type application synthesising
 --   typeapplysynth Γ loc A e = (C, Δ) <=> Γ |- A . e =>> C -| Δ
-typeapplysynth :: Context -> Location -> Type -> Expr -> NameGen (Type, Context, Expr -> Expr)
-typeapplysynth gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, e) $
+typeapplysynth :: GlobalTypeInfo -> Context -> Location -> Type -> Expr -> NameGen (Type, Context, Expr -> Expr)
+typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, e) $
   checkwftype gamma typ $
   case typ of
     -- ForallApp
@@ -948,7 +1029,7 @@ typeapplysynth gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, e) $
       -- Do alpha conversion to avoid clashes
       alphas' <- replicateM (length alphas) freshExistsTypeVar
       (typ, delta, g)
-        <- typeapplysynth (gamma >++ map CExists alphas') loc
+        <- typeapplysynth gti (gamma >++ map CExists alphas') loc
                      (typeSubsts (map TypeVarType alphas') alphas a) e
       return (typ, delta, g. \f -> TypeApp f (Just typ) (map TypeVarType alphas'))
       
@@ -967,7 +1048,7 @@ typeapplysynth gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, e) $
       alpha2 <- freshExistsTypeVar
       l      <- freshExistsLocationVar
       let loc' = LocVar l
-      (delta, e') <- typecheckExpr (insertAt gamma (CExists alpha) $ context
+      (delta, e') <- typecheckExpr gti (insertAt gamma (CExists alpha) $ context
                             [ CLExists l
                             , CExists alpha2
                             , CExists alpha1
@@ -981,7 +1062,7 @@ typeapplysynth gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, e) $
 
     -- ->App
     FunType a loc' c -> do
-      (delta, e') <- typecheckExpr gamma loc e a
+      (delta, e') <- typecheckExpr gti gamma loc e a
       return (c, delta, \f -> App f (Just typ) e' (Just loc'))
 
 
@@ -991,8 +1072,8 @@ typeapplysynth gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, e) $
 
 -- | Location application synthesising
 --   locapplysynth Γ loc A loc0 = (C, Δ) <=> Γ |- A . loc0 =>> C -| Δ
-locsapplysynth :: Context -> Location -> Type -> [Location] -> NameGen (Type, Context, Expr -> Expr)
-locsapplysynth gamma loc typ locs0 = traceNS "locsapplysynth" (gamma, loc, typ, locs0) $
+locsapplysynth :: GlobalTypeInfo -> Context -> Location -> Type -> [Location] -> NameGen (Type, Context, Expr -> Expr)
+locsapplysynth gti gamma loc typ locs0 = traceNS "locsapplysynth" (gamma, loc, typ, locs0) $
   checkwftype gamma typ $
   case typ of
     -- LForall LocApp
@@ -1004,7 +1085,7 @@ locsapplysynth gamma loc typ locs0 = traceNS "locsapplysynth" (gamma, loc, typ, 
       -- Do alpha conversion to avoid clashes
       alphas' <- replicateM (length alphas) freshExistsTypeVar
       (typ', delta, g) <-
-        locsapplysynth (gamma >++ map CExists alphas') loc
+        locsapplysynth gti (gamma >++ map CExists alphas') loc
                      (typeSubsts (map TypeVarType alphas') alphas a) locs0
       return (typ', delta, g . \f -> TypeApp f (Just typ) (map TypeVarType alphas'))
     
@@ -1012,7 +1093,3 @@ locsapplysynth gamma loc typ locs0 = traceNS "locsapplysynth" (gamma, loc, typ, 
     
     _ -> error $ "locsapplysynth: don't know what to do with: "
                ++ pretty (gamma, loc, typ, locs0)
-
-
-
-

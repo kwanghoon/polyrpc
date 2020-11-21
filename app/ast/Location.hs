@@ -64,6 +64,8 @@ doSubstLocOverLoc x loc (LocVar y)
   | otherwise = LocVar y
 
 
+locSubstOverLoc loc x loc0 = doSubstLocOverLoc x loc loc0
+
 doSubstLocOverLocs [] loc0 = loc0
 doSubstLocOverLocs ((x,loc):substLoc) loc0 =
   doSubstLocOverLocs substLoc (doSubstLocOverLoc x loc loc0)
