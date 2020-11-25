@@ -20,7 +20,7 @@ module Expr(Expr(..), ExprVar, AST(..), BindingDecl(..), DataTypeDecl(..)
   , toASTIdTypeLocSeq, toASTIdTypeLoc
   , toASTAlternativeSeq, toASTAlternative
   , toASTTriple, toASTLit
-  , subst, locExprSubst, locExprSubsts
+  , subst, substs, locExprSubst, locExprSubsts
   ) where
 
 import Location
@@ -478,7 +478,9 @@ subst e' x (Lit lit) = Lit lit
 
 subst e' x (Constr c locs tys es argtys) =
   Constr c locs tys (fmap (subst e' x) es) argtys
-  
+
+substs es' xs' e = 
+  foldl (\ e0 (e',x) -> subst e' x e0) e (zip es' xs')
 
 -- | locExprSubst loc l e = [loc/l]e
 locExprSubst loc' l (Var v) = Var v

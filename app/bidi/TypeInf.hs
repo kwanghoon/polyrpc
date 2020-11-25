@@ -3,7 +3,7 @@ module TypeInf(typeInf) where
 import Data.Either
 import Data.Maybe
 import qualified Data.Set as S
-import Data.Tuple.HT(mapFst)
+import Data.Tuple.HT(mapFst, fst3, snd3, thd3)
 
 import Control.Monad (replicateM, foldM)
 
@@ -617,13 +617,13 @@ subloc gamma loc1 loc2 =
          error $ "subloc, don't know what to do with: "
                           ++ pretty (gamma, loc1, loc2)
 
-    (LocVar l, loc) 
+    (LocVar l, loc)
       | clExists l && l `S.notMember` freeLVarsIn loc ->
           instantiateLocL gamma l loc
       | otherwise ->
          error $ "subloc, don't know what to do with: "
                           ++ pretty (gamma, loc1, loc2)
-                          
+
     (loc, LocVar l)
       | clExists l && l `S.notMember` freeLVarsIn loc ->
           instantiateLocR gamma loc l
@@ -702,7 +702,7 @@ subtype gamma typ1 typ2 =
       | otherwise ->
           error $ "subtype(TypeVarType,TypeVarType), don't know what to do with: "
                          ++ pretty (gamma, typ1, typ2)
-                         
+
     (TypeVarType alpha, a)
       | cExists alpha
           && alpha `elem` existentials gamma
@@ -712,9 +712,9 @@ subtype gamma typ1 typ2 =
       | cExists alpha
           && alpha `elem` existentials gamma
           && alpha `S.notMember` freeTVars a -> instantiateR gamma a alpha
-        
+
     -- <:TupleType
-    (TupleType tys1, TupleType tys2) 
+    (TupleType tys1, TupleType tys2)
       | length tys1 == length tys2 ->
          foldM (\ g (maybety1,maybety2) ->
                   case (maybety1, maybety2) of
@@ -722,13 +722,13 @@ subtype gamma typ1 typ2 =
                     _ -> error $ "subtype: TupleType: not monotype: "
                                     ++ pretty (gamma, typ1, typ2))
            gamma (zip (map monotype tys1) (map monotype tys2))
-    
+
     -- <:->
     (FunType a1 loc1 a2, FunType b1 loc2 b2) -> do
       theta <- subtype gamma b1 a1
       delta <- subtype theta (apply theta a2) (apply theta b2)
       subloc delta (lapply delta loc1) (lapply delta loc2)
-      
+
     -- <:forallR
     (a, TypeAbsType alphas b) -> do
       -- Do alpha conversion to avoid clashes
@@ -745,7 +745,7 @@ subtype gamma typ1 typ2 =
         subtype (gamma >++ map CMarker alphas' >++ map CExists alphas')
                 (typeSubsts (map TypeVarType alphas') alphas a)
                 b
-        
+
     -- forallLoc
     (LocAbsType locvars1 a, LocAbsType locvars2 b)
       | locvars1 == locvars2 -> subtype gamma a b
@@ -757,7 +757,7 @@ subtype gamma typ1 typ2 =
                    (locSubsts (map LocVar locvars) locvars2 a)
       | otherwise ->
          error $ "subtype: different length of location vars: "
-                           ++ pretty (gamma, typ1, typ2)        
+                           ++ pretty (gamma, typ1, typ2)
 
     -- <:ConType
     (ConType c1 locs1 tys1, ConType c2 locs2 tys2)
@@ -772,7 +772,7 @@ subtype gamma typ1 typ2 =
                      _ -> error $ "subtype: ConType: not monotype: "
                                      ++ pretty (gamma, typ1, typ2))
             gamma (zip (map monotype tys1) (map monotype tys2))
-    
+
     _ -> error $ "subtype, don't know what to do with: "
                            ++ pretty (gamma, typ1, typ2)
 
@@ -783,7 +783,7 @@ instantiateL :: Context -> TypeVar -> Type -> NameGen Context
 instantiateL gamma alpha a
   | cExists alpha = instantiateL_ gamma alpha a
   | otherwise = error $ "instantiateL: not ended with ^: " ++ alpha
-  
+
 instantiateL_ gamma alpha a =
   traceNS "instantiateL" (gamma, alpha, a) $
   checkwftype gamma a $ checkwftype gamma (TypeVarType alpha) $
@@ -825,15 +825,15 @@ instantiateL_ gamma alpha a =
           instantiateL (gamma >++ map CForall betas')
                        alpha
                        (typeSubsts (map TypeVarType betas') betas b)
-                       
-      -- Note: No polymorphic (location) abstraction is allowed. 
-      
+
+      -- Note: No polymorphic (location) abstraction is allowed.
+
       -- InstLAIIL
       -- LocAbsType locs b -> do  -- Should not be allowed!!
 
       -- Note: TupleType and ConType should be monomorphic types that
-      --       will be handled above. 
-      
+      --       will be handled above.
+
       -- InstLTupleType
       -- TupleType tys -> do
       --   alphas <- replicateM (length tys) freshExistsTypeVar
@@ -844,21 +844,21 @@ instantiateL_ gamma alpha a =
       --          (zip alphas tys)
 
       -- InstLConstr
-      -- ConType c locs tys -> do        
+      -- ConType c locs tys -> do
       --   error "instantiateL: ConType: Not implemented"
 
-        
+
       _ -> error $ "The impossible happened! instantiateL: "
                 ++ pretty (gamma, alpha, a)
 
-      
+
 -- | Algorithmic instantiation (right):
 --   instantiateR Γ A α = Δ <=> Γ |- A =:< α -| Δ
 instantiateR :: Context -> Type -> TypeVar -> NameGen Context
 instantiateR gamma a alpha
   | cExists alpha = instantiateR_ gamma a alpha
   | otherwise = error $ "instantiateR: not ended with ^: " ++ alpha
-  
+
 instantiateR_ gamma a alpha =
   traceNS "instantiateR" (gamma, a, alpha) $
   checkwftype gamma a $ checkwftype gamma (TypeVarType alpha) $
@@ -890,7 +890,7 @@ instantiateR_ gamma a alpha =
                               alpha1 a1
         delta <- instantiateR theta (apply theta a2) alpha2
         instantiateLocR delta (lapply delta loc) l
-        
+
       -- InstRAIIL
       TypeAbsType betas b -> do
         -- Do alpha conversion to avoid clashes
@@ -900,14 +900,14 @@ instantiateR_ gamma a alpha =
                        (typeSubsts (map TypeVarType betas') betas b)
                        alpha
 
-      -- Note: No polymorphic (location) abstraction is allowed. 
-      
+      -- Note: No polymorphic (location) abstraction is allowed.
+
       -- InstLAIIR
       -- LocAbsType locs b -> do  -- Should not be allowed!!
 
       -- Note: TupleType and ConType should be monomorphic types that
-      --       will be handled above. 
-      
+      --       will be handled above.
+
       -- InstRTupleType
       -- TupleType tys -> do
       --   alphas <- replicateM (length tys) freshExistsTypeVar
@@ -916,9 +916,9 @@ instantiateR_ gamma a alpha =
       --          (gamma >++ map CExists alphas
       --                 >++ [CExistsSolved alpha (TupleType (map TypeVarType alphas))])
       --          (zip alphas tys)
-        
+
       -- InstRConstr
-      -- ConType c locs tys -> do        
+      -- ConType c locs tys -> do
       --   error "instantiateR: ConType: Not implemented"
 
       _ -> error $ "The impossible happened! instantiateR: "
@@ -930,7 +930,7 @@ typecheckExpr :: GlobalTypeInfo -> Context -> Location -> Expr -> Type -> NameGe
 typecheckExpr gti gamma loc expr typ =
   traceNS "typecheck" (gamma, loc, expr, typ) $ checkwftype gamma typ $
   typecheckExpr_ gti gamma loc expr typ
-  
+
 typecheckExpr_ :: GlobalTypeInfo -> Context -> Location -> Expr -> Type -> NameGen (Context, Expr)
 
 -- ForallI
@@ -943,7 +943,7 @@ typecheckExpr_ gti gamma loc e (TypeAbsType alphas a) = do
   return (gamma', TypeAbs alphas' e')
 
 -- LForallI
-typecheckExpr_ gti gamma loc (LocAbs ls0 e) (LocAbsType ls1 a) = do  
+typecheckExpr_ gti gamma loc (LocAbs ls0 e) (LocAbsType ls1 a) = do
   ls' <- replicateM (length ls0) freshLocationVar
   (gamma', e') <- mapFst (dropMarker (CLForall (head ls'))) <$>
         typecheckExpr gti (gamma >++ map CLForall ls') loc
@@ -953,7 +953,7 @@ typecheckExpr_ gti gamma loc (LocAbs ls0 e) (LocAbsType ls1 a) = do
 -- ->I
 typecheckExpr_ gti gamma loc (Abs [] e) a = do
   typecheckExpr_ gti gamma loc e a
-  
+
 typecheckExpr_ gti gamma loc (Abs [(x,mty,loc0)] e) (FunType a loc' b) = do
   x' <- freshVar
   gamma0 <- subloc gamma loc' loc0
@@ -973,7 +973,7 @@ typecheckExpr_ gti gamma loc e b = do
   (a, theta, e') <- typesynthExpr gti gamma loc e
   delta <- subtype theta (apply theta a) (apply theta b)
   return (delta, e')
-  
+
 -- typecheckExpr_ gti gamma loc e typ = do
 --   error $ "typecheckExpr: not implemented yet"
 
@@ -1000,21 +1000,26 @@ typesynthExpr_ gti gamma loc expr@(Var x) = do
 --   return (a, delta, e')
 
 -- ->I=> Original rule
-{-
-typesynthExpr_ gti gamma loc expr@(Abs x loc0 e) = do
-  x'    <- freshVar
-  alpha <- freshTVar
-  beta  <- freshTVar
-  delta <- dropMarker (CVar x' (TExists alpha)) <$>
-    typecheck (gamma >++ [ CExists alpha
-                         , CExists beta
-                         , CVar x' (TExists alpha)
-                         ])
-              loc0
-              (subst (EVar x') x e)
-              (TExists beta)
-  return (TFun (TExists alpha) loc0 (TExists beta), delta)
--}
+typesynthExpr_ gti gamma loc expr@(Abs xmtyls e) = do
+  xs'    <- replicateM (length xmtyls) freshVar
+  alphas <- replicateM (length xmtyls) freshExistsTypeVar
+  beta   <- freshExistsTypeVar
+  let locs = map thd3 xmtyls
+  let xs = map fst3 xmtyls
+  (gamma', e') <- mapFst (dropMarker (CVar (last xs') (TypeVarType (last alphas)))) <$>
+     typecheckExpr gti
+       (gamma >++ map CExists alphas
+              >++ [CExists beta]
+              >++ map (uncurry CVar)
+                      (zip xs' (map TypeVarType alphas)))
+                     (last locs) (substs (map Var xs') xs e) (TypeVarType beta)
+  let funty = foldr (\ (loc, alpha) ty0 -> FunType (TypeVarType alpha) loc ty0)
+                (TypeVarType beta) (zip locs alphas)
+  return (funty, gamma',
+          Abs (map (\ ((x,_,loc), ty)-> (x,ty,loc))
+              (zip xmtyls (map (Just . TypeVarType) alphas)))
+                  (substs (map Var xs) xs' e'))
+
 
 typesynthExpr_ gti gamma loc expr = do
   error $ "typesynth: not implemented yet"
@@ -1033,7 +1038,7 @@ typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, 
         <- typeapplysynth gti (gamma >++ map CExists alphas') loc
                      (typeSubsts (map TypeVarType alphas') alphas a) e
       return (typ, delta, g. \f -> TypeApp f (Just typ) (map TypeVarType alphas'))
-      
+
     -- ForallApp: Not allowed without any explicit location applications
     -- LForall l a -> do
     --   -- Do alpha conversion to avoid clashes
@@ -1089,8 +1094,8 @@ locsapplysynth gti gamma loc typ locs0 = traceNS "locsapplysynth" (gamma, loc, t
         locsapplysynth gti (gamma >++ map CExists alphas') loc
                      (typeSubsts (map TypeVarType alphas') alphas a) locs0
       return (typ', delta, g . \f -> TypeApp f (Just typ) (map TypeVarType alphas'))
-    
+
     -- alpha^: Not allowed because alpha^ is a monomorphic type variable!
-    
+
     _ -> error $ "locsapplysynth: don't know what to do with: "
                ++ pretty (gamma, loc, typ, locs0)
