@@ -960,7 +960,7 @@ typecheckExpr_ gti gamma loc (Abs [(x,mty,loc0)] e) (FunType a loc' b) = do
   (gamma1, e') <- mapFst (dropMarker (CVar x' a)) <$>
         typecheckExpr_ gti (gamma0 >: CVar x' a) loc0 (subst (Var x') x e) b
   return (gamma1, Abs [(x,mty, loc0)] e')
-                                                  
+
 typecheckExpr_ gti gamma loc (Abs ((x,mty,loc0):xmtyls) e) (FunType a loc' b) = do
   x' <- freshVar
   gamma0 <- subloc gamma loc' loc0
@@ -976,44 +976,45 @@ typecheckExpr_ gti gamma loc e b = do
   
 -- typecheckExpr_ gti gamma loc e typ = do
 --   error $ "typecheckExpr: not implemented yet"
-  
-{-
-    -- 1I
-    (EUnit, TUnit) -> return gamma
-
-    -- ForallI
-    (e, TForall alpha a) -> do
-      -- Do alpha conversion to avoid clashes
-      alpha' <- freshTVar
-      dropMarker (CForall alpha') <$>
-        typecheck (gamma >: CForall alpha') loc e (typeSubst (TVar alpha') alpha a)
-
-    -- LForallI
-    (ELocAbs l0 e, LForall l1 a) -> do
-      -- Do alpha conversion to avoid clashes
-      l' <- freshLVar
-      dropMarker (CLForall l') <$>
-        typecheck (gamma >: CLForall l') loc (locExprSubst (Unknown l') l0 e) (locSubst (Unknown l') l1 a)
-
-    -- ->I
-    (EAbs x loc0 e, TFun a loc' b) -> do
-      x' <- freshVar
-      gamma0 <- subloc gamma loc' loc0
-      dropMarker (CVar x' a) <$>
-        typecheck (gamma0 >: CVar x' a) loc0 (subst (EVar x') x e) b
-
-    -- Sub
-    (e, b) -> do
-      (a, theta) <- typesynth gamma loc e
-      subtype theta (apply theta a) (apply theta b)
--}  
 
 
 -- | Type synthesising:
 --   typesynth Γ loc e = (A, Δ) <=> Γ |- e => A -| Δ
 typesynthExpr :: GlobalTypeInfo -> Context -> Location -> Expr -> NameGen (Type, Context, Expr)
-typesynthExpr gti gamma loc expr = traceNS "typesynth" (gamma, loc, expr) $ checkwf gamma $
+typesynthExpr gti gamma loc expr =
+  traceNS "typesynth" (gamma, loc, expr) $ checkwf gamma $
   typesynthExpr_ gti gamma loc expr
+
+-- Var
+typesynthExpr_ gti gamma loc expr@(Var x) = do
+  return
+   ( fromMaybe (error $ "typesynth: not in scope " ++ pretty (expr, gamma))
+               (findVarType gamma x)
+   , gamma
+   , expr
+   )
+
+-- Anno
+-- typesynthExpr_ gti gamma loc expr@(EAnno e a) = do
+--   (delta, e') <- typecheck gamma loc e a
+--   return (a, delta, e')
+
+-- ->I=> Original rule
+{-
+typesynthExpr_ gti gamma loc expr@(Abs x loc0 e) = do
+  x'    <- freshVar
+  alpha <- freshTVar
+  beta  <- freshTVar
+  delta <- dropMarker (CVar x' (TExists alpha)) <$>
+    typecheck (gamma >++ [ CExists alpha
+                         , CExists beta
+                         , CVar x' (TExists alpha)
+                         ])
+              loc0
+              (subst (EVar x') x e)
+              (TExists beta)
+  return (TFun (TExists alpha) loc0 (TExists beta), delta)
+-}
 
 typesynthExpr_ gti gamma loc expr = do
   error $ "typesynth: not implemented yet"
