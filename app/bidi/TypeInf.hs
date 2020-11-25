@@ -924,6 +924,7 @@ instantiateR_ gamma a alpha =
       _ -> error $ "The impossible happened! instantiateR: "
                 ++ pretty (gamma, a, alpha)
 
+
 -- | Type checking:
 --   typecheck Γ loc e A = Δ <=> Γ |-_loc e <= A -| Δ
 typecheckExpr :: GlobalTypeInfo -> Context -> Location -> Expr -> Type -> NameGen (Context, Expr)
@@ -1020,13 +1021,38 @@ typesynthExpr_ gti gamma loc expr@(Abs xmtyls e) = do
               (zip xmtyls (map (Just . TypeVarType) alphas)))
                   (substs (map Var xs) xs' e'))
 
+-- ->forall_l=>
+typesynthExpr_ gti gamma loc expr@(LocAbs locvars e) = do
+  ls' <- replicateM (length locvars) freshLocationVar
+  (polylocbodyty, delta, e') <-
+    typesynthExpr gti (gamma >++ map CLMarker ls' >++ map CLForall ls')
+              loc (locExprSubsts (map LocVar ls') locvars e)
+  return (LocAbsType ls' polylocbodyty
+         , foldl (\ delta0 l' ->
+                     singleoutMarker (CLMarker l')
+                       (singleoutMarker (CLForall l') delta0)) delta ls'
+         , LocAbs locvars e')
+
+-- ->E
+typesynthExpr_ gti gamma loc expr@(App e1 maybeTy e2 maybeLoc) = do
+  (a, theta, e1') <- typesynthExpr gti gamma loc e1
+  (ty2, loc0, delta, transformFun) <- typeapplysynth gti theta loc (apply theta a) e2
+  return (ty2, delta, App (transformFun e1) (Just a) e2 (Just loc0))
+
+-- forall_l E
+typesynthExpr_ gti gamma loc expr@(LocApp e maybeTy locs) = do
+  (a, theta, e') <- typesynthExpr gti gamma loc e
+  (b, delta, transformFun) <- locsapplysynth gti theta loc (apply theta a) locs
+  return (b, delta, LocApp (transformFun e) (Just a) locs)
 
 typesynthExpr_ gti gamma loc expr = do
   error $ "typesynth: not implemented yet"
 
+
 -- | Type application synthesising
 --   typeapplysynth Γ loc A e = (C, Δ) <=> Γ |- A . e =>> C -| Δ
-typeapplysynth :: GlobalTypeInfo -> Context -> Location -> Type -> Expr -> NameGen (Type, Context, Expr -> Expr)
+typeapplysynth :: GlobalTypeInfo -> Context -> Location -> Type -> Expr
+   -> NameGen (Type, Location, Context, Expr -> Expr)
 typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, e) $
   checkwftype gamma typ $
   case typ of
@@ -1034,10 +1060,10 @@ typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, 
     TypeAbsType alphas a -> do
       -- Do alpha conversion to avoid clashes
       alphas' <- replicateM (length alphas) freshExistsTypeVar
-      (typ, delta, g)
+      (typ, loc0, delta, g)
         <- typeapplysynth gti (gamma >++ map CExists alphas') loc
                      (typeSubsts (map TypeVarType alphas') alphas a) e
-      return (typ, delta, g. \f -> TypeApp f (Just typ) (map TypeVarType alphas'))
+      return (typ, loc0, delta, g. \f -> TypeApp f (Just typ) (map TypeVarType alphas'))
 
     -- ForallApp: Not allowed without any explicit location applications
     -- LForall l a -> do
@@ -1064,12 +1090,12 @@ typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, 
                          loc
                          e
                          (TypeVarType alpha1)
-      return (TypeVarType alpha2, delta, \f -> App f (Just typ) e' (Just loc'))
+      return (TypeVarType alpha2, loc', delta, \f -> App f (Just typ) e' (Just loc'))
 
     -- ->App
     FunType a loc' c -> do
       (delta, e') <- typecheckExpr gti gamma loc e a
-      return (c, delta, \f -> App f (Just typ) e' (Just loc'))
+      return (c, loc', delta, \f -> App f (Just typ) e' (Just loc'))
 
 
     _ -> error $ "typeapplysynth: don't know what to do with: "
@@ -1078,7 +1104,8 @@ typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, 
 
 -- | Location application synthesising
 --   locapplysynth Γ loc A loc0 = (C, Δ) <=> Γ |- A . loc0 =>> C -| Δ
-locsapplysynth :: GlobalTypeInfo -> Context -> Location -> Type -> [Location] -> NameGen (Type, Context, Expr -> Expr)
+locsapplysynth :: GlobalTypeInfo -> Context -> Location -> Type -> [Location]
+  -> NameGen (Type, Context, Expr -> Expr)
 locsapplysynth gti gamma loc typ locs0 = traceNS "locsapplysynth" (gamma, loc, typ, locs0) $
   checkwftype gamma typ $
   case typ of
