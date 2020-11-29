@@ -987,13 +987,30 @@ typesynthExpr gti gamma loc expr =
   typesynthExpr_ gti gamma loc expr
 
 -- Var
-typesynthExpr_ gti gamma loc expr@(Var x) = do
-  return
-   ( fromMaybe (error $ "typesynth: not in scope " ++ pretty (expr, gamma))
-               (findVarType gamma x)
-   , gamma
-   , expr
-   )
+-- typesynthExpr_ gti gamma loc expr@(Var x) = do
+--   return
+--    ( fromMaybe (error $ "typesynth: not in scope " ++ pretty (expr, gamma))
+--                (findVarType gamma x)
+--    , gamma
+--    , expr
+--    )
+
+typesynthExpr_ gti gamma loc expr@(Var x)
+  | isConstructorName x =
+      case lookupConstr gti x  of
+        ((argtys, tyname, locvars, tyvars):_)
+           -> do let (e', ty') = mkLocAbs loc x tyname locvars tyvars argtys
+                 return (ty', gamma, e')
+
+        [] -> error $ "[TypeInf] typesynthExpr: Not found constructor " ++ x
+
+  | otherwise =
+      return
+       ( fromMaybe (error $ "typesynth: not in scope " ++ pretty (expr, gamma))
+                   (findVarType gamma x)
+       , gamma
+       , expr
+       )
 
 -- Anno
 -- typesynthExpr_ gti gamma loc expr@(EAnno e a) = do
