@@ -934,6 +934,14 @@ typecheckExpr gti gamma loc expr typ =
 
 typecheckExpr_ :: GlobalTypeInfo -> Context -> Location -> Expr -> Type -> NameGen (Context, Expr)
 
+-- Lit
+typecheckExpr_ gti gamma loc (Lit literal) ty
+  | typeOfLiteral literal == ty =
+      return (gamma, Lit literal)
+  | otherwise =
+      error $ "[TypeInf] typecheckExpr: not admitted type: "
+                ++ pretty ty ++ " for " ++ pretty (Lit literal)
+
 -- ForallI
 typecheckExpr_ gti gamma loc e (TypeAbsType alphas a) = do
   -- Do alpha conversion to avoid clashes
@@ -987,14 +995,6 @@ typesynthExpr gti gamma loc expr =
   typesynthExpr_ gti gamma loc expr
 
 -- Var
--- typesynthExpr_ gti gamma loc expr@(Var x) = do
---   return
---    ( fromMaybe (error $ "typesynth: not in scope " ++ pretty (expr, gamma))
---                (findVarType gamma x)
---    , gamma
---    , expr
---    )
-
 typesynthExpr_ gti gamma loc expr@(Var x)
   | isConstructorName x =
       case lookupConstr gti x  of
@@ -1011,6 +1011,10 @@ typesynthExpr_ gti gamma loc expr@(Var x)
        , gamma
        , expr
        )
+
+-- Lit
+typesynthExpr_ gti gamma loc expr@(Lit literal) =
+  return (typeOfLiteral literal, gamma, Lit literal)
 
 -- Anno
 -- typesynthExpr_ gti gamma loc expr@(EAnno e a) = do
