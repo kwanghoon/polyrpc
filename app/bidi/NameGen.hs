@@ -74,13 +74,3 @@ freshExistsLocationVar = do
   l <- freshLocationVar
   return $ mkExists l
 
--- | Print some debugging info
-traceNS :: (Pretty a, Pretty b) => String -> a -> NameGen b -> NameGen b
-traceNS f args x = do
-  ilevel <- gets indent
-  let ind = replicate (ilevel * 3) ' '
-  trace (ind ++ f ++ pretty args) $ do
-    modify $ \s -> s {indent = ilevel + 1}
-    res <- x
-    modify $ \s -> s {indent = ilevel}
-    trace (ind ++ "=" ++ pretty res) $ return res

@@ -6,6 +6,8 @@ import qualified Data.Set as S
 import Data.Tuple.HT(mapFst, fst3, snd3, thd3)
 
 import Control.Monad (replicateM, foldM)
+import Control.Monad.Except
+import Control.Monad.State
 
 import Location
 import Type
@@ -18,6 +20,10 @@ import Naming
 import NameGen
 import Context
 import Pretty
+
+import Debug.Trace
+
+type TIMonad = ExceptT String (State NameState) -- 'ExceptT String NameGen'
 
 -- typeInf :: Monad m => [TopLevelDecl] -> m (GlobalTypeInfo, [TopLevelDecl])
 typeInf :: Monad m => [TopLevelDecl] -> m ()
@@ -62,7 +68,12 @@ typeInf toplevelDecls = do
   -- elab_bindingDecls <- elaborate gti initEnv clientLoc partial_elab_bindingDecls
 
   let initGamma = mempty >++ map (uncurry CVar) (_bindingTypeInfo gti ++ bindingTypeInfo)
-  let (elab_bindingDecls) = evalNameGen $ bidi gti initGamma clientLoc partial_elab_bindingDecls
+  let (elab_bindingDecls) =
+        case evalNameGen
+               $ runExceptT
+                   (bidi gti initGamma clientLoc partial_elab_bindingDecls) of
+          Left err_msg -> error err_msg -- Uncaught error!!
+          Right (_,x) -> x
 
   -- 7. return elaborated data types and bindings
   -- let elab_toplevels = [ LibDeclTopLevel x ty | (x,ty) <- basicLibTypeInfo]
@@ -215,10 +226,10 @@ bindingTypes partial_elab_bindingDecls =
 --   then return (Binding istop name ty elab_expr)
 --   else error $ "[TypeCheck] elabBindingDecl: Incorrect types: " ++ name ++ "\n" ++ show elab_ty ++ "\n" ++ show ty
 
-bidi :: GlobalTypeInfo -> Context -> Location -> [BindingDecl] -> NameGen (Context, [BindingDecl])
+bidi :: GlobalTypeInfo -> Context -> Location -> [BindingDecl] -> TIMonad (Context, [BindingDecl])
 bidi gti gamma loc bindingDecls =  bidiBindingDecls gti gamma loc bindingDecls
 
-bidiBindingDecls :: GlobalTypeInfo -> Context -> Location -> [BindingDecl] -> NameGen (Context, [BindingDecl])
+bidiBindingDecls :: GlobalTypeInfo -> Context -> Location -> [BindingDecl] -> TIMonad (Context, [BindingDecl])
 bidiBindingDecls gti gamma loc [] =  return (gamma, [])
 bidiBindingDecls gti gamma loc (bindingDecl@(Binding _ f ty _):bindingDecls) = do
   let gti1 = gti {_bindingTypeInfo = (f,ty):_bindingTypeInfo gti}   -- for self-recursion
@@ -226,7 +237,7 @@ bidiBindingDecls gti gamma loc (bindingDecl@(Binding _ f ty _):bindingDecls) = d
   (gamma2, elab_bindingDecls) <- bidiBindingDecls gti1 gamma1 loc bindingDecls
   return (gamma2, elab_bindingDecl:elab_bindingDecls)
 
-bidiBindingDecl :: GlobalTypeInfo -> Context -> Location -> BindingDecl -> NameGen (Context, BindingDecl)
+bidiBindingDecl :: GlobalTypeInfo -> Context -> Location -> BindingDecl -> TIMonad (Context, BindingDecl)
 bidiBindingDecl gti gamma loc (Binding istop name ty expr) = do -- ToDo: When name is recursive, expr must be lambda abstraction!
   (delta, expr') <- typecheckExpr gti gamma clientLoc expr ty
   return (delta, Binding istop name ty expr')  -- apply delta to expr'???
@@ -346,250 +357,6 @@ mkAbs loc cname tyname locvars tyvars argtys =
   in  (singleAbs (Abs varTypeLocList (Constr cname locs tys vars argtys))
       , foldr ( \ ty ty0 -> FunType ty loc ty0) (ConType tyname locs tys) argtys)
 
-{-
-elabExpr :: Monad m =>
-  GlobalTypeInfo -> Env -> Location -> Expr -> m (Expr, Type)
-elabExpr gti env loc (Var x)
-  | isConstructorName x =    -- if it is a constructor
-  case lookupConstr gti x  of
-        ((argtys, tyname, locvars, tyvars):_) -> return $ mkLocAbs loc x tyname locvars tyvars argtys
-
-        [] -> error $ "[TypeCheck] elabExpr: Not found constructor " ++ x
-
-  | otherwise =    --  isBindingName x =        -- if it is a term variable
-  case lookupVar env x of    -- try to find it in the local var env or
-    (x_ty:_) -> return (Var x, x_ty)
-    [] -> error $ "[TypeCheck] elabExpr: Not found variable " ++ x
-
-elabExpr gti env loc (TypeAbs tyvars expr) = do
-  let typeVarEnv = _typeVarEnv env
-  let typeVarEnv' = reverse tyvars ++ typeVarEnv
-  (elab_expr, elab_ty) <- elabExpr gti (env{_typeVarEnv=typeVarEnv'}) loc expr
-  return (singleTypeAbs (TypeAbs tyvars elab_expr), singleTypeAbsType (TypeAbsType tyvars elab_ty))
-
-elabExpr gti env loc (LocAbs locvars expr) = do
-  let locVarEnv = _locVarEnv env
-  let locVarEnv' = reverse locvars ++ locVarEnv
-  (elab_expr, elab_ty) <- elabExpr gti (env{_locVarEnv=locVarEnv'}) loc expr
-  return (singleLocAbs (LocAbs locvars elab_expr), singleLocAbsType (LocAbsType locvars elab_ty))
-
-elabExpr gti env loc_0 (Abs [(var,Just argty,loc)] expr)  = do
-  elab_argty <- elabType (_typeInfo gti) (_typeVarEnv env) (_locVarEnv env) argty
-  elab_loc <- elabLocation (_locVarEnv env) loc
-  let varEnv = _varEnv env
-  let varEnv' = (var,elab_argty):varEnv
-  (elab_expr, ret_ty) <- elabExpr gti (env{_varEnv=varEnv'}) elab_loc expr
-  return (Abs [(var,Just elab_argty,elab_loc)] elab_expr, FunType elab_argty elab_loc ret_ty)
-
-elabExpr gti env loc_0 (Abs ((var,Just argty,loc):varTypeLocList) expr)  = do
-  elab_argty <- elabType (_typeInfo gti) (_typeVarEnv env) (_locVarEnv env) argty
-  elab_loc <- elabLocation (_locVarEnv env) loc
-  let varEnv = _varEnv env
-  let varEnv' = (var,elab_argty):varEnv
-  (elab_expr, ret_ty) <-
-    elabExpr gti (env{_varEnv=varEnv'}) elab_loc (singleAbs (Abs varTypeLocList expr))
-  return (Abs [(var,Just elab_argty,elab_loc)] elab_expr, FunType elab_argty elab_loc ret_ty)
-
-elabExpr gti env loc_0 (Abs triple expr)  =
-  error $ "[TypeCheck] elabExpr: Abs argument: empty triple or no annotated type" ++ show triple
-
-elabExpr gti env loc (Let letBindingDecls expr) = do
-  let typeInfo = _typeInfo gti
-  partial_elab_letBindingDecls
-     <- elabBindingTypes typeInfo (_typeVarEnv env) (_locVarEnv env) letBindingDecls
-
---------------------------------
--- for fully recursive bindings:
---------------------------------
---  letBindingTypeInfo <- bindingTypes partial_elab_letBindingDecls
-
---  let letBindingTypeInfo' = letBindingTypeInfo ++ _bindingTypeInfo gti
---  let gti1 = gti {_bindingTypeInfo=letBindingTypeInfo'}
-  let gti1 = gti
-  elab_letBindingDecls <- elaborate gti1 env loc partial_elab_letBindingDecls
-
-  letBindingTypeInfo <- bindingTypes partial_elab_letBindingDecls -- for let body
-
-  let varEnv' = letBindingTypeInfo ++ _varEnv env
-  (elab_expr, elab_ty) <- elabExpr gti (env {_varEnv=varEnv'}) loc expr
-  return (Let elab_letBindingDecls elab_expr, elab_ty)
-
-elabExpr gti env loc (Case expr _ []) =
-  error $ "[TypeCheck] empty alternatives"
-
-elabExpr gti env loc (Case expr _ alts) = do
-  (elab_caseexpr, casety) <- elabExpr gti env loc expr
-  case casety of
-    ConType tyconName locs tys ->
-      case lookupDataTypeName gti tyconName of
-        ((locvars, tyvars, tycondecls):_) -> do
-          (elab_alts, altty) <- elabAlts gti env loc locs locvars tys tyvars tycondecls alts
-          return (Case elab_caseexpr (Just casety) elab_alts, altty)
-        [] -> error $ "[TypeCheck] elabExpr: invalid constructor type: " ++ tyconName
-
-    TupleType tys -> do
-      (elab_alts, altty) <- elabAlts gti env loc [] [] tys [] [] alts
-      return (Case elab_caseexpr (Just casety) elab_alts, altty)
-
-    _ -> error $ "[TypeCheck] elabExpr: case expr not constructor type"
-
-elabExpr gti env loc (App left_expr maybe right_expr l) = do
-  (elab_left_expr, left_ty) <- elabExpr gti env loc left_expr
-  (elab_right_expr, right_ty) <- elabExpr gti env loc right_expr
-  case left_ty of
-    FunType argty loc0 retty ->
-      if equalType argty right_ty
-      then return (App elab_left_expr (Just left_ty) elab_right_expr (Just loc0), retty)
-      else error $ "[TypeCheck] elabExpr: not equal arg type in app:\n"
-                   ++ show (App left_expr maybe right_expr l) ++ "\n" ++ show argty ++ "\n" ++ show right_ty
-    _ -> error $ "[TypeCheck] elabExpr: not function type in app:\n"
-                   ++ show (App left_expr maybe right_expr l) ++ "\n" ++ show left_ty ++ "\n" ++ show right_ty
-
-elabExpr gti env loc (TypeApp expr maybe tys) = do
-  elab_tys <- mapM (elabType (_typeInfo gti) (_typeVarEnv env) (_locVarEnv env)) tys
-  (elab_expr, elab_ty) <- elabExpr gti env loc expr
-  case elab_ty of
-    TypeAbsType tyvars ty0 ->
-      if length tyvars == length elab_tys
-      then return (singleTypeApp (TypeApp elab_expr (Just elab_ty) elab_tys), doSubst (zip tyvars elab_tys) ty0)
-      else error $ "[TypeCheck] elabExpr: not equal length of arg types in type app: "
-    _ -> error $ "[TypeCheck] elabExpr: not type-abstraction type in type app: " ++ "\n"
-                   ++ show elab_ty ++ "\n"
-                   ++ show (TypeApp expr maybe tys) ++ "\n"
-
-elabExpr gti env loc (LocApp expr maybe locs) =
-  let f (Location loc0) = if loc0 `elem` (_locVarEnv env) then LocVar loc0 else Location loc0
-      f (LocVar x)      = error $ "[TypeCheck] elabExpr: LocApp: LocVar: " ++ x
-  in do
-  let locs0 = map f locs
-  (elab_expr, elab_ty) <- elabExpr gti env loc expr
-  case elab_ty of
-    LocAbsType locvars ty0 ->
-      if length locvars == length locs
-      then return (singleLocApp (LocApp elab_expr (Just elab_ty) locs0), doSubstLoc (zip locvars locs0) ty0)
-      else error $ "[TypeCheck] elabExpr: not equal length of arg locations in location app: " ++ show locvars ++ " " ++ show locs
-    _ -> error $ "[TypeCheck] elabExpr: not location-abstraction type in type app: "
-
-elabExpr gti env loc (Tuple exprs) = do
-  elabExprTyList <- mapM (elabExpr gti env loc) exprs
-  let (elab_exprs, tys) = unzip elabExprTyList
-  return (Tuple elab_exprs, TupleType tys)
-
-elabExpr gti env loc (Prim op op_locs@[] op_tys@[] exprs) =  -- A hack for the primitives with the current loc!
-  elabExpr gti env loc (Prim op [loc] op_tys exprs)
-
-elabExpr gti env loc (Prim op op_locs op_tys exprs) = do
-  elab_op_locs <- mapM (elabLocation (_locVarEnv env)) op_locs
-  elab_op_tys  <- mapM (elabType (_typeInfo gti) (_typeVarEnv env) (_locVarEnv env)) op_tys
-  elabExprTyList <- mapM (elabExpr gti env loc) exprs
-  let (elab_exprs, tys) = unzip elabExprTyList
-  case op of
-    EqIntPrimOp -> overloaded elab_op_locs elab_op_tys elab_exprs tys
-    _           -> do
-       match <- nonoverloaded elab_op_locs elab_op_tys elab_exprs tys op
-       case match of
-         Left expr -> return expr
-         Right err -> error err
-
-  where {- A hack: overloaded operator (=) : EqStringPrimOp, EqBoolPrimOp, EqIntPrimOp -}
-     overloaded elab_op_locs elab_op_tys elab_exprs tys  = do
-       matchInt <- nonoverloaded elab_op_locs elab_op_tys elab_exprs tys EqIntPrimOp
-       case matchInt of
-         Left expr -> return expr
-         Right err -> do
-            matchBool <- nonoverloaded elab_op_locs elab_op_tys elab_exprs tys EqBoolPrimOp
-            case matchBool of
-              Left expr -> return expr
-              Right err -> do
-                matchString <- nonoverloaded elab_op_locs elab_op_tys elab_exprs tys EqStringPrimOp
-                case matchString of
-                  Left expr -> return expr
-                  Right err -> error $ err
-
-     nonoverloaded elab_op_locs elab_op_tys elab_exprs tys  op =
-       case lookupPrimOpType op of
-         ((locvars, tyvars, argtys, retty):_) -> do
-           let substTy  = zip tyvars op_tys
-           let substLoc = zip locvars op_locs
-           let substed_argtys = map (doSubstLoc substLoc . doSubst substTy) argtys
-
-           if length tys==length argtys
-              && and (map (uncurry equalType) (zip substed_argtys tys))
-              && length locvars==length op_locs
-              && length tyvars==length op_tys
-
-           then return $ Left $ (Prim op elab_op_locs elab_op_tys elab_exprs, retty)
-
-           else return $ Right $ "[TypeCheck] elabExpr: incorrect arg types in Prim op: "
-                                  ++ show tys ++ " != " ++ show substed_argtys
-
-         [] -> return $ Right $ "[TypeCheck] elabExpr: type not found type in Prim op: "
-                                  ++ show op
-
-elabExpr gti env loc (Lit literal) = return (Lit literal, typeOfLiteral literal)
-
-elabExpr gti env loc (Constr conname locs contys exprs _argtys) = do
-  elab_locs <- mapM (elabLocation (_locVarEnv env)) locs
-  elab_contys <- mapM (elabType (_typeInfo gti) (_typeVarEnv env) (_locVarEnv env)) contys
-  elabExprTyList <- mapM (elabExpr gti env loc) exprs
-  let (elab_exprs, elab_tys) = unzip elabExprTyList
-  case lookupConstr gti conname of
-    ((argtys,tyname,locvars,tyvars):_) ->
-      case (unifyTypes argtys elab_tys) of
-        (Just subst) ->
-          return (Constr conname elab_locs elab_contys elab_exprs            -- BUG: subt0???
-                   (map (doSubst subst) elab_tys)
-                 , doSubst subst (ConType tyname (map LocVar locvars) (map TypeVarType tyvars)))
-        (Nothing) -> error $ "[TypeCheck] elabExpr: constructor arg types incorrect: " ++ conname
-
-    [] -> error $ "[TypeCheck] elabExpr: constructor not found: " ++ conname
-
--- elabExpr gti env loc expr = error $ "[TypeCheck] elabExpr: " ++ show expr
-
---
-elabAlts gti env loc locs locvars tys tyvars tycondecls [alt] = do
-  let substLoc = zip locvars locs
-  let substTy = zip tyvars tys
-  (elab_alt, elab_ty) <- elabAlt gti env loc substLoc substTy tycondecls tys alt
-  return ([elab_alt], elab_ty)
-
-elabAlts gti env loc locs locvars tys tyvars tycondecls (alt:alts) = do
-  let substLoc = zip locvars locs
-  let substTy = zip tyvars tys
-  (elab_alt, elab_ty1)  <- elabAlt gti env loc substLoc substTy tycondecls tys alt
-  (elab_alts, elab_ty2) <- elabAlts gti env loc locs locvars tys tyvars tycondecls alts
-  if equalType elab_ty1 elab_ty2
-  then return (elab_alt:elab_alts, elab_ty1)
-  else error $ "[TypeCheck] elabAlts: not equal alt type: " ++
-                             (case alt of {
-                               Alternative con args _ -> con ++ show args;
-                               TupleAlternative args _ -> show args })
-
--- lookupCon tycondecls con =
---  [tys | (conname, tys) <- tycondecls, con==conname]
-
-elabAlt gti env loc substLoc substTy tycondecls externTys (Alternative con args expr) = do
--- externTys only for TupleAlternative
-  case lookupCon tycondecls con of
-    (tys:_) ->
-      if length tys==length args
-      then do let tys' = map (doSubst substTy) (map (doSubstLoc substLoc) tys)
-              let varEnv = _varEnv env
-              let varEnv' = zip args tys' ++ varEnv
-              (elab_expr, elab_ty) <- elabExpr gti (env {_varEnv=varEnv'}) loc expr
-              return (Alternative con args elab_expr, elab_ty)
-      else error $ "[TypeCheck] elabAlt: invalid arg length: " ++ con ++ show args
-
-    [] -> error $ "[TypeCheck] elabAlt: constructor not found"
-
-elabAlt gti env loc substLoc substTy tycondecls externTys (TupleAlternative args expr) = do
--- substTy==[], tycondecls==[]
-  let varEnv  = _varEnv env
-  let varEnv' = zip args externTys ++ varEnv
-  (elab_expr, elab_ty) <- elabExpr gti (env {_varEnv=varEnv'}) loc expr
-  return (TupleAlternative args elab_expr, elab_ty)
--}
-
 ----------------------------------------------------------------------------
 -- Common Utils
 ----------------------------------------------------------------------------
@@ -602,7 +369,7 @@ allUnique (x:xs) =
 ----------------------------------------------------------------------------
 
 -- | Algorithmic sublocation:
-subloc :: Context -> Location -> Location -> NameGen Context
+subloc :: Context -> Location -> Location -> TIMonad Context
 subloc gamma loc1 loc2 =
   traceNS "subloc" (gamma, loc1, loc2) $
   checkwfloc gamma loc1 $ checkwfloc gamma loc2 $
@@ -614,24 +381,24 @@ subloc gamma loc1 loc2 =
       | (not (clExists l1)) && (not (clExists l2)) && l1 == l2 -> return gamma
       | clExists l1 && clExists l2 && l1 == l2 -> return gamma
       | otherwise ->
-         error $ "subloc, don't know what to do with: "
+         throwError $ "subloc, don't know what to do with: "
                           ++ pretty (gamma, loc1, loc2)
 
     (LocVar l, loc)
       | clExists l && l `S.notMember` freeLVarsIn loc ->
           instantiateLocL gamma l loc
       | otherwise ->
-         error $ "subloc, don't know what to do with: "
+         throwError $ "subloc, don't know what to do with: "
                           ++ pretty (gamma, loc1, loc2)
 
     (loc, LocVar l)
       | clExists l && l `S.notMember` freeLVarsIn loc ->
           instantiateLocR gamma loc l
       | otherwise ->
-         error $ "subloc, don't know what to do with: "
+         throwError $ "subloc, don't know what to do with: "
                           ++ pretty (gamma, loc1, loc2)
 
-    _ -> error $ "subloc, don't know what to do with: "
+    _ -> throwError $ "subloc, don't know what to do with: "
                           ++ pretty (gamma, loc1, loc2)
 
 
@@ -653,12 +420,12 @@ instantiateLocL gamma l loc
             else
                return $ fromJust $ lsolve gamma l (LocVar l')
         | otherwise ->
-            error $ "instantiateLocL: not ended with ^: " ++ l'
-      _ -> error $ "The impossible happened! instantiateLocL: "
+            throwError $ "instantiateLocL: not ended with ^: " ++ l'
+      _ -> throwError $ "The impossible happened! instantiateLocL: "
                 ++ pretty (gamma, l, loc)
 
   | otherwise =
-    error $ "instantiateLocL: not ended with ^: " ++ l
+    throwError $ "instantiateLocL: not ended with ^: " ++ l
 
 
 -- | Algorithmic instantiation location (right):
@@ -678,17 +445,17 @@ instantiateLocR gamma loc l
              else
                 return $ fromJust $ lsolve gamma l (LocVar l')
           | otherwise ->
-              error $ "instantiateLocR: not ended with ^: " ++ l'
+              throwError $ "instantiateLocR: not ended with ^: " ++ l'
 
-        _ -> error $ "The impossible happened! instantiateLocR: "
+        _ -> throwError $ "The impossible happened! instantiateLocR: "
                   ++ pretty (gamma, loc, l)
 
   | otherwise =
-    error $ "instantiateLocR: not ended with ^: " ++ l
+    throwError $ "instantiateLocR: not ended with ^: " ++ l
 
 -- | Algorithmic subtyping:
 --   subtype Γ A B = Δ <=> Γ |- A <: B -| Δ
-subtype :: Context -> Type -> Type -> NameGen Context
+subtype :: Context -> Type -> Type -> TIMonad Context
 subtype gamma typ1 typ2 =
   traceNS "subtype" (gamma, typ1, typ2) $
   checkwftype gamma typ1 $ checkwftype gamma typ2 $
@@ -700,7 +467,7 @@ subtype gamma typ1 typ2 =
       | cExists alpha && cExists alpha'
           && alpha == alpha' && alpha `elem` existentials gamma -> return gamma
       | otherwise ->
-          error $ "subtype(TypeVarType,TypeVarType), don't know what to do with: "
+          throwError $ "subtype(TypeVarType,TypeVarType), don't know what to do with: "
                          ++ pretty (gamma, typ1, typ2)
 
     (TypeVarType alpha, a)
@@ -719,7 +486,7 @@ subtype gamma typ1 typ2 =
          foldM (\ g (maybety1,maybety2) ->
                   case (maybety1, maybety2) of
                     (Just ty1, Just ty2) -> subtype g ty1 ty2
-                    _ -> error $ "subtype: TupleType: not monotype: "
+                    _ -> throwError $ "subtype: TupleType: not monotype: "
                                     ++ pretty (gamma, typ1, typ2))
            gamma (zip (map monotype tys1) (map monotype tys2))
 
@@ -732,7 +499,7 @@ subtype gamma typ1 typ2 =
     -- <:forallR
     (a, TypeAbsType alphas b) -> do
       -- Do alpha conversion to avoid clashes
-      alphas' <- replicateM (length alphas) freshTypeVar
+      alphas' <- lift $ replicateM (length alphas) freshTypeVar
       dropMarker (CForall (head alphas')) <$>
         subtype (gamma >++ map CForall alphas') a
            (typeSubsts (map TypeVarType alphas') alphas b)
@@ -740,7 +507,7 @@ subtype gamma typ1 typ2 =
     -- <:forallL
     (TypeAbsType alphas a, b) -> do
       -- Do alpha conversion to avoid clashes
-      alphas' <- replicateM (length alphas) freshExistsTypeVar
+      alphas' <- lift $ replicateM (length alphas) freshExistsTypeVar
       dropMarker (CMarker (head alphas')) <$>
         subtype (gamma >++ map CMarker alphas' >++ map CExists alphas')
                 (typeSubsts (map TypeVarType alphas') alphas a)
@@ -750,39 +517,39 @@ subtype gamma typ1 typ2 =
     (LocAbsType locvars1 a, LocAbsType locvars2 b)
       | locvars1 == locvars2 -> subtype gamma a b
       | length locvars1 == length locvars2 -> do
-         locvars <- replicateM (length locvars1) freshLocationVar
+         locvars <- lift $ replicateM (length locvars1) freshLocationVar
          dropMarker (CLMarker (head locvars)) <$>
            subtype (gamma >++ map CLMarker locvars)
                    (locSubsts (map LocVar locvars) locvars1 a)
                    (locSubsts (map LocVar locvars) locvars2 a)
       | otherwise ->
-         error $ "subtype: different length of location vars: "
+         throwError $ "subtype: different length of location vars: "
                            ++ pretty (gamma, typ1, typ2)
 
     -- <:ConType
     (ConType c1 locs1 tys1, ConType c2 locs2 tys2)
       | c1 /= c2 || length locs1 /= length locs2 || length tys1 /= length tys2 ->
-          error $ "subtype: ConType: different type constructors: "
+          throwError $ "subtype: ConType: different type constructors: "
                   ++ pretty (gamma, typ1, typ2)
       | otherwise -> do
           delta <- foldM (\ g (loc1, loc2) -> subloc g loc1 loc2) gamma (zip locs1 locs2)
           foldM (\ g (maybety1, maybety2) ->
                    case (maybety1, maybety2) of
                      (Just ty1, Just ty2) -> subtype g ty1 ty2
-                     _ -> error $ "subtype: ConType: not monotype: "
+                     _ -> throwError $ "subtype: ConType: not monotype: "
                                      ++ pretty (gamma, typ1, typ2))
             gamma (zip (map monotype tys1) (map monotype tys2))
 
-    _ -> error $ "subtype, don't know what to do with: "
+    _ -> throwError $ "subtype, don't know what to do with: "
                            ++ pretty (gamma, typ1, typ2)
 
 
 -- | Algorithmic instantiation (left):
 --   instantiateL Γ α A = Δ <=> Γ |- α^ :=< A -| Δ
-instantiateL :: Context -> TypeVar -> Type -> NameGen Context
+instantiateL :: Context -> TypeVar -> Type -> TIMonad Context
 instantiateL gamma alpha a
   | cExists alpha = instantiateL_ gamma alpha a
-  | otherwise = error $ "instantiateL: not ended with ^: " ++ alpha
+  | otherwise = throwError $ "instantiateL: not ended with ^: " ++ alpha
 
 instantiateL_ gamma alpha a =
   traceNS "instantiateL" (gamma, alpha, a) $
@@ -794,7 +561,7 @@ instantiateL_ gamma alpha a =
       -- InstLReach
       TypeVarType beta
         | not (cExists beta) ->
-            error $ "instantiateL: InstLReach: not ended with ^: " ++ beta
+            throwError $ "instantiateL: InstLReach: not ended with ^: " ++ beta
         | ordered gamma alpha beta ->
             return $ fromJust $ solve gamma beta (TypeVarType alpha)
         | otherwise ->
@@ -802,9 +569,9 @@ instantiateL_ gamma alpha a =
 
       -- InstLArr
       FunType a1 loc a2   -> do
-        alpha1 <- freshExistsTypeVar
-        alpha2 <- freshExistsTypeVar
-        l      <- freshExistsLocationVar
+        alpha1 <- lift $ freshExistsTypeVar
+        alpha2 <- lift $ freshExistsTypeVar
+        l      <- lift $ freshExistsLocationVar
         theta <- instantiateR (insertAt gamma (CExists alpha) $ context
                                 [ CLExists l
                                 , CExists alpha2
@@ -820,7 +587,7 @@ instantiateL_ gamma alpha a =
       -- InstLAIIR
       TypeAbsType betas b -> do
         -- Do alpha conversion to avoid clashes
-        betas' <- replicateM (length betas) freshTypeVar
+        betas' <- lift $ replicateM (length betas) freshTypeVar
         dropMarker (CForall (head betas')) <$> -- Todo: Ensure that betas is not null!
           instantiateL (gamma >++ map CForall betas')
                        alpha
@@ -836,7 +603,7 @@ instantiateL_ gamma alpha a =
 
       -- InstLTupleType
       -- TupleType tys -> do
-      --   alphas <- replicateM (length tys) freshExistsTypeVar
+      --   alphas <- lift $ replicateM (length tys) freshExistsTypeVar
       --   foldM (\gamma (alphai, ai) ->
       --            instantiateL gamma alphai (apply gamma ai))
       --          (gamma >++ map CExists alphas
@@ -845,19 +612,19 @@ instantiateL_ gamma alpha a =
 
       -- InstLConstr
       -- ConType c locs tys -> do
-      --   error "instantiateL: ConType: Not implemented"
+      --   throwError "instantiateL: ConType: Not implemented"
 
 
-      _ -> error $ "The impossible happened! instantiateL: "
+      _ -> throwError $ "The impossible happened! instantiateL: "
                 ++ pretty (gamma, alpha, a)
 
 
 -- | Algorithmic instantiation (right):
 --   instantiateR Γ A α = Δ <=> Γ |- A =:< α -| Δ
-instantiateR :: Context -> Type -> TypeVar -> NameGen Context
+instantiateR :: Context -> Type -> TypeVar -> TIMonad Context
 instantiateR gamma a alpha
   | cExists alpha = instantiateR_ gamma a alpha
-  | otherwise = error $ "instantiateR: not ended with ^: " ++ alpha
+  | otherwise = throwError $ "instantiateR: not ended with ^: " ++ alpha
 
 instantiateR_ gamma a alpha =
   traceNS "instantiateR" (gamma, a, alpha) $
@@ -868,7 +635,7 @@ instantiateR_ gamma a alpha =
       -- InstRReach
       TypeVarType beta
         | not (cExists beta) ->
-            error $ "instantiateR: InstRReach: not ended with ^: " ++ beta
+            throwError $ "instantiateR: InstRReach: not ended with ^: " ++ beta
         | ordered gamma alpha beta ->
             return $ fromJust $ solve gamma beta (TypeVarType alpha)
         | otherwise ->
@@ -876,9 +643,9 @@ instantiateR_ gamma a alpha =
 
       -- InstRArr
       FunType a1 loc a2   -> do
-        alpha1 <- freshExistsTypeVar
-        alpha2 <- freshExistsTypeVar
-        l      <- freshExistsLocationVar
+        alpha1 <- lift $ freshExistsTypeVar
+        alpha2 <- lift $ freshExistsTypeVar
+        l      <- lift $ freshExistsLocationVar
         theta <- instantiateL (insertAt gamma (CExists alpha) $ context
                                  [ CLExists l
                                  , CExists alpha2
@@ -894,7 +661,7 @@ instantiateR_ gamma a alpha =
       -- InstRAIIL
       TypeAbsType betas b -> do
         -- Do alpha conversion to avoid clashes
-        betas' <- replicateM (length betas) freshTypeVar
+        betas' <- lift $ replicateM (length betas) freshTypeVar
         dropMarker (CMarker (head betas')) <$>
           instantiateR (gamma >++ map CMarker betas' >++ map CExists betas')
                        (typeSubsts (map TypeVarType betas') betas b)
@@ -910,7 +677,7 @@ instantiateR_ gamma a alpha =
 
       -- InstRTupleType
       -- TupleType tys -> do
-      --   alphas <- replicateM (length tys) freshExistsTypeVar
+      --   alphas <- lift $ replicateM (length tys) freshExistsTypeVar
       --   foldM (\gamma (alphai, ai) ->
       --            instantiateR gamma (apply gamma ai) alphai)
       --          (gamma >++ map CExists alphas
@@ -919,33 +686,33 @@ instantiateR_ gamma a alpha =
 
       -- InstRConstr
       -- ConType c locs tys -> do
-      --   error "instantiateR: ConType: Not implemented"
+      --   throwError "instantiateR: ConType: Not implemented"
 
-      _ -> error $ "The impossible happened! instantiateR: "
+      _ -> throwError $ "The impossible happened! instantiateR: "
                 ++ pretty (gamma, a, alpha)
 
 
 -- | Type checking:
 --   typecheck Γ loc e A = Δ <=> Γ |-_loc e <= A -| Δ
-typecheckExpr :: GlobalTypeInfo -> Context -> Location -> Expr -> Type -> NameGen (Context, Expr)
+typecheckExpr :: GlobalTypeInfo -> Context -> Location -> Expr -> Type -> TIMonad (Context, Expr)
 typecheckExpr gti gamma loc expr typ =
   traceNS "typecheck" (gamma, loc, expr, typ) $ checkwftype gamma typ $
   typecheckExpr_ gti gamma loc expr typ
 
-typecheckExpr_ :: GlobalTypeInfo -> Context -> Location -> Expr -> Type -> NameGen (Context, Expr)
+typecheckExpr_ :: GlobalTypeInfo -> Context -> Location -> Expr -> Type -> TIMonad (Context, Expr)
 
 -- Lit
 typecheckExpr_ gti gamma loc (Lit literal) ty
   | typeOfLiteral literal == ty =
       return (gamma, Lit literal)
   | otherwise =
-      error $ "[TypeInf] typecheckExpr: not admitted type: "
+      throwError $ "[TypeInf] typecheckExpr: not admitted type: "
                 ++ pretty ty ++ " for " ++ pretty (Lit literal)
 
 -- ForallI
 typecheckExpr_ gti gamma loc e (TypeAbsType alphas a) = do
   -- Do alpha conversion to avoid clashes
-  alphas' <- replicateM (length alphas) freshTypeVar
+  alphas' <- lift $ replicateM (length alphas) freshTypeVar
   (gamma', e') <- mapFst (dropMarker (CForall (head alphas'))) <$>
        typecheckExpr gti (gamma >++ map CForall alphas') loc e
           (typeSubsts (map TypeVarType alphas') alphas a)
@@ -953,7 +720,7 @@ typecheckExpr_ gti gamma loc e (TypeAbsType alphas a) = do
 
 -- LForallI
 typecheckExpr_ gti gamma loc (LocAbs ls0 e) (LocAbsType ls1 a) = do
-  ls' <- replicateM (length ls0) freshLocationVar
+  ls' <- lift $ replicateM (length ls0) freshLocationVar
   (gamma', e') <- mapFst (dropMarker (CLForall (head ls'))) <$>
         typecheckExpr gti (gamma >++ map CLForall ls') loc
           (locExprSubsts (map LocVar ls') ls0 e) (locSubsts (map LocVar ls') ls1 a)
@@ -964,14 +731,14 @@ typecheckExpr_ gti gamma loc (Abs [] e) a = do
   typecheckExpr_ gti gamma loc e a
 
 typecheckExpr_ gti gamma loc (Abs [(x,mty,loc0)] e) (FunType a loc' b) = do
-  x' <- freshVar
+  x' <- lift $ freshVar
   gamma0 <- subloc gamma loc' loc0
   (gamma1, e') <- mapFst (dropMarker (CVar x' a)) <$>
         typecheckExpr_ gti (gamma0 >: CVar x' a) loc0 (subst (Var x') x e) b
   return (gamma1, Abs [(x,mty, loc0)] e')
 
 typecheckExpr_ gti gamma loc (Abs ((x,mty,loc0):xmtyls) e) (FunType a loc' b) = do
-  x' <- freshVar
+  x' <- lift $ freshVar
   gamma0 <- subloc gamma loc' loc0
   (gamma1, e') <- mapFst (dropMarker (CVar x' a)) <$>
       typecheckExpr_ gti (gamma0 >: CVar x' a) loc0 (subst (Var x') x (Abs xmtyls e)) b
@@ -984,12 +751,12 @@ typecheckExpr_ gti gamma loc e b = do
   return (delta, e')
 
 -- typecheckExpr_ gti gamma loc e typ = do
---   error $ "typecheckExpr: not implemented yet"
+--   throwError $ "typecheckExpr: not implemented yet"
 
 
 -- | Type synthesising:
 --   typesynth Γ loc e = (A, Δ) <=> Γ |- e => A -| Δ
-typesynthExpr :: GlobalTypeInfo -> Context -> Location -> Expr -> NameGen (Type, Context, Expr)
+typesynthExpr :: GlobalTypeInfo -> Context -> Location -> Expr -> TIMonad (Type, Context, Expr)
 typesynthExpr gti gamma loc expr =
   traceNS "typesynth" (gamma, loc, expr) $ checkwf gamma $
   typesynthExpr_ gti gamma loc expr
@@ -1002,15 +769,12 @@ typesynthExpr_ gti gamma loc expr@(Var x)
            -> do let (e', ty') = mkLocAbs loc x tyname locvars tyvars argtys
                  return (ty', gamma, e')
 
-        [] -> error $ "[TypeInf] typesynthExpr: Not found constructor " ++ x
+        [] -> throwError $ "[TypeInf] typesynthExpr: Not found constructor " ++ x
 
   | otherwise =
-      return
-       ( fromMaybe (error $ "typesynth: not in scope " ++ pretty (expr, gamma))
-                   (findVarType gamma x)
-       , gamma
-       , expr
-       )
+      case findVarType gamma x of
+        Just x_ty -> return ( x_ty, gamma, expr )
+        Nothing -> (throwError $ "typesynth: not in scope " ++ pretty (expr, gamma))
 
 -- Lit
 typesynthExpr_ gti gamma loc expr@(Lit literal) =
@@ -1023,9 +787,9 @@ typesynthExpr_ gti gamma loc expr@(Lit literal) =
 
 -- ->I=> Original rule
 typesynthExpr_ gti gamma loc expr@(Abs xmtyls e) = do
-  xs'    <- replicateM (length xmtyls) freshVar
-  alphas <- replicateM (length xmtyls) freshExistsTypeVar
-  beta   <- freshExistsTypeVar
+  xs'    <- lift $ replicateM (length xmtyls) freshVar
+  alphas <- lift $ replicateM (length xmtyls) freshExistsTypeVar
+  beta   <- lift $ freshExistsTypeVar
   let locs = map thd3 xmtyls
   let xs = map fst3 xmtyls
   (gamma', e') <- mapFst (dropMarker (CVar (last xs') (TypeVarType (last alphas)))) <$>
@@ -1044,7 +808,7 @@ typesynthExpr_ gti gamma loc expr@(Abs xmtyls e) = do
 
 -- ->forall_l=>
 typesynthExpr_ gti gamma loc expr@(LocAbs locvars e) = do
-  ls' <- replicateM (length locvars) freshLocationVar
+  ls' <- lift $ replicateM (length locvars) freshLocationVar
   (polylocbodyty, delta, e') <-
     typesynthExpr gti (gamma >++ map CLMarker ls' >++ map CLForall ls')
               loc (locExprSubsts (map LocVar ls') locvars e)
@@ -1067,20 +831,20 @@ typesynthExpr_ gti gamma loc expr@(LocApp e maybeTy locs) = do
   return (b, delta, LocApp (transformFun e) (Just a) locs)
 
 typesynthExpr_ gti gamma loc expr = do
-  error $ "typesynth: not implemented yet"
+  throwError $ "typesynth: not implemented yet"
 
 
 -- | Type application synthesising
 --   typeapplysynth Γ loc A e = (C, Δ) <=> Γ |- A . e =>> C -| Δ
 typeapplysynth :: GlobalTypeInfo -> Context -> Location -> Type -> Expr
-   -> NameGen (Type, Location, Context, Expr -> Expr)
+   -> TIMonad (Type, Location, Context, Expr -> Expr)
 typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, e) $
   checkwftype gamma typ $
   case typ of
     -- ForallApp
     TypeAbsType alphas a -> do
       -- Do alpha conversion to avoid clashes
-      alphas' <- replicateM (length alphas) freshExistsTypeVar
+      alphas' <- lift $ replicateM (length alphas) freshExistsTypeVar
       (typ, loc0, delta, g)
         <- typeapplysynth gti (gamma >++ map CExists alphas') loc
                      (typeSubsts (map TypeVarType alphas') alphas a) e
@@ -1089,7 +853,7 @@ typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, 
     -- ForallApp: Not allowed without any explicit location applications
     -- LForall l a -> do
     --   -- Do alpha conversion to avoid clashes
-    --   l' <- freshLVar
+    --   l' <- lift $ freshLVar
     --   typeapplysynth (gamma >: CLExists l') loc
     --                  (locSubst (UnknownExists l') l a)
     --                  e
@@ -1097,9 +861,9 @@ typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, 
     -- alpha^App
     TypeVarType alpha
      | cExists alpha -> do  -- TExists alpha
-      alpha1 <- freshExistsTypeVar
-      alpha2 <- freshExistsTypeVar
-      l      <- freshExistsLocationVar
+      alpha1 <- lift $ freshExistsTypeVar
+      alpha2 <- lift $ freshExistsTypeVar
+      l      <- lift $ freshExistsLocationVar
       let loc' = LocVar l
       (delta, e') <- typecheckExpr gti (insertAt gamma (CExists alpha) $ context
                             [ CLExists l
@@ -1119,14 +883,14 @@ typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, 
       return (c, loc', delta, \f -> App f (Just typ) e' (Just loc'))
 
 
-    _ -> error $ "typeapplysynth: don't know what to do with: "
+    _ -> throwError $ "typeapplysynth: don't know what to do with: "
               ++ pretty (gamma, loc, typ, e)
 
 
 -- | Location application synthesising
 --   locapplysynth Γ loc A loc0 = (C, Δ) <=> Γ |- A . loc0 =>> C -| Δ
 locsapplysynth :: GlobalTypeInfo -> Context -> Location -> Type -> [Location]
-  -> NameGen (Type, Context, Expr -> Expr)
+  -> TIMonad (Type, Context, Expr -> Expr)
 locsapplysynth gti gamma loc typ locs0 = traceNS "locsapplysynth" (gamma, loc, typ, locs0) $
   checkwftype gamma typ $
   case typ of
@@ -1137,7 +901,7 @@ locsapplysynth gti gamma loc typ locs0 = traceNS "locsapplysynth" (gamma, loc, t
     -- TForall LocApp
     TypeAbsType alphas a -> do
       -- Do alpha conversion to avoid clashes
-      alphas' <- replicateM (length alphas) freshExistsTypeVar
+      alphas' <- lift $ replicateM (length alphas) freshExistsTypeVar
       (typ', delta, g) <-
         locsapplysynth gti (gamma >++ map CExists alphas') loc
                      (typeSubsts (map TypeVarType alphas') alphas a) locs0
@@ -1145,5 +909,16 @@ locsapplysynth gti gamma loc typ locs0 = traceNS "locsapplysynth" (gamma, loc, t
 
     -- alpha^: Not allowed because alpha^ is a monomorphic type variable!
 
-    _ -> error $ "locsapplysynth: don't know what to do with: "
+    _ -> throwError $ "locsapplysynth: don't know what to do with: "
                ++ pretty (gamma, loc, typ, locs0)
+
+-- | Print some debugging info
+traceNS :: (Pretty a, Pretty b) => String -> a -> TIMonad b -> TIMonad b
+traceNS f args x = do
+  ilevel <- gets indent
+  let ind = replicate (ilevel * 3) ' '
+  trace (ind ++ f ++ pretty args) $ do
+    modify $ \s -> s {indent = ilevel + 1}
+    res <- x
+    modify $ \s -> s {indent = ilevel}
+    trace (ind ++ "=" ++ pretty res) $ return res
