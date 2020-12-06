@@ -829,7 +829,16 @@ typesynthExpr_ gti gamma loc expr@(LocApp e maybeTy locs) = do
   (a, theta, e') <- typesynthExpr gti gamma loc e
   (b, delta, transformFun) <- locsapplysynth gti theta loc (apply theta a) locs
   return (b, delta, LocApp (transformFun e) (Just a) locs)
-
+  
+-- Tuple
+typesynthExpr_ gti gamma loc expr@(Tuple es) = do
+  (gamma', tys', es') <-
+    foldM (\ (gamma0, tys0, es0) e0 -> do
+            (ty1, gamma1, e1) <- typesynthExpr gti gamma0 loc e0
+            return (gamma1, tys0++[ty1], es0++[e1])
+          ) (gamma, [], []) es
+  return (TupleType tys', gamma', Tuple es')
+  
 -- Prim
 {- Note that we safely assume that op_tys is explicitly given.
 
@@ -884,6 +893,8 @@ typesynthExpr_ gti gamma loc expr@(Prim op op_locs op_tys exprs) =
 -- Lit
 typesynthExpr_ gti gamma loc expr@(Lit literal) =
   return (typeOfLiteral literal, gamma, Lit literal)
+
+-- Constr: No constructor is exposed to programmers. 
 
 typesynthExpr_ gti gamma loc expr = do
   throwError $ "typesynth: not implemented yet"
