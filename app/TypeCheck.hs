@@ -463,15 +463,15 @@ elabExpr gti env loc (Prim op op_locs op_tys exprs) = do
      overloaded elab_op_locs elab_op_tys elab_exprs tys  = do
        matchInt <- nonoverloaded elab_op_locs elab_op_tys elab_exprs tys EqIntPrimOp
        case matchInt of
-         Left expr -> return expr
+         Left exprTy -> return exprTy
          Right err -> do
             matchBool <- nonoverloaded elab_op_locs elab_op_tys elab_exprs tys EqBoolPrimOp
             case matchBool of
-              Left expr -> return expr
+              Left exprTy -> return exprTy
               Right err -> do
                 matchString <- nonoverloaded elab_op_locs elab_op_tys elab_exprs tys EqStringPrimOp
                 case matchString of
-                  Left expr -> return expr
+                  Left exprTy -> return exprTy
                   Right err -> error $ err
 
      nonoverloaded elab_op_locs elab_op_tys elab_exprs tys  op =

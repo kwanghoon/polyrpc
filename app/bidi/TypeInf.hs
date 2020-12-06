@@ -23,6 +23,10 @@ import Pretty
 
 import Debug.Trace
 
+-- Todo
+--   1. Apply context to term to replace all occurrences of alpha^ by some type.
+--   2. Adjust elabType and elabLocation to this framework. 
+
 type TIMonad = ExceptT String (State NameState) -- 'ExceptT String NameGen'
 
 -- typeInf :: Monad m => [TopLevelDecl] -> m (GlobalTypeInfo, [TopLevelDecl])
@@ -776,10 +780,6 @@ typesynthExpr_ gti gamma loc expr@(Var x)
         Just x_ty -> return ( x_ty, gamma, expr )
         Nothing -> (throwError $ "typesynth: not in scope " ++ pretty (expr, gamma))
 
--- Lit
-typesynthExpr_ gti gamma loc expr@(Lit literal) =
-  return (typeOfLiteral literal, gamma, Lit literal)
-
 -- Anno
 -- typesynthExpr_ gti gamma loc expr@(EAnno e a) = do
 --   (delta, e') <- typecheck gamma loc e a
@@ -829,6 +829,61 @@ typesynthExpr_ gti gamma loc expr@(LocApp e maybeTy locs) = do
   (a, theta, e') <- typesynthExpr gti gamma loc e
   (b, delta, transformFun) <- locsapplysynth gti theta loc (apply theta a) locs
   return (b, delta, LocApp (transformFun e) (Just a) locs)
+
+-- Prim
+{- Note that we safely assume that op_tys is explicitly given.
+
+   Two groups of primitives:
+    (1) +, -, *, /, <, <=, >, >=, !=, read, print, intoToString, concat  (cf. not???)
+    (2) !, :=, ref
+
+   In (1), no type argumnet is required.
+
+   In (2), the surface language does not use PrimRefCreateOp, but it uses !
+   (!) is a wrapper of PrimRefCreateOp, and it explicitly provides type arguments.
+-}
+typesynthExpr_ gti gamma loc expr@(Prim op op_locs@[] op_tys@[] exprs) =
+  typesynthExpr_ gti gamma loc (Prim op [loc] op_tys exprs)
+
+typesynthExpr_ gti gamma loc expr@(Prim op op_locs op_tys exprs) =
+  case op of
+    EqIntPrimOp -> overloadedEq op_locs op_tys exprs -- EqIntPrimOpt By default by Parser!!
+    _ -> nonoverloaded op_locs op_tys exprs op
+    
+  where
+    overloadedEq locs tys exprs =
+      (catchError (nonoverloaded locs tys exprs EqIntPrimOp) (\err ->
+         (catchError (nonoverloaded locs tys exprs EqBoolPrimOp) (\err ->
+            (catchError (nonoverloaded locs tys exprs EqStringPrimOp) (\err ->                       throwError $ "[TypeInf] typesynthExpr: No overloaded match:" ++ show op))))))
+    
+    nonoverloaded locs tys exprs op =
+      case lookupPrimOpType op of
+        ((locvars, tyvars, argtys, retty):_) ->
+          if length locvars==length locs
+             && length tyvars==length tys
+             && length argtys==length exprs
+          then do
+            let substLoc = zip locvars locs
+            let substTy  = zip tyvars tys
+            let substed_argtys = map (doSubstLoc substLoc . doSubst substTy) argtys
+            let substed_retty = doSubstLoc substLoc . doSubst substTy $ retty
+            (gamma0, exprs0) <-
+               foldM (\ (gamma',exprs') (ty',expr') -> do
+                 (gamma'', expr'') <- typecheckExpr gti gamma' loc expr' (apply gamma' ty')
+                 return (gamma'', exprs'++[expr'']) )
+                    (gamma,[]) (zip substed_argtys exprs)
+            return (apply gamma0 substed_retty, gamma0, Prim op op_locs op_tys exprs0)
+            
+              
+          else throwError $ "[TypeInf] typesynthExpr: incorrect arg locations/types in Prim: " ++ show op
+          
+        [] -> throwError $ "[TypeInf] typesynthExpr: type not found in Prim op: " ++ show op
+      
+
+  
+-- Lit
+typesynthExpr_ gti gamma loc expr@(Lit literal) =
+  return (typeOfLiteral literal, gamma, Lit literal)
 
 typesynthExpr_ gti gamma loc expr = do
   throwError $ "typesynth: not implemented yet"
