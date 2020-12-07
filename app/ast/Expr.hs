@@ -393,13 +393,14 @@ instance Pretty Expr where
       fa (last alts) .
       showString " } "
       where
-        fa (Alternative c xs e) =
-          showString c . showString " " .
-          showVars xs . showString " -> " .
-          bpretty 0 e 
-        fa (TupleAlternative xs e) =
-          showTuple xs . showString " -> ".
-          bpretty 0 e
+        fa alt = bpretty 0 alt
+        -- fa (Alternative c xs e) =
+        --   showString c . showString " " .
+        --   showVars xs . showString " -> " .
+        --   bpretty 0 e 
+        -- fa (TupleAlternative xs e) =
+        --   showTuple xs . showString " -> ".
+        --   bpretty 0 e
           
     App e1 maybeTy e2 maybeLoc -> showParen (d > app_prec) $    
       bpretty app_prec e1 . showString " " . bpretty (app_prec + 1) e2
@@ -424,7 +425,17 @@ instance Pretty Expr where
       app_prec  = 10
       anno_prec = 1
 
-      
+instance Pretty Alternative where
+  bpretty d (Alternative con args expr) =
+    showString con . showString " " .
+    showVars args . showString " -> " .
+    bpretty 0 expr
+    
+  bpretty d (TupleAlternative args expr) =
+    showTuple args . showString " -> ".
+    bpretty 0 expr
+  
+  
 --     EApp e1 e2   -> showParen (d > app_prec) $
 --       bpretty app_prec e1 . showString " " . bpretty (app_prec + 1) e2
 --     ELocApp e loc   -> showParen (d > app_prec) $

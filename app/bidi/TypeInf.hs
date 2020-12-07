@@ -762,7 +762,7 @@ typecheckExpr_ gti gamma loc e b = do
 --   typesynth Γ loc e = (A, Δ) <=> Γ |- e => A -| Δ
 typesynthExpr :: GlobalTypeInfo -> Context -> Location -> Expr -> TIMonad (Type, Context, Expr)
 typesynthExpr gti gamma loc expr =
-  traceNS "typesynth" (gamma, loc, expr) $ checkwf gamma $
+  traceNS "typesynthExpr" (gamma, loc, expr) $ checkwf gamma $
   typesynthExpr_ gti gamma loc expr
 
 -- Var
@@ -833,6 +833,27 @@ typesynthExpr_ gti gamma loc (Let letBindingDecls expr) = do
     
   return (letty, delta, Let letBindingDecls' expr')
 
+-- Case
+typesynthExpr_ gti gamma loc (Case expr _ []) = 
+  throwError $ "[TypeInf] typesynthExpr: empty alternatives"
+
+-- typesynthExpr_ gti gamma loc (Case expr _ alts) = do
+--   (elab_caseexpr, casety) <- elabExpr gti env loc expr
+--   case casety of
+--     ConType tyconName locs tys ->
+--       case lookupDataTypeName gti tyconName of
+--         ((locvars, tyvars, tycondecls):_) -> do
+--           (elab_alts, altty) <- elabAlts gti env loc locs locvars tys tyvars tycondecls alts
+--           return (Case elab_caseexpr (Just casety) elab_alts, altty)
+--         [] -> error $ "[TypeCheck] elabExpr: invalid constructor type: " ++ tyconName
+
+--     TupleType tys -> do
+--       (elab_alts, altty) <- elabAlts gti env loc [] [] tys [] [] alts
+--       return (Case elab_caseexpr (Just casety) elab_alts, altty)
+
+--     _ -> error $ "[TypeCheck] elabExpr: case expr not constructor type"
+
+  
 -- ->E
 typesynthExpr_ gti gamma loc expr@(App e1 maybeTy e2 maybeLoc) = do
   (a, theta, e1') <- typesynthExpr gti gamma loc e1
@@ -916,6 +937,31 @@ typesynthExpr_ gti gamma loc expr = do
   throwError $ "typesynth: not implemented yet"
 
 
+-- | Type synthesising:
+--   typesynthAlt Γ loc alt = (D B, A, Δ) <=> Γ |- alt => D B, A -| Δ
+typesynthAlt gti gamma loc alt =
+  traceNS "typesynthAlt" (gamma, loc, alt) $ checkwf gamma $
+  typesynthAlt_ gti gamma loc alt 
+
+-- Tuple alternative
+typesynthAlt_ gti gamma loc (TupleAlternative args expr) = do
+  alphas <- lift $ replicateM (length args) freshExistsTypeVar
+  beta   <- lift $ freshExistsTypeVar
+  (delta, expr')
+     <- typecheckExpr gti
+          (gamma >++ map CExists alphas
+                 >++ [CExists beta]
+                 >++ [ CVar arg (TypeVarType alpha)
+                     | (arg, alpha) <- zip args alphas ])
+          loc expr (TypeVarType beta)
+  return (TupleType (map TypeVarType alphas), beta, delta, TupleAlternative args expr')
+
+-- Data constructor alternative
+typesynthAlt_ gti gamma loc (Alternative con args expr) =
+  throwError $ "typesynthAlt: not implemented yet"
+
+
+  
 -- | Type application synthesising
 --   typeapplysynth Γ loc A e = (C, Δ) <=> Γ |- A . e =>> C -| Δ
 typeapplysynth :: GlobalTypeInfo -> Context -> Location -> Type -> Expr
