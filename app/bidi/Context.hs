@@ -58,6 +58,12 @@ singleoutMarker :: ContextElem a -> GContext a -> GContext a
 singleoutMarker m (Context gamma) = 
   let (Context l, Context r) = breakMarker m (Context gamma) in (Context (l++r))
 
+typeVars :: GContext a -> [TypeVar]
+typeVars (Context gamma) = [ alpha | CForall alpha <- gamma ]
+
+locVars :: GContext a -> [LocationVar]
+locVars (Context gamma) = [ l | CLForall l <- gamma ]
+
 instance Monoid (GContext a) where
   mempty = Context []
   mappend (Context gamma) (Context delta) = Context (delta ++ gamma)

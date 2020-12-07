@@ -818,6 +818,21 @@ typesynthExpr_ gti gamma loc expr@(LocAbs locvars e) = do
                        (singleoutMarker (CLForall l') delta0)) delta ls'
          , LocAbs locvars e')
 
+-- Let
+typesynthExpr_ gti gamma loc (Let letBindingDecls expr) = do 
+  let typeInfo = _typeInfo gti
+  partial_elab_letBindingDecls
+     <- elabBindingTypes typeInfo (typeVars gamma) (locVars gamma) letBindingDecls
+  let gti1 = gti
+  (gamma', letBindingDecls') <- bidi gti1 gamma loc partial_elab_letBindingDecls
+
+  letBindingTypeInfo <- bindingTypes partial_elab_letBindingDecls -- for let body
+
+  (letty, delta, expr') <-
+    typesynthExpr gti (gamma >++ map (uncurry CVar) letBindingTypeInfo) loc expr
+    
+  return (letty, delta, Let letBindingDecls' expr')
+
 -- ->E
 typesynthExpr_ gti gamma loc expr@(App e1 maybeTy e2 maybeLoc) = do
   (a, theta, e1') <- typesynthExpr gti gamma loc e1
@@ -863,7 +878,8 @@ typesynthExpr_ gti gamma loc expr@(Prim op op_locs op_tys exprs) =
     overloadedEq locs tys exprs =
       (catchError (nonoverloaded locs tys exprs EqIntPrimOp) (\err ->
          (catchError (nonoverloaded locs tys exprs EqBoolPrimOp) (\err ->
-            (catchError (nonoverloaded locs tys exprs EqStringPrimOp) (\err ->                       throwError $ "[TypeInf] typesynthExpr: No overloaded match:" ++ show op))))))
+            (catchError (nonoverloaded locs tys exprs EqStringPrimOp) (\err ->
+               throwError $ "[TypeInf] typesynthExpr: No overloaded match:" ++ show op))))))
     
     nonoverloaded locs tys exprs op =
       case lookupPrimOpType op of
