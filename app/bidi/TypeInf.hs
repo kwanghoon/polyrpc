@@ -957,9 +957,13 @@ typesynthAlt_ gti gamma loc (TupleAlternative args expr) = do
   return (TupleType (map TypeVarType alphas), beta, delta, TupleAlternative args expr')
 
 -- Data constructor alternative
-typesynthAlt_ gti gamma loc (Alternative con args expr) =
-  throwError $ "typesynthAlt: not implemented yet"
-
+-- typesynthAlt_ gti gamma loc (Alternative con args expr) = do
+--   case lookupCon tycondecls con of
+--     (tys:_) ->
+--       if length tys==length args
+--       then 
+--       else throwError $ "[TypeInf] typesynthAlt: invalid arg length: " ++ con ++ show args
+--     [] -> throwError $ "[TypeInf] typesynthAlt: constructor not found" ++ con
 
   
 -- | Type application synthesising

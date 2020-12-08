@@ -60,6 +60,24 @@ lookupDataTypeName gti x = [info | (y,info) <- _dataTypeInfo gti, x==y]
 lookupCon tycondecls con =
   [tys | (conname, tys) <- tycondecls, con==conname]
 
+--
+-- Given a constructor name, this returns its type.
+--
+lookupConFromDataTypeInfo :: GlobalTypeInfo -> String -> Location -> [Type]
+lookupConFromDataTypeInfo gti con loc =
+  [ LocAbsType locvars
+     (TypeAbsType tyvars
+      (mkFunType tys loc
+       (ConType datatypeName
+        (map LocVar locvars)
+        (map TypeVarType tyvars))))
+  | (datatypeName, (locvars, tyvars, info)) <- _dataTypeInfo gti
+  , (con',  tys) <- info, con==con' ]
+    
+
+mkFunType :: [Type] -> Location -> Type -> Type
+mkFunType [] loc retty = retty
+mkFunType (ty:tys) loc retty = FunType ty loc (mkFunType tys loc retty)
 
 --
 singleTypeAbs (TypeAbs [] expr) = expr
