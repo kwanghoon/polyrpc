@@ -36,6 +36,9 @@ singleLocAbsType (LocAbsType [a] expr) = LocAbsType [a] expr
 singleLocAbsType (LocAbsType (a:as) expr) = LocAbsType [a] (singleLocAbsType (LocAbsType as expr))
 singleLocAbsType other = other
 
+mkFunType :: [Type] -> Location -> Type -> Type
+mkFunType [] loc retty = retty
+mkFunType (ty:tys) loc retty = FunType ty loc (mkFunType tys loc retty)
 
 --
 -- For aeson

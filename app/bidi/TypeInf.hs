@@ -954,16 +954,37 @@ typesynthAlt_ gti gamma loc (TupleAlternative args expr) = do
                  >++ [ CVar arg (TypeVarType alpha)
                      | (arg, alpha) <- zip args alphas ])
           loc expr (TypeVarType beta)
-  return (TupleType (map TypeVarType alphas), beta, delta, TupleAlternative args expr')
+  return (TupleType (map TypeVarType alphas)
+         , TypeVarType beta, delta, TupleAlternative args expr')
 
 -- Data constructor alternative
--- typesynthAlt_ gti gamma loc (Alternative con args expr) = do
---   case lookupCon tycondecls con of
---     (tys:_) ->
---       if length tys==length args
---       then 
---       else throwError $ "[TypeInf] typesynthAlt: invalid arg length: " ++ con ++ show args
---     [] -> throwError $ "[TypeInf] typesynthAlt: constructor not found" ++ con
+typesynthAlt_ gti gamma loc (Alternative con args expr) = do
+  case lookupConFromDataTypeInfo gti con loc of
+    ((locvars,tyvars,argtys,datatypename):_) ->
+      if length argtys==length args
+      then do
+        ls <- lift $ replicateM (length locvars) freshExistsLocationVar
+        alphas <- lift $ replicateM (length locvars) freshExistsTypeVar
+        
+        let substLoc = zip locvars (map LocVar ls)
+        let substTy = zip tyvars (map TypeVarType alphas)
+
+        let substedArgtys = map (doSubst substTy . doSubstLoc substLoc) argtys
+        let substedRetty =
+              doSubst substTy $ doSubstLoc substLoc
+                 $ ConType datatypename (map LocVar locvars) (map TypeVarType tyvars)
+
+        (gamma', expr') <-
+          typecheckExpr gti
+            (gamma >++ map CExists alphas >++ map CLExists ls)
+               loc expr substedRetty
+
+        return (ConType datatypename (map LocVar ls) (map TypeVarType alphas)
+               , substedRetty, gamma', Alternative con args expr')
+        
+      else throwError $ "[TypeInf] typesynthAlt: invalid arg length: " ++ con ++ show args
+      
+    [] -> throwError $ "[TypeInf] typesynthAlt: constructor not found" ++ con
 
   
 -- | Type application synthesising

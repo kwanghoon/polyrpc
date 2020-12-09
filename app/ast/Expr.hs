@@ -5,7 +5,8 @@ module Expr(Expr(..), ExprVar, AST(..), BindingDecl(..), DataTypeDecl(..)
   , TopLevelDecl(..), TypeConDecl(..), Alternative(..)
   , TypeInfo, ConTypeInfo, BindingTypeInfo, DataTypeInfo
   , GlobalTypeInfo(..), Env(..)
-  , lookupConstr, lookupCon, lookupDataTypeName, lookupPrimOpType
+  , lookupConstr, lookupCon, lookupDataTypeName
+  , lookupConFromDataTypeInfo, lookupPrimOpType
   , mainName, primOpTypes
   , singleTypeAbs, singleLocAbs, singleAbs
   , singleTypeApp, singleLocApp
@@ -63,21 +64,13 @@ lookupCon tycondecls con =
 --
 -- Given a constructor name, this returns its type.
 --
-lookupConFromDataTypeInfo :: GlobalTypeInfo -> String -> Location -> [Type]
+lookupConFromDataTypeInfo :: GlobalTypeInfo -> String -> Location ->
+  [([LocationVar], [ExprVar], [Type], String)]
 lookupConFromDataTypeInfo gti con loc =
-  [ LocAbsType locvars
-     (TypeAbsType tyvars
-      (mkFunType tys loc
-       (ConType datatypeName
-        (map LocVar locvars)
-        (map TypeVarType tyvars))))
+  [ (locvars, tyvars, tys, datatypeName)
   | (datatypeName, (locvars, tyvars, info)) <- _dataTypeInfo gti
   , (con',  tys) <- info, con==con' ]
     
-
-mkFunType :: [Type] -> Location -> Type -> Type
-mkFunType [] loc retty = retty
-mkFunType (ty:tys) loc retty = FunType ty loc (mkFunType tys loc retty)
 
 --
 singleTypeAbs (TypeAbs [] expr) = expr
