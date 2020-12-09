@@ -834,25 +834,10 @@ typesynthExpr_ gti gamma loc (Let letBindingDecls expr) = do
   return (letty, delta, Let letBindingDecls' expr')
 
 -- Case
-typesynthExpr_ gti gamma loc (Case expr _ []) = 
-  throwError $ "[TypeInf] typesynthExpr: empty alternatives"
-
--- typesynthExpr_ gti gamma loc (Case expr _ alts) = do
---   (elab_caseexpr, casety) <- elabExpr gti env loc expr
---   case casety of
---     ConType tyconName locs tys ->
---       case lookupDataTypeName gti tyconName of
---         ((locvars, tyvars, tycondecls):_) -> do
---           (elab_alts, altty) <- elabAlts gti env loc locs locvars tys tyvars tycondecls alts
---           return (Case elab_caseexpr (Just casety) elab_alts, altty)
---         [] -> error $ "[TypeCheck] elabExpr: invalid constructor type: " ++ tyconName
-
---     TupleType tys -> do
---       (elab_alts, altty) <- elabAlts gti env loc [] [] tys [] [] alts
---       return (Case elab_caseexpr (Just casety) elab_alts, altty)
-
---     _ -> error $ "[TypeCheck] elabExpr: case expr not constructor type"
-
+typesynthExpr_ gti gamma loc (Case expr _ alts) = do
+  (ty1, ty2, gamma0, alts') <- typesynthAlts gti gamma loc alts
+  (gamma', expr') <- typecheckExpr gti gamma0 loc expr ty1
+  return (ty2, gamma', Case expr' (Just ty1) alts')
   
 -- ->E
 typesynthExpr_ gti gamma loc expr@(App e1 maybeTy e2 maybeLoc) = do
@@ -937,8 +922,34 @@ typesynthExpr_ gti gamma loc expr = do
   throwError $ "typesynth: not implemented yet"
 
 
--- | Type synthesising:
---   typesynthAlt Γ loc alt = (D B, A, Δ) <=> Γ |- alt => D B, A -| Δ
+-- | Alternative synthesising:
+--   typesynthAlt Γ loc alts = (D B, A, Δ) <=> Γ |- alt => D B, A -| Δ
+typesynthAlts :: GlobalTypeInfo -> Context -> Location -> [Alternative] -> TIMonad (Type, Type, Context, [Alternative])
+typesynthAlts gti gamma loc alts =
+  traceNS "typesynthAlts" (gamma, loc, alts) $ checkwf gamma $
+  if valid alts then typesynthAlts_ gti gamma loc alts
+  else throwError $ "[TypeInf] typesynthAlts: invalid alternatives"
+  
+  where
+    valid alts = oneTupleAlt alts || conAlts alts
+    
+    oneTupleAlt [TupleAlternative _ _] = True
+    oneTupleAlt _ = False
+
+    conAlts [] = False   -- Having an empty alternative is error!!
+    conAlts [Alternative _ _ _] = True
+    conAlts ((Alternative _ _ _):alts) = conAlts alts
+
+typesynthAlts_ :: GlobalTypeInfo -> Context -> Location -> [Alternative] -> TIMonad (Type, Type, Context, [Alternative])
+typesynthAlts_ gti gamma loc (alt:alts) = do  -- Always more than zero!
+  (ty,ty',gamma',alt') <- typesynthAlt gti gamma loc alt
+  foldM (\ (ty0,ty0',gamma0,alts0) alt0 -> do
+           (ty1,ty1',gamma1,alt1) <- typesynthAlt gti gamma0 loc alt0
+           gamma2 <- subtype gamma1 ty0  ty1
+           gamma3 <- subtype gamma2 ty0' ty1'
+           return (ty1, ty1', gamma3, alts0++[alt1])
+        ) (ty,ty',gamma',[alt']) alts
+
 typesynthAlt gti gamma loc alt =
   traceNS "typesynthAlt" (gamma, loc, alt) $ checkwf gamma $
   typesynthAlt_ gti gamma loc alt 
