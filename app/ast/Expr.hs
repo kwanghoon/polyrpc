@@ -577,6 +577,7 @@ locExprSubst loc' l (Constr c locs tys es argTys) =
             (fmap (locSubst loc' l) argTys)
 
 
+locExprSubsts :: [Location] -> [LocationVar] -> Expr -> Expr
 locExprSubsts locs' ls e =
   foldl (\ e0 (loc', l) -> locExprSubst loc' l e0) e (zip locs' ls)
 
