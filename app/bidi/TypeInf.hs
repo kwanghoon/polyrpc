@@ -24,8 +24,11 @@ import Pretty
 import Debug.Trace
 
 -- Todo
---   1. Apply context to term to replace all occurrences of alpha^ by some type.
---   2. Adjust elabType and elabLocation to this framework. 
+--   1. Apply context to term to replace all occurrences of alpha^ by
+--      some type.
+--   2. Apply elabType in type declarations of let bindings [Done]
+--   3. Apply elabLocation in the use of locations at expressions and
+--      type declarations [Done]
 
 type TIMonad = ExceptT String (State NameState) -- 'ExceptT String NameGen'
 
@@ -735,18 +738,20 @@ typecheckExpr_ gti gamma loc (Abs [] e) a = do
   typecheckExpr_ gti gamma loc e a
 
 typecheckExpr_ gti gamma loc (Abs [(x,mty,loc0)] e) (FunType a loc' b) = do
+  loc0' <- elabLocation (locVars gamma) loc0
   x' <- lift $ freshVar
-  gamma0 <- subloc gamma loc' loc0
+  gamma0 <- subloc gamma loc' loc0'
   (gamma1, e') <- mapFst (dropMarker (CVar x' a)) <$>
-        typecheckExpr_ gti (gamma0 >: CVar x' a) loc0 (subst (Var x') x e) b
-  return (gamma1, Abs [(x,mty, loc0)] e')
+        typecheckExpr_ gti (gamma0 >: CVar x' a) loc0' (subst (Var x') x e) b
+  return (gamma1, Abs [(x,mty, loc0')] e')
 
 typecheckExpr_ gti gamma loc (Abs ((x,mty,loc0):xmtyls) e) (FunType a loc' b) = do
+  loc0' <- elabLocation (locVars gamma) loc0
   x' <- lift $ freshVar
-  gamma0 <- subloc gamma loc' loc0
+  gamma0 <- subloc gamma loc' loc0'
   (gamma1, e') <- mapFst (dropMarker (CVar x' a)) <$>
-      typecheckExpr_ gti (gamma0 >: CVar x' a) loc0 (subst (Var x') x (Abs xmtyls e)) b
-  return (gamma1, Abs [(x,mty,loc0)] e')
+      typecheckExpr_ gti (gamma0 >: CVar x' a) loc0' (subst (Var x') x (Abs xmtyls e)) b
+  return (gamma1, Abs [(x,mty,loc0')] e')
 
 -- Sub
 typecheckExpr_ gti gamma loc e b = do
@@ -790,7 +795,7 @@ typesynthExpr_ gti gamma loc expr@(Abs xmtyls e) = do
   xs'    <- lift $ replicateM (length xmtyls) freshVar
   alphas <- lift $ replicateM (length xmtyls) freshExistsTypeVar
   beta   <- lift $ freshExistsTypeVar
-  let locs = map thd3 xmtyls
+  locs <- mapM (elabLocation (locVars gamma)) $ map thd3 xmtyls
   let xs = map fst3 xmtyls
   (gamma', e') <- mapFst (dropMarker (CVar (last xs') (TypeVarType (last alphas)))) <$>
      typecheckExpr gti
@@ -846,7 +851,8 @@ typesynthExpr_ gti gamma loc expr@(App e1 maybeTy e2 maybeLoc) = do
   return (ty2, delta, App (transformFun e1) (Just a) e2 (Just loc0))
 
 -- forall_l E
-typesynthExpr_ gti gamma loc expr@(LocApp e maybeTy locs) = do
+typesynthExpr_ gti gamma loc expr@(LocApp e maybeTy locs0) = do
+  locs <- mapM (elabLocation (locVars gamma)) locs0
   (a, theta, e') <- typesynthExpr gti gamma loc e
   (b, delta, transformFun) <- locsapplysynth gti theta loc (apply theta a) locs
   return (b, delta, LocApp (transformFun e) (Just a) locs)

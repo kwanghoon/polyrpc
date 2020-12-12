@@ -53,6 +53,18 @@ data Expr =
 --  deriving (Show, Generic)
   deriving (Show, Typeable, Data)
 
+--------------------------------------------------------------------
+-- On location annotations:
+--------------------------------------------------------------------
+-- In Abs, the location is given by programmers.
+-- In App, the location is inferred automatically.  
+-- In LocApp, the locations are given by programmers.
+-- In Prim, locations in primitives except (ref), (!), and (:=) are
+--    set with the current location. For (ref), (!), and (:=), the
+--    location is given through LocApp by programmers.
+-- In Constr, the locations are given through LocApp by programmers.
+--------------------------------------------------------------------
+
 type ExprVar = String
 
 --
