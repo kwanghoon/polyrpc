@@ -723,7 +723,7 @@ typecheckExpr_ gti gamma loc e (TypeAbsType alphas a) = do
   (gamma', e') <- mapFst (dropMarker (CForall (head alphas'))) <$>
        typecheckExpr gti (gamma >++ map CForall alphas') loc e
           (typeSubsts (map TypeVarType alphas') alphas a)
-  return (gamma', TypeAbs alphas' e')
+  return (gamma', TypeAbs alphas (tyExprSubsts (map TypeVarType alphas) alphas' e'))
 
 -- LForallI
 typecheckExpr_ gti gamma loc (LocAbs ls0 e) (LocAbsType ls1 a) = do

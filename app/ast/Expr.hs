@@ -21,7 +21,7 @@ module Expr(Expr(..), ExprVar, AST(..), BindingDecl(..), DataTypeDecl(..)
   , toASTIdTypeLocSeq, toASTIdTypeLoc
   , toASTAlternativeSeq, toASTAlternative
   , toASTTriple, toASTLit
-  , subst, substs, locExprSubst, locExprSubsts
+  , subst, substs, tyExprSubst, tyExprSubsts, locExprSubst, locExprSubsts
   ) where
 
 import Location
@@ -515,6 +515,66 @@ subst e' x (Constr c locs tys es argtys) =
 
 substs es' xs' e = 
   foldl (\ e0 (e',x) -> subst e' x e0) e (zip es' xs')
+
+-- | tyExprSubst ty alpha e = [ty/alpha]e
+tyExprSubst :: Type -> TypeVar -> Expr -> Expr
+tyExprSubst ty' alpha (Var y) = Var y
+
+tyExprSubst ty' alpha (TypeAbs xs e)
+  | alpha `elem` xs = (TypeAbs xs e)
+  | otherwise = TypeAbs xs (tyExprSubst ty' alpha e)
+
+tyExprSubst ty' alpha (LocAbs xs e) = LocAbs xs (tyExprSubst ty' alpha e)
+
+tyExprSubst ty' alpha (Abs vTyLocs e) =
+  Abs (fmap ftriple vTyLocs) (tyExprSubst ty' alpha e)
+  where
+    ftriple (x, maybeTy, loc) =
+      (x, fmap (doSubstOne alpha ty') maybeTy, loc)
+
+tyExprSubst ty' alpha (Let bindingDecls e) =
+  Let (fmap f bindingDecls) (tyExprSubst ty' alpha e)
+  where
+    f (Binding b x ty e) =
+      Binding b x (doSubstOne alpha ty' ty) (tyExprSubst ty' alpha e)
+
+tyExprSubst ty' alpha (Case e maybety alts) =
+  Case (tyExprSubst ty' alpha e) (fmap (doSubstOne alpha ty') maybety) (fmap f alts)
+  where
+    f (Alternative c xs e) = Alternative c xs (tyExprSubst ty' alpha e)
+    f (TupleAlternative xs e) = TupleAlternative xs (tyExprSubst ty' alpha e)
+
+tyExprSubst ty' alpha (App e1 maybety e2 maybeloc) =
+  App (tyExprSubst ty' alpha e1)
+    (fmap (doSubstOne alpha ty') maybety)
+      (tyExprSubst ty' alpha e2) maybeloc
+
+tyExprSubst ty' alpha (TypeApp e maybety tys) =
+  TypeApp (tyExprSubst ty' alpha e)
+    (fmap (doSubstOne alpha ty') maybety)
+       (fmap (doSubstOne alpha ty') tys)
+
+tyExprSubst ty' alpha (LocApp e maybety locs) =
+  LocApp (tyExprSubst ty' alpha e)
+    (fmap (doSubstOne alpha ty') maybety) locs
+
+tyExprSubst ty' alpha (Tuple es) = Tuple (fmap (tyExprSubst ty' alpha) es)
+
+tyExprSubst ty' alpha (Prim p locs tys es) =
+  Prim p locs
+    (fmap (doSubstOne alpha ty') tys)
+      (fmap (tyExprSubst ty' alpha) es)
+
+tyExprSubst ty' alpha (Lit lit) = Lit lit
+
+tyExprSubst ty' alpha (Constr c locs tys es argtys) =
+  Constr c locs
+    (fmap (doSubstOne alpha ty') tys)
+      (fmap (tyExprSubst ty' alpha) es)
+        (fmap (doSubstOne alpha ty') argtys)
+
+tyExprSubsts tys' alphas' e = 
+  foldl (\ e0 (ty',alpha) -> tyExprSubst ty' alpha e0) e (zip tys' alphas')
 
 -- | locExprSubst loc l e = [loc/l]e
 locExprSubst loc' l (Var v) = Var v
