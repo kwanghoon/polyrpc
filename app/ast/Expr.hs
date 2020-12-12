@@ -383,11 +383,11 @@ lookupPrimOpType primop =
 -----
 instance Pretty Expr where
   bpretty d expr = case expr of
-    Var v       -> bpretty d v
+    Var v       -> showString v
     TypeAbs vs e -> showParen (d > abs_prec) $
-      showTyVars vs . showString ". " . bpretty abs_prec e
+      showWithSpace vs . showString ". " . bpretty abs_prec e
     LocAbs ls e -> showParen (d > abs_prec) $
-      showLocVars ls . showString ". " . bpretty abs_prec e
+      showWithSpace ls . showString ". " . bpretty abs_prec e
     Abs varMaybeTyLocs e -> showParen (d >abs_prec) $
       showString "\\" . showVarMaybeTyLocs varMaybeTyLocs .
       showString ". " . bpretty abs_prec e
@@ -402,7 +402,7 @@ instance Pretty Expr where
       showString "end"
       where
          fb (Binding istop x ty e) =
-           showString x . showString " : " .
+           showString (x ++ " : ") .
            bpretty 0 ty . showString " = " .
            bpretty 0 e
 
@@ -451,13 +451,15 @@ instance Pretty Expr where
 instance Pretty Alternative where
   bpretty d (Alternative con args expr) =
     showString con . showString " " .
-    showVars args . showString " -> " .
+    showWithSpace args . showString " -> " .
     bpretty 0 expr
     
   bpretty d (TupleAlternative args expr) =
-    showTuple args . showString " -> ".
-    bpretty 0 expr
-  
+    showString "(" . showWithSpace args . showString ")"
+    . showString " -> ". bpretty 0 expr
+
+instance Pretty BindingDecl where
+  bpretty d _ = showString ""
   
 --     EApp e1 e2   -> showParen (d > app_prec) $
 --       bpretty app_prec e1 . showString " " . bpretty (app_prec + 1) e2

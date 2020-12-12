@@ -84,4 +84,10 @@ showTuple_ deli (x:xs) = bpretty 0 x . showString deli . showTuple_ deli xs
 showSpace True f  = showString " " . f . showString " "
 showSpace False f = f
 
+showWith del [] = showString ""
+showWith del [x] = showString x
+showWith del (x:xs) = showString x . showString del . showWithComma xs
 
+showWithComma xs = showWith "," xs
+
+showWithSpace xs = showWith " " xs

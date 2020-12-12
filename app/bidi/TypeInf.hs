@@ -32,19 +32,24 @@ import Debug.Trace
 
 type TIMonad = ExceptT String (State NameState) -- 'ExceptT String NameGen'
 
--- typeInf :: Monad m => [TopLevelDecl] -> m (GlobalTypeInfo, [TopLevelDecl])
-typeInf :: Monad m => [TopLevelDecl] -> m ()
+typeInf :: Monad m => [TopLevelDecl] -> m (GlobalTypeInfo, [TopLevelDecl], [TopLevelDecl], [TopLevelDecl])
 typeInf toplevelDecls = do
   -- 1. split
   (bindingDecls, userDatatypes) <- splitTopLevelDecls toplevelDecls
 
-  let datatypeDecls = builtinDatatypes ++ userDatatypes
+  -- let datatypeDecls = builtinDatatypes ++ userDatatypes
+  let datatypeDecls0 = builtinDatatypes
+  let datatypeDecls1 = userDatatypes
+  let datatypeDecls = datatypeDecls0 ++ datatypeDecls1
 
   -- 2. collect all types, builtin or user-defined ones
   typeInfo <- collectDataTypeDecls datatypeDecls
 
   -- 3. elaborate data types
-  elab_datatypeDecls <- elabDataTypeDecls typeInfo datatypeDecls
+  -- elab_datatypeDecls <- elabDataTypeDecls typeInfo datatypeDecls
+  elab_datatypeDecls0 <- elabDataTypeDecls typeInfo datatypeDecls0
+  elab_datatypeDecls1 <- elabDataTypeDecls typeInfo datatypeDecls1
+  let elab_datatypeDecls = elab_datatypeDecls0 ++ elab_datatypeDecls1
   dataTypeInfo <- collectDataTypeInfo elab_datatypeDecls
 
   -- 4. elaborate constructor types
@@ -83,14 +88,16 @@ typeInf toplevelDecls = do
           Right (_,x) -> x
 
   -- 7. return elaborated data types and bindings
-  -- let elab_toplevels = [ LibDeclTopLevel x ty | (x,ty) <- basicLibTypeInfo]
-  --                      ++ [ DataTypeTopLevel dt | dt <- elab_datatypeDecls]
-  --                      ++ [ BindingTopLevel bd | bd <- elab_bindingDecls]
+  let lib_toplevels = [ LibDeclTopLevel x ty | (x,ty) <- basicLibTypeInfo]
+  let elab_toplevels0 =
+        [ DataTypeTopLevel dt | dt <- elab_datatypeDecls0]
+  let elab_toplevels1 =
+        [ DataTypeTopLevel dt | dt <- elab_datatypeDecls1]
+        ++ [ BindingTopLevel bd | bd <- elab_bindingDecls]
 
-  -- let gti1 = gti {_bindingTypeInfo=basicLibTypeInfo ++ bindingTypeInfo}
+  let gti1 = gti {_bindingTypeInfo=basicLibTypeInfo ++ bindingTypeInfo}
 
-  -- return (gti1, elab_toplevels)
-  return ()
+  return (gti1, elab_toplevels1, elab_toplevels0, lib_toplevels)
 
 ----------------------------------------------------------------------------
 -- 1. Split toplevel declarations into datatypes and bindings
@@ -797,7 +804,7 @@ typesynthExpr_ gti gamma loc expr@(Abs xmtyls e) = do
   beta   <- lift $ freshExistsTypeVar
   locs <- mapM (elabLocation (locVars gamma)) $ map thd3 xmtyls
   let xs = map fst3 xmtyls
-  let funty = foldr (\ (loc, alpha) ty0 -> FunType (TypeVarType alpha) loc ty0)
+  let funty = foldr (\ (loc0, alpha0) ty0 -> FunType (TypeVarType alpha0) loc0 ty0)
                 (TypeVarType beta) (zip locs alphas)
   (gamma', e') <- typecheckExpr gti
                     (gamma >++ map CExists alphas
@@ -822,7 +829,8 @@ typesynthExpr_ gti gamma loc expr@(LocAbs locvars e) = do
          , foldl (\ delta0 l' ->
                      singleoutMarker (CLMarker l')
                        (singleoutMarker (CLForall l') delta0)) delta ls'
-         , LocAbs locvars (locExprSubsts (map LocVar locvars) ls' e'))
+         , singleLocAbs $
+           LocAbs locvars (locExprSubsts (map LocVar locvars) ls' e'))
 
 -- Let
 typesynthExpr_ gti gamma loc (Let letBindingDecls expr) = do 

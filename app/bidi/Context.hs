@@ -257,29 +257,34 @@ lordered gamma l1 l2 =
       
 -- Pretty
 instance Pretty (GContext a) where
-  bpretty d (Context xs) = bpretty d $ reverse xs
+  bpretty d (Context []) = showString "[" . showString "]"
+  bpretty d (Context xs) =
+    let ys = map (bpretty d) $ reverse xs in
+    showString "[" .
+    foldl (\f g -> f . showString ", " . g) (head ys) (tail ys) .
+    showString "]"
 
 instance Pretty (ContextElem a) where
   bpretty d cxte = case cxte of
-    CForall v  -> bpretty d v
+    CForall v  -> showString v
     CVar v t -> showParen (d > hastype_prec) $
-      bpretty (hastype_prec + 1) v . showString " : " . bpretty hastype_prec t
+      showString v . showString " : " . bpretty hastype_prec t
     CExists v -> showParen (d > exists_prec) $
-      showString "∃ " . bpretty exists_prec v
+      showString ("∃" ++ v)
     CExistsSolved v t -> showParen (d > exists_prec) $
-      showString "∃ " . bpretty exists_prec v .
+      showString ("∃" ++ v) .
       showString " = " . bpretty exists_prec t
     CMarker v -> showParen (d > app_prec) $
-      showString "▶ " . bpretty (app_prec + 1) v
+      showString "▶ " . showString v
 
-    CLForall l -> bpretty d l
+    CLForall l -> showString l
     CLExists l -> showParen (d > exists_prec) $
-      showString "∃ " . bpretty exists_prec l
+      showString ("∃" ++ l)
     CLExistsSolved l loc -> showParen (d > exists_prec) $
-      showString "∃ " . bpretty exists_prec l .
+      showString ("∃" ++ l) .
       showString " = " . bpretty exists_prec loc
     CLMarker l -> showParen (d > app_prec) $
-      showString "▶ " . bpretty (app_prec + 1) l
+      showString "▶ " . showString l
 
     where
       exists_prec = 1

@@ -227,8 +227,8 @@ instance Pretty Type where
     TypeVarType v ->
       if cExists v
       then showParen (d > exists_prec) $
-           showString "∃ " . bpretty exists_prec v
-      else bpretty d v
+           showString $ "∃" ++ v
+      else showString v
     TupleType tys ->
       showString "(" . showTuple tys . showString ")"
     FunType t1 loc t2 -> showParen (d > fun_prec) $
@@ -236,10 +236,10 @@ instance Pretty Type where
       showString " -" . bpretty d loc  . showString "-> " .
       bpretty fun_prec t2
     TypeAbsType vs t -> showParen (d > forall_prec) $
-      showString "∀ " . bpretty (forall_prec + 1) vs .
+      showString "∀" . showWithComma vs .
       showString ". "      . bpretty forall_prec t
     LocAbsType ls t -> showParen (d > forall_prec) $
-      showString "∀ " . bpretty (forall_prec + 1) ls .
+      showString "∀" . showWithComma ls .
       showString ". "      . bpretty forall_prec t
     ConType c ls tys ->
       showString c. showSpace (null ls) (showLocs ls). showTys tys

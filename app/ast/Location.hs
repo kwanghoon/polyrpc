@@ -74,8 +74,8 @@ doSubstLocOverLocs ((x,loc):substLoc) loc0 =
 instance Pretty Location where
   bpretty _ (Location locstr) = showString locstr
   bpretty d (LocVar lvar)
-    | clExists lvar = showString "∃ " . bpretty d lvar
-    | otherwise     = bpretty d lvar
+    | clExists lvar = showString $ "∃"++ lvar
+    | otherwise     = showString lvar
 
 
 --

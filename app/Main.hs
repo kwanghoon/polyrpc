@@ -61,7 +61,14 @@ doProcess cmd file = do
   let toplevelDecls = fromASTTopLevelDeclSeq exprSeqAst
 
   putStrLn "[Type checking bidirectionally]"
-  () <- typeInf toplevelDecls
+  (gti, elab_toplevelDecls1, elab_toplevelDecls0, lib_toplevelDecls) <- typeInf toplevelDecls
+
+  let elab_toplevelDecls = lib_toplevelDecls ++ elab_toplevelDecls0 ++ elab_toplevelDecls1
+  
+  verbose (_flag_debug_typecheck cmd) $ putStrLn "Dumping..."
+  verbose (_flag_debug_typecheck cmd) $ putStrLn $ show $ elab_toplevelDecls1
+
+  print_rpc cmd file elab_toplevelDecls1
 
 {-
   putStrLn "[Type checking]"
@@ -70,8 +77,9 @@ doProcess cmd file = do
   verbose (_flag_debug_typecheck cmd) $ putStrLn $ show $ elab_toplevelDecls
 
   print_rpc cmd file elab_toplevelDecls
+-}
 
-
+{-
   putStrLn "[Compiling]"
   (t_gti, funStore, t_expr) <- compile gti elab_toplevelDecls
   verbose (_flag_debug_compile cmd) $ putStrLn "Dumping...\nGlobal type information:\n"
