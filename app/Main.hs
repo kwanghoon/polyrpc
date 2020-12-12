@@ -60,7 +60,7 @@ doProcess cmd file = do
 
   let toplevelDecls = fromASTTopLevelDeclSeq exprSeqAst
 
-  putStrLn "[Type checking bidirectionally]"
+  putStrLn "[Bidirectional type checking]"
   (gti, elab_toplevelDecls1, elab_toplevelDecls0, lib_toplevelDecls) <- typeInf toplevelDecls
 
   let elab_toplevelDecls = lib_toplevelDecls ++ elab_toplevelDecls0 ++ elab_toplevelDecls1
