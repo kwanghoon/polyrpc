@@ -29,6 +29,7 @@ import Debug.Trace
 --   2. Apply elabType in type declarations of let bindings [Done]
 --   3. Apply elabLocation in the use of locations at expressions and
 --      type declarations [Done]
+--   4. elabExpr before typeInf !!
 
 type TIMonad = ExceptT String (State NameState) -- 'ExceptT String NameGen'
 
@@ -259,7 +260,7 @@ bidiBindingDecl gti gamma loc (Binding istop name ty expr) = do -- ToDo: When na
 ----------------------------------------------------------------------------
 -- [Common] Elaboration of types
 ----------------------------------------------------------------------------
-elabType :: Monad m => TypeInfo -> [String] -> [String] -> Type -> m Type
+elabType :: Monad m => TypeInfo -> [TypeVar] -> [LocationVar] -> Type -> m Type
 elabType typeInfo tyvars locvars (TypeVarType x) = do
   if elem x tyvars then return (TypeVarType x)
   else if isConstructorName x then
@@ -301,7 +302,11 @@ elabType typeInfo tyvars locvars (ConType name locs tys) = do
     else error $ "[TypeCheck]: elabType: Invalud args for ConType: " ++ name
 
 
-elabLocation :: Monad m => [String] -> Location -> m Location
+----------------------------------------------------------------------------
+-- [Common] Elaboration of locations
+----------------------------------------------------------------------------
+
+elabLocation :: Monad m => [LocationVar] -> Location -> m Location
 elabLocation locvars (Location loc)
   | loc `elem` locvars = return (LocVar loc)
   | otherwise = return (Location loc)
@@ -312,6 +317,9 @@ elabLocation locvars (LocVar x)
 ----------------------------------------------------------------------------
 -- [Common] Elaboration of expressions
 ----------------------------------------------------------------------------
+
+-- elabExpr :: Monad m => TypeInfo -> [LocationVar] -> [TypeVar] -> Type -> m Type
+-- elabExpr typeInfo tyvars locvars expr = expr
 
 -- data Env = Env
 --        { _locVarEnv  :: [String]
@@ -728,9 +736,13 @@ typecheckExpr_ gti gamma loc e (TypeAbsType alphas a) = do
   -- Do alpha conversion to avoid clashes
   alphas' <- lift $ replicateM (length alphas) freshTypeVar
   (gamma', e') <- mapFst (dropMarker (CForall (head alphas'))) <$>
-       typecheckExpr gti (gamma >++ map CForall alphas') loc e
+       typecheckExpr gti (gamma >++ map CForall alphas')
+          loc
+          (tyExprSubsts (map TypeVarType alphas') alphas e)
           (typeSubsts (map TypeVarType alphas') alphas a)
-  return (gamma', TypeAbs alphas (tyExprSubsts (map TypeVarType alphas) alphas' e'))
+  return (gamma',
+          TypeAbs alphas
+            (tyExprSubsts (map TypeVarType alphas) alphas' e'))
 
 -- LForallI
 typecheckExpr_ gti gamma loc (LocAbs ls0 e) (LocAbsType ls1 a) = do
