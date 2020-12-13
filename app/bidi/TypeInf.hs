@@ -29,7 +29,10 @@ import Debug.Trace
 --   2. Apply elabType in type declarations of let bindings [Done]
 --   3. Apply elabLocation in the use of locations at expressions and
 --      type declarations [Done]
---   4. elabExpr before typeInf !!
+--   4. elabExpr before typeInf [Done]
+--   5. Unconstrained existence type variables remain!
+--   6. Type application terms in an argumnet, (...) expr, do not have
+--      type annotations.  [Solution] subtype returns a transformer?
 
 type TIMonad = ExceptT String (State NameState) -- 'ExceptT String NameGen'
 
@@ -209,7 +212,8 @@ elabBindingTypes :: Monad m => TypeInfo -> [String] -> [String] -> [BindingDecl]
 elabBindingTypes typeInfo tyvars locvars bindingDecls =
   mapM (\(Binding istop f ty expr)-> do
            elab_ty <- elabType typeInfo tyvars locvars ty
-           return (Binding istop f elab_ty expr)) bindingDecls
+           elab_expr <- elabExpr typeInfo tyvars locvars expr
+           return (Binding istop f elab_ty elab_expr)) bindingDecls
 
 bindingTypes :: Monad m => [BindingDecl] -> m [(String,Type)]
 bindingTypes partial_elab_bindingDecls =
@@ -318,9 +322,114 @@ elabLocation locvars (LocVar x)
 -- [Common] Elaboration of expressions
 ----------------------------------------------------------------------------
 
--- elabExpr :: Monad m => TypeInfo -> [LocationVar] -> [TypeVar] -> Type -> m Type
--- elabExpr typeInfo tyvars locvars expr = expr
+elabExpr :: Monad m => TypeInfo -> [TypeVar] -> [LocationVar] -> Expr -> m Expr
+elabExpr typeInfo tyvars locvars (Var x) = return $ Var x
 
+elabExpr typeInfo tyvars locvars (TypeAbs alphas e) = do
+  e' <- elabExpr typeInfo (alphas++tyvars) locvars e
+  return $ TypeAbs alphas e'
+  
+elabExpr typeInfo tyvars locvars (LocAbs ls e) = do
+  e' <- elabExpr typeInfo tyvars (ls++locvars) e
+  return $ LocAbs ls e'
+  
+elabExpr typeInfo tyvars locvars (Abs xMaybetyLocs e) = do
+  xMaybetyLocs' <- mapM ftriple xMaybetyLocs
+  e' <- elabExpr typeInfo tyvars locvars e
+  return $ Abs xMaybetyLocs' e'
+  where
+    ftriple (x,Nothing,loc) = do
+      loc' <- elabLocation locvars loc
+      return (x, Nothing, loc')
+    ftriple (x,Just ty,loc) = do
+      ty' <- elabType typeInfo tyvars locvars ty
+      loc' <- elabLocation locvars loc
+      return (x, Just ty', loc')
+      
+elabExpr typeInfo tyvars locvars (Let bindingDecls e) = do
+  bindingDecls' <- mapM fBindDecl bindingDecls
+  e' <- elabExpr typeInfo tyvars locvars e
+  return $ Let bindingDecls' e'
+  where
+    fBindDecl (Binding istop x ty expr) = do
+      ty' <- elabType typeInfo tyvars locvars ty
+      expr' <- elabExpr typeInfo tyvars locvars expr
+      return $ Binding istop x ty' expr'
+        
+elabExpr typeInfo tyvars locvars (Case e maybeTy alts) = do
+  e' <- elabExpr typeInfo tyvars locvars e
+  maybeTy' <- mapM (elabType typeInfo tyvars locvars) maybeTy
+  alts' <- mapM fAlt alts
+  return $ Case e' maybeTy' alts'
+  where
+    fAlt (Alternative c xs expr) = do
+      expr' <- elabExpr typeInfo tyvars locvars expr
+      return $ Alternative c xs expr'
+    fAlt (TupleAlternative xs expr) = do
+      expr' <- elabExpr typeInfo tyvars locvars expr
+      return $ TupleAlternative xs expr'
+
+elabExpr typeInfo tyvars locvars (App e1 maybeTy e2 maybeLoc) = do
+  e1' <- elabExpr typeInfo tyvars locvars e1
+  maybeTy' <- fMaybety maybeTy
+  e2' <- elabExpr typeInfo tyvars locvars e2
+  maybeLoc' <- fMaybeloc maybeLoc
+  return $ App e1' maybeTy' e2' maybeLoc'
+
+  where
+    fMaybety Nothing = return Nothing
+    fMaybety (Just ty) = do
+      ty' <- elabType typeInfo tyvars locvars ty
+      return (Just ty')
+
+    fMaybeloc Nothing = return Nothing
+    fMaybeloc (Just loc) = do
+      loc' <- elabLocation locvars loc
+      return (Just loc')
+
+elabExpr typeInfo tyvars locvars (TypeApp e1 maybeTy tys) = do
+  e1' <- elabExpr typeInfo tyvars locvars e1
+  maybeTy' <- fMaybety maybeTy
+  tys' <- mapM (elabType typeInfo tyvars locvars) tys
+  return $ TypeApp e1' maybeTy' tys'
+
+  where
+    fMaybety Nothing = return Nothing
+    fMaybety (Just ty) = do
+      ty' <- elabType typeInfo tyvars locvars ty
+      return (Just ty')
+      
+elabExpr typeInfo tyvars locvars (LocApp e1 maybeTy locs) = do
+  e1' <- elabExpr typeInfo tyvars locvars e1
+  maybeTy' <- fMaybety maybeTy
+  locs' <- mapM (elabLocation locvars) locs
+  return $ LocApp e1' maybeTy' locs'
+  
+  where
+    fMaybety Nothing = return Nothing
+    fMaybety (Just ty) = do
+      ty' <- elabType typeInfo tyvars locvars ty
+      return (Just ty')
+
+elabExpr typeInfo tyvars locvars (Tuple exprs) = do
+  exprs' <- mapM (elabExpr typeInfo tyvars locvars) exprs
+  return $ Tuple exprs'
+
+elabExpr typeInfo tyvars locvars (Prim op locs tys exprs) = do
+  locs' <- mapM (elabLocation locvars) locs
+  tys' <- mapM (elabType typeInfo tyvars locvars) tys
+  exprs' <- mapM (elabExpr typeInfo tyvars locvars) exprs
+  return $ Prim op locs' tys' exprs'
+
+elabExpr typeInfo tyvars locvars (Lit lit) = return $ Lit lit
+
+elabExpr typeInfo tyvars locvars (Constr c locs tys exprs argtys) = do
+  locs' <- mapM (elabLocation locvars) locs
+  tys' <- mapM (elabType typeInfo tyvars locvars) tys
+  exprs' <- mapM (elabExpr typeInfo tyvars locvars) exprs
+  argtys' <- mapM (elabType typeInfo tyvars locvars) argtys
+  return $ Constr c locs' tys' exprs' argtys'
+  
 -- data Env = Env
 --        { _locVarEnv  :: [String]
 --        , _typeVarEnv :: [String]
@@ -488,6 +597,12 @@ subtype gamma typ1 typ2 =
           && alpha == alpha' -> return gamma
       | cExists alpha && cExists alpha'
           && alpha == alpha' && alpha `elem` existentials gamma -> return gamma
+      | cExists alpha
+          && alpha `elem` existentials gamma
+          && alpha `S.notMember` freeTVars (TypeVarType alpha') -> instantiateL gamma alpha (TypeVarType alpha')
+      | cExists alpha'
+          && alpha' `elem` existentials gamma
+          && alpha' `S.notMember` freeTVars (TypeVarType alpha) -> instantiateR gamma (TypeVarType alpha) alpha'
       | otherwise ->
           throwError $ "subtype(TypeVarType,TypeVarType), don't know what to do with: "
                          ++ pretty (gamma, typ1, typ2)
@@ -735,42 +850,47 @@ typecheckExpr_ gti gamma loc (Lit literal) ty
 typecheckExpr_ gti gamma loc e (TypeAbsType alphas a) = do
   -- Do alpha conversion to avoid clashes
   alphas' <- lift $ replicateM (length alphas) freshTypeVar
-  (gamma', e') <- mapFst (dropMarker (CForall (head alphas'))) <$>
+  (gamma', e') <- 
        typecheckExpr gti (gamma >++ map CForall alphas')
           loc
           (tyExprSubsts (map TypeVarType alphas') alphas e)
           (typeSubsts (map TypeVarType alphas') alphas a)
-  return (gamma',
+  let delta = dropMarker (CForall (head alphas')) gamma'
+  return (delta,
           TypeAbs alphas
-            (tyExprSubsts (map TypeVarType alphas) alphas' e'))
+            (tyExprSubsts (map TypeVarType alphas) alphas' (eapply gamma' e')))
 
 -- LForallI
 typecheckExpr_ gti gamma loc (LocAbs ls0 e) (LocAbsType ls1 a) = do
   ls' <- lift $ replicateM (length ls0) freshLocationVar
-  (gamma', e') <- mapFst (dropMarker (CLForall (head ls'))) <$>
-        typecheckExpr gti (gamma >++ map CLForall ls') loc
-          (locExprSubsts (map LocVar ls') ls0 e) (locSubsts (map LocVar ls') ls1 a)
-  return (gamma', LocAbs ls0 (locExprSubsts (map LocVar ls0) ls' e'))
+  (gamma', e') <-
+    typecheckExpr gti (gamma >++ map CLForall ls') loc
+      (locExprSubsts (map LocVar ls') ls0 e) (locSubsts (map LocVar ls') ls1 a)
+  let delta = dropMarker (CLForall (head ls')) gamma'
+  return (delta, LocAbs ls0 (locExprSubsts (map LocVar ls0) ls' (eapply gamma' e')))
 
 -- ->I
 typecheckExpr_ gti gamma loc (Abs [] e) a = do
   typecheckExpr_ gti gamma loc e a
 
 typecheckExpr_ gti gamma loc (Abs [(x,mty,loc0)] e) (FunType a loc' b) = do
-  loc0' <- elabLocation (locVars gamma) loc0
+  -- loc0' <- elabLocation (locVars gamma) loc0
+  let loc0' = loc0
   x' <- lift $ freshVar
   gamma0 <- subloc gamma loc' loc0'
-  (gamma1, e') <- mapFst (dropMarker (CVar x' a)) <$>
-        typecheckExpr_ gti (gamma0 >: CVar x' a) loc0' (subst (Var x') x e) b
-  return (gamma1, Abs [(x,Just a, loc0')] (subst (Var x) x' e'))
+  (gamma1, e') <- typecheckExpr_ gti (gamma0 >: CVar x' a) loc0' (subst (Var x') x e) b
+  let delta = dropMarker (CVar x' a) gamma1
+  return (delta, Abs [(x,Just a, loc0')] (subst (Var x) x' (eapply gamma1 e')))
 
 typecheckExpr_ gti gamma loc (Abs ((x,mty,loc0):xmtyls) e) (FunType a loc' b) = do
-  loc0' <- elabLocation (locVars gamma) loc0
+  -- loc0' <- elabLocation (locVars gamma) loc0
+  let loc0' = loc0
   x' <- lift $ freshVar
   gamma0 <- subloc gamma loc' loc0'
-  (gamma1, e') <- mapFst (dropMarker (CVar x' a)) <$>
-      typecheckExpr_ gti (gamma0 >: CVar x' a) loc0' (subst (Var x') x (Abs xmtyls e)) b
-  return (gamma1, Abs [(x,Just a,loc0')] (subst (Var x) x' e'))
+  (gamma1, e') <- typecheckExpr_ gti (gamma0 >: CVar x' a) loc0' (subst (Var x') x (Abs xmtyls e)) b
+  let delta = dropMarker (CVar x' a) gamma1
+      
+  return (delta, Abs [(x,Just a,loc0')] (subst (Var x) x' (eapply gamma1 e')))
 
 -- Sub
 typecheckExpr_ gti gamma loc e b = do
@@ -814,7 +934,8 @@ typesynthExpr_ gti gamma loc expr@(Abs xmtyls e) = do
   xs'    <- lift $ replicateM (length xmtyls) freshVar
   alphas <- lift $ replicateM (length xmtyls) freshExistsTypeVar
   beta   <- lift $ freshExistsTypeVar
-  locs <- mapM (elabLocation (locVars gamma)) $ map thd3 xmtyls
+  -- locs <- mapM (elabLocation (locVars gamma)) $ map thd3 xmtyls
+  let locs = map thd3 xmtyls
   let xs = map fst3 xmtyls
   let funty = foldr (\ (loc0, alpha0) ty0 -> FunType (TypeVarType alpha0) loc0 ty0)
                 (TypeVarType beta) (zip locs alphas)
@@ -829,7 +950,7 @@ typesynthExpr_ gti gamma loc expr@(Abs xmtyls e) = do
           singleAbs $
           Abs (map (\ ((x,_,loc), ty)-> (x,ty,loc))
               (zip xmtyls (map (Just . apply delta . TypeVarType) alphas)))
-                  (substs (map Var xs) xs' e'))
+                  (substs (map Var xs) xs' (eapply gamma' e')))
 
 -- ->forall_l=>
 typesynthExpr_ gti gamma loc expr@(LocAbs locvars e) = do
@@ -869,14 +990,15 @@ typesynthExpr_ gti gamma loc (Case expr _ alts) = do
 typesynthExpr_ gti gamma loc expr@(App e1 maybeTy e2 maybeLoc) = do
   (a, theta, e1') <- typesynthExpr gti gamma loc e1
   (ty2, loc0, delta, transformFun) <- typeapplysynth gti theta loc (apply theta a) e2
-  return (ty2, delta, App (transformFun e1) (Just . apply delta $ a) e2 (Just loc0))
+  return (ty2, delta, transformFun e1') -- App (transformFun e1') (Just . apply delta $ a) e2 (Just loc0)
 
 -- forall_l E
 typesynthExpr_ gti gamma loc expr@(LocApp e maybeTy locs0) = do
-  locs <- mapM (elabLocation (locVars gamma)) locs0
+  -- locs <- mapM (elabLocation (locVars gamma)) locs0
+  let locs = locs0
   (a, theta, e') <- typesynthExpr gti gamma loc e
   (b, delta, transformFun) <- locsapplysynth gti theta loc (apply theta a) locs
-  return (b, delta, LocApp (transformFun e) (Just . apply delta $ a) locs)
+  return (b, delta, transformFun e') -- LocApp (transformFun e') (Just . apply delta $ a) locs
   
 -- Tuple
 typesynthExpr_ gti gamma loc expr@(Tuple es) = do
@@ -1046,7 +1168,10 @@ typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, 
       (typ', loc0, delta, g)
         <- typeapplysynth gti (gamma >++ map CExists alphas') loc
                      (typeSubsts (map TypeVarType alphas') alphas a) e
-      return (typ', loc0, delta, g. \f -> TypeApp f (Just typ) (map TypeVarType alphas'))
+      return (typ', loc0, delta,
+              g . \f -> singleTypeApp $
+                         TypeApp f (Just . apply delta $ typ)
+                           (map (apply delta) (map TypeVarType alphas')))
 
     -- ForallApp: Not allowed without any explicit location applications
     -- LForall l a -> do
@@ -1073,12 +1198,14 @@ typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, 
                          loc
                          e
                          (TypeVarType alpha1)
-      return (TypeVarType alpha2, loc', delta, \f -> App f (Just typ) e' (Just loc'))
+      return (TypeVarType alpha2, loc', delta,
+              \f -> App f (Just . apply delta $ typ) e' (Just $ lapply delta $ loc'))
 
     -- ->App
     FunType a loc' c -> do
       (delta, e') <- typecheckExpr gti gamma loc e a
-      return (c, loc', delta, \f -> App f (Just typ) e' (Just loc'))
+      return (c, loc', delta,
+              \f -> App f (Just . apply delta $ typ) e' (Just $ lapply delta $ loc'))
 
 
     _ -> throwError $ "typeapplysynth: don't know what to do with: "
@@ -1103,7 +1230,10 @@ locsapplysynth gti gamma loc typ locs0 = traceNS "locsapplysynth" (gamma, loc, t
       (typ', delta, g) <-
         locsapplysynth gti (gamma >++ map CExists alphas') loc
                      (typeSubsts (map TypeVarType alphas') alphas a) locs0
-      return (typ', delta, g . \f -> TypeApp f (Just typ) (map TypeVarType alphas'))
+      return (typ', delta,
+              g . \f -> singleTypeApp $
+                          TypeApp f (Just . apply delta $ typ)
+                            (map (apply delta) (map TypeVarType alphas')))
 
     -- alpha^: Not allowed because alpha^ is a monomorphic type variable!
 

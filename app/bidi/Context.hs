@@ -120,9 +120,10 @@ locwf gamma loc = case loc of
 typewf :: Context -> Type -> Bool
 typewf gamma typ = case typ of
   -- UvarWF
-  TypeVarType alpha -> alpha `elem` foralls gamma
   -- EvarWF and SolvedEvarWF
---  TExists alpha -> alpha `elem` existentials gamma
+  TypeVarType alpha
+    | cExists alpha -> alpha `elem` existentials gamma
+    | otherwise -> alpha `elem` foralls gamma
   -- 
   TupleType ts -> and $ map (typewf gamma) ts
   -- ArrowWF
@@ -242,6 +243,48 @@ lapply gamma loc = case loc of
     if clExists l 
     then maybe (LocVar l) (\loc->loc) $ findLSolved gamma l
     else LocVar l
+
+eapply :: Context -> Expr -> Expr
+eapply gamma (Var x) = Var x
+eapply gamma (TypeAbs alphas e) = TypeAbs alphas (eapply gamma e)
+eapply gamma (LocAbs ls e) = LocAbs ls (eapply gamma e)
+eapply gamma (Abs xMaybetyLocs e) =
+  Abs (map f xMaybetyLocs) (eapply gamma e)
+  where
+    f (x, maybeTy, loc) = (x, fmap (apply gamma) maybeTy, lapply gamma loc)
+eapply gamma (Let bindingDecls e) =
+  Let (map f bindingDecls) e
+  where
+    f (Binding b x ty e) = Binding b x (apply gamma ty) (eapply gamma e)
+eapply gamma (Case e maybeTy alts) =
+  Case (eapply gamma e) (fmap (apply gamma) maybeTy) (map f alts)
+  where
+    f (Alternative c xs e) = Alternative c xs (eapply gamma e)
+    f (TupleAlternative xs e) = TupleAlternative xs (eapply gamma e)
+eapply gamma (App e1 maybeTy e2 maybeLoc) =
+  App (eapply gamma e1)
+    (fmap (apply gamma) maybeTy)
+      (eapply gamma e2)
+        (fmap (lapply gamma) maybeLoc)
+eapply gamma (TypeApp e maybeTy tys) =
+  TypeApp (eapply gamma e)
+    (fmap (apply gamma) maybeTy)
+      (map (apply gamma) tys)
+eapply gamma (LocApp e maybeTy locs) =
+  LocApp (eapply gamma e)
+    (fmap (apply gamma) maybeTy)
+      (map (lapply gamma) locs)
+eapply gamma (Tuple es) = Tuple (map (eapply gamma) es)
+eapply gamma (Prim op locs tys es) =
+  Prim op (map (lapply gamma) locs)
+    (map (apply gamma) tys)
+      (map (eapply gamma) es)
+eapply gamma (Lit lit) = Lit lit
+eapply gamma (Constr c locs tys es argtys) =
+  Constr c (map (lapply gamma) locs)
+    (map (apply gamma) tys)
+      (map (eapply gamma) es)
+        (map (apply gamma) argtys)
     
 -- | ordered Γ α β = True <=> Γ[α^][β^]
 ordered :: Context -> TypeVar -> TypeVar -> Bool
