@@ -164,10 +164,15 @@ primOpTypes =
   [ (NotPrimOp, (["l"], [], [bool_type], bool_type))
   , (OrPrimOp,  (["l"], [], [bool_type, bool_type], bool_type))
   , (AndPrimOp, (["l"], [], [bool_type, bool_type], bool_type))
+  
   , (EqStringPrimOp,  (["l"], [], [string_type, string_type], bool_type))
   , (EqBoolPrimOp,  (["l"], [], [bool_type, bool_type], bool_type))
   , (EqIntPrimOp,  (["l"], [], [int_type, int_type], bool_type))
-  , (NeqPrimOp, (["l"], [], [bool_type, bool_type], bool_type))
+  
+  , (NeqStringPrimOp, (["l"], [], [string_type, string_type], bool_type))
+  , (NeqBoolPrimOp, (["l"], [], [bool_type, bool_type], bool_type))
+  , (NeqIntPrimOp, (["l"], [], [int_type, int_type], bool_type))
+  
   , (LtPrimOp,  (["l"], [], [int_type, int_type], bool_type))
   , (LePrimOp,  (["l"], [], [int_type, int_type], bool_type))
   , (GtPrimOp,  (["l"], [], [int_type, int_type], bool_type))

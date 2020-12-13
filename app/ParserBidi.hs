@@ -346,7 +346,7 @@ parserSpec = ParserSpec
       ("LogicAnd -> CompEqNeq", \rhs -> get rhs 1),
 
       ("CompEqNeq -> CompEqNeq == Comp",  -- Assume EqIntPrimOp, which may change to EqBoolOp or EqStringOp later
-        \rhs -> toASTExpr (Prim EqIntPrimOp [] [] [fromASTExpr (get rhs 1), fromASTExpr (get rhs 3)]) ),
+        \rhs -> toASTExpr (Prim EqPrimOp [] [] [fromASTExpr (get rhs 1), fromASTExpr (get rhs 3)]) ),
 
       ("CompEqNeq -> CompEqNeq != Comp",
         \rhs -> toASTExpr (Prim NeqPrimOp [] [] [fromASTExpr (get rhs 1), fromASTExpr (get rhs 3)]) ),

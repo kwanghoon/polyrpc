@@ -892,7 +892,8 @@ typesynthExpr_ gti gamma loc expr@(Prim op op_locs@[] op_tys@[] exprs) =
 
 typesynthExpr_ gti gamma loc expr@(Prim op op_locs op_tys exprs) =
   case op of
-    EqIntPrimOp -> overloadedEq op_locs op_tys exprs -- EqIntPrimOpt By default by Parser!!
+    EqPrimOp -> overloadedEq op_locs op_tys exprs -- EqPrimOp by Parser!!
+    NeqPrimOp -> overloadedNeq op_locs op_tys exprs -- NeqPrimOp by Parser!!
     _ -> nonoverloaded op_locs op_tys exprs op
     
   where
@@ -900,7 +901,13 @@ typesynthExpr_ gti gamma loc expr@(Prim op op_locs op_tys exprs) =
       (catchError (nonoverloaded locs tys exprs EqIntPrimOp) (\err ->
          (catchError (nonoverloaded locs tys exprs EqBoolPrimOp) (\err ->
             (catchError (nonoverloaded locs tys exprs EqStringPrimOp) (\err ->
-               throwError $ "[TypeInf] typesynthExpr: No overloaded match:" ++ show op))))))
+               throwError $ "[TypeInf] typesynthExpr: No overloaded match (==):" ++ show op))))))
+
+    overloadedNeq locs tys exprs =
+      (catchError (nonoverloaded locs tys exprs NeqIntPrimOp) (\err ->
+         (catchError (nonoverloaded locs tys exprs NeqBoolPrimOp) (\err ->
+            (catchError (nonoverloaded locs tys exprs NeqStringPrimOp) (\err ->
+               throwError $ "[TypeInf] typesynthExpr: No overloaded match (!=):" ++ show op))))))
     
     nonoverloaded locs tys exprs op =
       case lookupPrimOpType op of

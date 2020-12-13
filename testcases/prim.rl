@@ -31,11 +31,17 @@ x9 : Bool
    = True == False;
 
 x10 : Bool
-   = True != False;  // 7809 != 012
+   = "True" != "False";
 
 x11 : Bool
-   = 901 >= 234 and True == False; // 7890 != 012;
+   = True != False;
 
 x12 : Bool
+   = 7809 != 012;
+
+x13 : Bool
+   = 901 >= 234 and True == False; // 7890 != 012;
+
+x14 : Bool
    = 123 == 456 or 123 < 456
 
