@@ -236,11 +236,11 @@ instance Pretty Type where
       showString " -" . bpretty d loc  . showString "-> " .
       bpretty fun_prec t2
     TypeAbsType vs t -> showParen (d > forall_prec) $
-      showString "∀" . showWithComma vs .
-      showString ". "      . bpretty forall_prec t
+      showString "[" . showWithComma vs .
+      showString "]. "      . bpretty forall_prec t
     LocAbsType ls t -> showParen (d > forall_prec) $
-      showString "∀" . showWithComma ls .
-      showString ". "      . bpretty forall_prec t
+      showString "{" . showWithComma ls .
+      showString "}. "      . bpretty forall_prec t
     ConType c ls tys ->
       showString c. showSpace (null ls) (showLocs ls). showTys tys
     where

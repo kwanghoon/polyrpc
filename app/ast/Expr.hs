@@ -390,9 +390,9 @@ instance Pretty Expr where
   bpretty d expr = case expr of
     Var v       -> showString v
     TypeAbs vs e -> showParen (d > abs_prec) $
-      showString "∀" . showWithSpace vs . showString ". " . bpretty abs_prec e
+      showString "[" . showWithSpace vs . showString "]. " . bpretty abs_prec e
     LocAbs ls e -> showParen (d > abs_prec) $
-      showString "∀" . showWithSpace ls . showString ". " . bpretty abs_prec e
+      showString "{" . showWithSpace ls . showString "}. " . bpretty abs_prec e
     Abs varMaybeTyLocs e -> showParen (d >abs_prec) $
       showString "\\" . showVarMaybeTyLocs varMaybeTyLocs .
       showString ". " . bpretty abs_prec e
