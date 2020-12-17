@@ -51,11 +51,22 @@ context = Context . reverse
 dropMarker :: ContextElem a -> GContext a -> GContext a
 dropMarker m (Context gamma) = Context $ tail $ dropWhile (/= m) gamma
 
+instUnsolved :: ContextElem a -> GContext a -> GContext a
+instUnsolved m (Context gamma) = Context $ inst gamma
+  where
+    inst [] = []
+    inst (elem:elems)
+      | elem /=m  = instElem elem : inst elems
+      | otherwise = instElem elem : elems
+
+    instElem (CExists alpha) = CExistsSolved alpha unit_type  -- Todo: unit type as unconstrained type
+    instElem elem            = elem
+
 breakMarker :: ContextElem a -> GContext a -> (GContext a, GContext a)
 breakMarker m (Context xs) = let (r, _:l) = break (== m) xs in (Context l, Context r)
 
 singleoutMarker :: ContextElem a -> GContext a -> GContext a
-singleoutMarker m (Context gamma) = 
+singleoutMarker m (Context gamma) =
   let (Context l, Context r) = breakMarker m (Context gamma) in (Context (l++r))
 
 typeVars :: GContext a -> [TypeVar]

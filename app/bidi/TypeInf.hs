@@ -30,9 +30,9 @@ import Debug.Trace
 --   3. Apply elabLocation in the use of locations at expressions and
 --      type declarations [Done]
 --   4. elabExpr before typeInf [Done]
---   5. Unconstrained existence type variables remain!
+--   5. Unconstrained existence type variables remain! [Done]
 --   6. Type application terms in an argumnet, (...) expr, do not have
---      type annotations.  [Solution] subtype returns a transformer?
+--      type annotations. The subtype returns a transformer? [Done]
 
 type TIMonad = ExceptT String (State NameState) -- 'ExceptT String NameGen'
 
@@ -883,10 +883,11 @@ typecheckExpr_ gti gamma loc e (TypeAbsType alphas a) = do
           loc
           (tyExprSubsts (map TypeVarType alphas') alphas e)
           (typeSubsts (map TypeVarType alphas') alphas a)
+  let instgamma' = instUnsolved (CForall (head alphas')) gamma'
   let delta = dropMarker (CForall (head alphas')) gamma'
   return (delta,
           TypeAbs alphas
-            (tyExprSubsts (map TypeVarType alphas) alphas' (eapply gamma' e')))
+            (tyExprSubsts (map TypeVarType alphas) alphas' (eapply instgamma' e')))
 
 -- LForallI
 typecheckExpr_ gti gamma loc (LocAbs ls0 e) (LocAbsType ls1 a) = do
@@ -894,8 +895,9 @@ typecheckExpr_ gti gamma loc (LocAbs ls0 e) (LocAbsType ls1 a) = do
   (gamma', e') <-
     typecheckExpr gti (gamma >++ map CLForall ls') loc
       (locExprSubsts (map LocVar ls') ls0 e) (locSubsts (map LocVar ls') ls1 a)
+  let instgamma' = instUnsolved (CLForall (head ls')) gamma'
   let delta = dropMarker (CLForall (head ls')) gamma'
-  return (delta, LocAbs ls0 (locExprSubsts (map LocVar ls0) ls' (eapply gamma' e')))
+  return (delta, LocAbs ls0 (locExprSubsts (map LocVar ls0) ls' (eapply instgamma' e')))
 
 -- ->I
 typecheckExpr_ gti gamma loc (Abs [] e) a = do
@@ -907,8 +909,9 @@ typecheckExpr_ gti gamma loc (Abs [(x,mty,loc0)] e) (FunType a loc' b) = do
   x' <- lift $ freshVar
   gamma0 <- subloc gamma loc' loc0'
   (gamma1, e') <- typecheckExpr_ gti (gamma0 >: CVar x' a) loc0' (subst (Var x') x e) b
+  let instgamma1 = instUnsolved (CVar x' a) gamma1
   let delta = dropMarker (CVar x' a) gamma1
-  return (delta, Abs [(x,Just a, loc0')] (subst (Var x) x' (eapply gamma1 e')))
+  return (delta, Abs [(x,Just a, loc0')] (subst (Var x) x' (eapply instgamma1 e')))
 
 typecheckExpr_ gti gamma loc (Abs ((x,mty,loc0):xmtyls) e) (FunType a loc' b) = do
   -- loc0' <- elabLocation (locVars gamma) loc0
@@ -916,9 +919,10 @@ typecheckExpr_ gti gamma loc (Abs ((x,mty,loc0):xmtyls) e) (FunType a loc' b) = 
   x' <- lift $ freshVar
   gamma0 <- subloc gamma loc' loc0'
   (gamma1, e') <- typecheckExpr_ gti (gamma0 >: CVar x' a) loc0' (subst (Var x') x (Abs xmtyls e)) b
+  let instgamma1 = instUnsolved (CVar x' a) gamma1
   let delta = dropMarker (CVar x' a) gamma1
 
-  return (delta, Abs [(x,Just a,loc0')] (subst (Var x) x' (eapply gamma1 e')))
+  return (delta, Abs [(x,Just a,loc0')] (subst (Var x) x' (eapply instgamma1 e')))
 
 -- Sub
 typecheckExpr_ gti gamma loc e b = do
@@ -973,12 +977,13 @@ typesynthExpr_ gti gamma loc expr@(Abs xmtyls e) = do
                            >++ map (uncurry CVar)
                                    (zip xs' (map TypeVarType alphas)))
                       (last locs) (substs (map Var xs') xs e) (TypeVarType beta)
+  let instgamma' = instUnsolved (CVar (last xs') (TypeVarType (last alphas))) gamma'
   let delta = dropMarker (CVar (last xs') (TypeVarType (last alphas))) gamma'
   return (apply delta funty, delta,
           singleAbs $
           Abs (map (\ ((x,_,loc), ty)-> (x,ty,loc))
               (zip xmtyls (map (Just . apply delta . TypeVarType) alphas)))
-                  (substs (map Var xs) xs' (eapply gamma' e')))
+                  (substs (map Var xs) xs' (eapply instgamma' e')))
 
 -- ->forall_l=>
 typesynthExpr_ gti gamma loc expr@(LocAbs locvars e) = do
