@@ -242,7 +242,7 @@ instance Pretty Type where
       showString "{" . showWithComma ls .
       showString "}. "      . bpretty forall_prec t
     ConType c ls tys ->
-      showString c. showSpace (null ls) (showLocs ls). showTys tys
+      showString c. showSpace (not (null ls)) (showLocs ls). showTys tys
     where
       exists_prec = 10
       forall_prec :: Int
