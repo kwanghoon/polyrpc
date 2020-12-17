@@ -8,6 +8,10 @@ pretty x = bpretty 0 x ""
 class Pretty a where
   bpretty :: Int -> a -> ShowS
 
+instance Pretty a => Pretty (Maybe a) where
+  bpretty d Nothing  = showString ""
+  bpretty d (Just x) = bpretty d x
+
 instance Pretty a => Pretty [a] where
   bpretty _ list = showString "[" . go list
     where
@@ -64,9 +68,9 @@ showLocVars xs = showString "{" . showTuple_ "" xs . showString "}"
 
 showVarMaybeTyLocs [] = \x -> x
 showVarMaybeTyLocs [(x,maybeTy,loc)] =
-  showString x . showString "@" . bpretty 0 loc
+  showString x . showString ":" . bpretty 0 maybeTy . showString "@" . bpretty 0 loc
 showVarMaybeTyLocs ((x,maybeTy,loc):xmls) =
-  showString x . showString "@" . bpretty 0 loc . showString " " .
+  showString x . showString ":" . bpretty 0 maybeTy .showString "@" . bpretty 0 loc . showString " " .
   showVarMaybeTyLocs xmls
 
 showLocs [] = \x -> x

@@ -672,7 +672,7 @@ subtype gamma loc0 typ1 typ2 =
                       (typeSubsts (map TypeVarType alphas') alphas a) b
       let delta = dropMarker (CMarker (head alphas')) theta
       let tys = map (apply theta) (map TypeVarType alphas')
-      return (delta, \x -> TypeApp (f x) (Just $ apply delta (TypeAbsType alphas a)) tys)
+      return (delta, \x -> f (TypeApp x (Just $ apply delta (TypeAbsType alphas a)) tys))
 
     -- forallLoc
     (LocAbsType locvars1 a, LocAbsType locvars2 b)
