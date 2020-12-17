@@ -460,7 +460,7 @@ instance Pretty Alternative where
     bpretty 0 expr
     
   bpretty d (TupleAlternative args expr) =
-    showString "(" . showWithSpace args . showString ")"
+    showString "(" . showWith "," args . showString ")"
     . showString " -> ". bpretty 0 expr
 
 instance Pretty BindingDecl where

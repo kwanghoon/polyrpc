@@ -866,14 +866,6 @@ typecheckExpr gti gamma loc expr typ =
 
 typecheckExpr_ :: GlobalTypeInfo -> Context -> Location -> Expr -> Type -> TIMonad (Context, Expr)
 
--- Lit
-typecheckExpr_ gti gamma loc (Lit literal) ty
-  | typeOfLiteral literal == ty =
-      return (gamma, Lit literal)
-  | otherwise =
-      throwError $ "[TypeInf] typecheckExpr: not admitted type: "
-                ++ pretty ty ++ " for " ++ pretty (Lit literal)
-
 -- ForallI
 typecheckExpr_ gti gamma loc e (TypeAbsType alphas a) = do
   -- Do alpha conversion to avoid clashes
