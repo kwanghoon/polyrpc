@@ -286,8 +286,10 @@ elabType typeInfo tyvars locvars (FunType ty1 (Location loc) ty2) = do
              then LocVar loc else Location loc
   return (FunType elab_ty1 loc0 elab_ty2)
 
-elabType typeInfo tyvars locvars (FunType ty1 (LocVar _) ty2) =
-  error $ "[TypeCheck] elabType: FunType: LocVar"
+elabType typeInfo tyvars locvars (FunType ty1 loc0@(LocVar _) ty2) = do
+  elab_ty1 <- elabType typeInfo tyvars locvars ty1
+  elab_ty2 <- elabType typeInfo tyvars locvars ty2
+  return (FunType elab_ty1 loc0 elab_ty2)
 
 elabType typeInfo tyvars locvars (TypeAbsType abs_tyvars ty) = do
   elab_ty <- elabType typeInfo (abs_tyvars ++ tyvars) locvars ty
@@ -499,10 +501,12 @@ allUnique (x:xs) =
 -- For bidirectional typechecking
 ----------------------------------------------------------------------------
 
+nolib (Context gamma) = Context $ reverse (drop 0 (reverse gamma))
+
 -- | Algorithmic sublocation:
 subloc :: Context -> Location -> Location -> TIMonad Context
 subloc gamma loc1 loc2 =
-  traceNS "subloc" (gamma, loc1, loc2) $
+  traceNS "subloc" (nolib gamma, loc1, loc2) $
   checkwfloc gamma loc1 $ checkwfloc gamma loc2 $
     case (loc1, loc2) of
     -- <:Loc
@@ -537,7 +541,7 @@ subloc gamma loc1 loc2 =
 --   instantiateLocL Γ l loc = Δ <=> Γ |- l^ :=< loc -| Δ
 instantiateLocL gamma l loc
   | clExists l =
-    traceNS "instantiateLocL" (gamma, l, loc) $
+    traceNS "instantiateLocL" (nolib gamma, l, loc) $
     checkwfloc gamma loc $ checkwfloc gamma (LocVar l) $
     case lsolve gamma l loc of
     -- InstLSolve
@@ -563,7 +567,7 @@ instantiateLocL gamma l loc
 --   instantiateLocR Γ loc l = Δ <=> Γ |- loc =:< l -| Δ
 instantiateLocR gamma loc l
   | clExists l =
-    traceNS "instantiateLocR" (gamma, loc, l) $
+    traceNS "instantiateLocR" (nolib gamma, loc, l) $
     checkwfloc gamma loc $ checkwfloc gamma (LocVar l) $
     case lsolve gamma l loc of
       Just gamma' -> return gamma'
@@ -588,7 +592,7 @@ instantiateLocR gamma loc l
 --   subtype Γ A B = Δ <=> Γ |- A <: B -| Δ
 subtype :: Context -> Location -> Type -> Type -> TIMonad (Context, Expr -> Expr)
 subtype gamma loc0 typ1 typ2 =
-  traceNS "subtype" (gamma, loc0, typ1, typ2) $
+  traceNS "subtype" (nolib gamma, loc0, typ1, typ2) $
   checkwftype gamma typ1 $ checkwfloc gamma loc0 $ checkwftype gamma typ2 $
     case (typ1, typ2) of
     -- <:Var
@@ -717,7 +721,7 @@ instantiateL gamma alpha a
   | otherwise = throwError $ "instantiateL: not ended with ^: " ++ alpha
 
 instantiateL_ gamma alpha a =
-  traceNS "instantiateL" (gamma, alpha, a) $
+  traceNS "instantiateL" (nolib gamma, alpha, a) $
   checkwftype gamma a $ checkwftype gamma (TypeVarType alpha) $
   case solve gamma alpha =<< monotype a of
     -- InstLSolve
@@ -792,7 +796,7 @@ instantiateR gamma a alpha
   | otherwise = throwError $ "instantiateR: not ended with ^: " ++ alpha
 
 instantiateR_ gamma a alpha =
-  traceNS "instantiateR" (gamma, a, alpha) $
+  traceNS "instantiateR" (nolib gamma, a, alpha) $
   checkwftype gamma a $ checkwftype gamma (TypeVarType alpha) $
   case solve gamma alpha =<< monotype a of
     Just gamma' -> return gamma'
@@ -861,7 +865,7 @@ instantiateR_ gamma a alpha =
 --   typecheck Γ loc e A = Δ <=> Γ |-_loc e <= A -| Δ
 typecheckExpr :: GlobalTypeInfo -> Context -> Location -> Expr -> Type -> TIMonad (Context, Expr)
 typecheckExpr gti gamma loc expr typ =
-  traceNS "typecheck" (gamma, loc, expr, typ) $ checkwftype gamma typ $
+  traceNS "typecheck" (nolib gamma, loc, expr, typ) $ checkwftype gamma typ $
   typecheckExpr_ gti gamma loc expr typ
 
 typecheckExpr_ :: GlobalTypeInfo -> Context -> Location -> Expr -> Type -> TIMonad (Context, Expr)
@@ -930,7 +934,7 @@ typecheckExpr_ gti gamma loc e b = do
 --   typesynth Γ loc e = (A, Δ) <=> Γ |- e => A -| Δ
 typesynthExpr :: GlobalTypeInfo -> Context -> Location -> Expr -> TIMonad (Type, Context, Expr)
 typesynthExpr gti gamma loc expr =
-  traceNS "typesynthExpr" (gamma, loc, expr) $ checkwf gamma $
+  traceNS "typesynthExpr" (nolib gamma, loc, expr) $ checkwf gamma $
   typesynthExpr_ gti gamma loc expr
 
 -- Var
@@ -970,7 +974,7 @@ typesynthExpr_ gti gamma loc expr@(Abs xmtyls e) = do
                                    (zip xs' (map TypeVarType alphas)))
                       (last locs) (substs (map Var xs') xs e) (TypeVarType beta)
   let instgamma' = instUnsolved (CVar (last xs') (TypeVarType (last alphas))) gamma'
-  let delta = dropMarker (CVar (last xs') (TypeVarType (last alphas))) gamma'
+  let delta = dropMarker (CVar (head xs') (TypeVarType (head alphas))) gamma'  -- Todo: Confirm head not last.
   return (apply delta funty, delta,
           singleAbs $
           Abs (map (\ ((x,_,loc), ty)-> (x,ty,loc))
@@ -999,11 +1003,17 @@ typesynthExpr_ gti gamma loc (Let letBindingDecls expr) = do
   (gamma', letBindingDecls') <- bidi gti1 gamma loc partial_elab_letBindingDecls
 
   letBindingTypeInfo <- bindingTypes partial_elab_letBindingDecls -- for let body
+  let xs = map fst letBindingTypeInfo
+  xs' <- lift $ replicateM (length xs) freshVar
+  let letBindingTypeInfo' = map (\(x',(_,ty))-> (x',ty)) (zip xs' letBindingTypeInfo)
 
   (letty, delta, expr') <-
-    typesynthExpr gti (gamma >++ map (uncurry CVar) letBindingTypeInfo) loc expr
+    typesynthExpr gti (gamma >++ map (uncurry CVar) letBindingTypeInfo') loc
+      (substs (map Var xs') xs expr)
 
-  return (letty, delta, Let letBindingDecls' expr')
+  let delta' = dropMarker (CVar (last xs') (snd (last letBindingTypeInfo'))) delta
+        
+  return (letty, delta', Let letBindingDecls' (substs (map Var xs) xs' expr'))
 
 -- Case
 typesynthExpr_ gti gamma loc (Case expr _ alts) = do
@@ -1107,7 +1117,7 @@ typesynthExpr_ gti gamma loc expr = do
 --   typesynthAlt Γ loc alts = (D B, A, Δ) <=> Γ |- alt => D B, A -| Δ
 typesynthAlts :: GlobalTypeInfo -> Context -> Location -> [Alternative] -> TIMonad (Type, Type, Context, [Alternative])
 typesynthAlts gti gamma loc alts =
-  traceNS "typesynthAlts" (gamma, loc, alts) $ checkwf gamma $
+  traceNS "typesynthAlts" (nolib gamma, loc, alts) $ checkwf gamma $
   if valid alts then typesynthAlts_ gti gamma loc alts
   else throwError $ "[TypeInf] typesynthAlts: invalid alternatives"
 
@@ -1132,7 +1142,7 @@ typesynthAlts_ gti gamma loc (alt:alts) = do  -- Always more than zero!
         ) (ty,ty',gamma',[alt']) alts
 
 typesynthAlt gti gamma loc alt =
-  traceNS "typesynthAlt" (gamma, loc, alt) $ checkwf gamma $
+  traceNS "typesynthAlt" (nolib gamma, loc, alt) $ checkwf gamma $
   typesynthAlt_ gti gamma loc alt
 
 -- Tuple alternative
@@ -1183,7 +1193,7 @@ typesynthAlt_ gti gamma loc (Alternative con args expr) = do
 --   typeapplysynth Γ loc A e = (C, Δ) <=> Γ |- A . e =>> C -| Δ
 typeapplysynth :: GlobalTypeInfo -> Context -> Location -> Type -> Expr
    -> TIMonad (Type, Location, Context, Expr -> Expr)
-typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, e) $
+typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (nolib gamma, loc, typ, e) $
   checkwftype gamma typ $
   case typ of
     -- ForallApp
@@ -1241,7 +1251,7 @@ typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (gamma, loc, typ, 
 --   locapplysynth Γ loc A loc0 = (C, Δ) <=> Γ |- A . loc0 =>> C -| Δ
 locsapplysynth :: GlobalTypeInfo -> Context -> Location -> Type -> [Location]
   -> TIMonad (Type, Context, Expr -> Expr)
-locsapplysynth gti gamma loc typ locs0 = traceNS "locsapplysynth" (gamma, loc, typ, locs0) $
+locsapplysynth gti gamma loc typ locs0 = traceNS "locsapplysynth" (nolib gamma, loc, typ, locs0) $
   checkwftype gamma typ $
   case typ of
     -- LForall LocApp
