@@ -1017,9 +1017,9 @@ typesynthExpr_ gti gamma loc (Let letBindingDecls expr) = do
 
   (letty, delta, expr') <- typesynthExpr gti gammaExt loc (substs_ subst' expr)
 
-  let (lastx, lastty) = head letBindingTypeInfo
-  let lastx' = head [ x' | (Var x', x) <- subst', lastx == x ]
-  let delta' = dropMarker (CVar lastx' lastty) delta
+  let (headx, headty) = head letBindingTypeInfo
+  let headx' = head [ x' | (Var x', x) <- subst', headx == x ]
+  let delta' = dropMarker (CVar headx' headty) delta
   let revsubst' = [(Var x, x') | (Var x', x) <- subst']
         
   return (apply delta letty, delta', Let letBindingDecls' (substs_ revsubst' expr')) -- Todo: confirm letty vs. apply delta letty

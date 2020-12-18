@@ -3,16 +3,6 @@
 // Testcase: Nested let expressions
 // --------------------------------
 
-x0 : Int
-   = let {
-        z : Int = 135 ;
-	y : Int
-	  = let {
-	       w : Int = z
-	    } w end
-     } y end ;
-	         
-
 x1 : Bool = True ;
 
 x2 : String
@@ -48,5 +38,83 @@ x7 : Bool
      } let {
         x : Bool = False
        } x end
-     end
+     end;
+
+x8 : Int
+   = let {
+        z : Int = 135 ;
+	y : Int
+	  = let {
+	       w : Int = z
+	    } w end
+     } y end ;
+
+x9 : Int
+   = let {
+        a : Int = 135 ;
+        b : Int = 135 ;
+        c : Int = 135 ;
+        z : Int = 135 ;
+	y : Int
+	  = let {
+	       w : Int = z
+	    } w end
+     } y end ;
+
+x10 : Int
+   = let {
+        z : Int = 135 ;
+        a : Int = 135 ;
+        b : Int = 135 ;
+        c : Int = 135 ;
+	y : Int
+	  = let {
+	       w : Int = z
+	    } w end
+     } y end ;
+
+x11 : Int
+   = let {
+        a : Int = 135 ;
+        b : Int = 135 ;
+        z : Int = 135 ;
+        c : Int = 135 ;
+	y : Int
+	  = let {
+	       w : Int = z
+	    } w end
+     } y end ;
+
+x12 : Int
+   = let {
+        a : Int = 135 ;
+        b : Int = 135 ;
+        z : Int = 135 ;
+        c : Int = 135 ;
+	y : Int
+	  = let {
+               d : Int = 135 ;
+	       w : Int = z
+	    } w end
+     } y end ;
+
+
+x13 : String
+   = let {
+       z : String = "hello world" ;
+       w : String = z
+     } w end ;
+
+
+x14 : String
+   = let {
+        z : Bool = True ;
+	y : String
+	  = let {
+               z : String = "helloworld" ;
+	       w : String = z
+	    } w end
+     } y end 
+
+
 

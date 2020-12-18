@@ -493,11 +493,12 @@ subst e' x (Abs vTyLocs e)
   where
     fst3 (x,y,z) = x
 
-subst e' x (Let bindingDecls e) = Let (fmap f bindingDecls) (g e)
+subst e' x (Let bindingDecls e) = Let (f bindingDecls) (g e)
   where
-    f (Binding b y ty e)
-      | x == y    = Binding b y ty e
-      | otherwise = Binding b y ty (subst e' x e)
+    f [] = []
+    f (Binding b y ty e : binds)
+      | x == y    = Binding b y ty e : binds
+      | otherwise = Binding b y ty (subst e' x e) : f binds
 
     g e
       | x `elem` [ y | (Binding _ y _ _) <- bindingDecls ] = e
