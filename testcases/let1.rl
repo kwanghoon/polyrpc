@@ -3,6 +3,16 @@
 // Testcase: Nested let expressions
 // --------------------------------
 
+x0 : Int
+   = let {
+        z : Int = 135 ;
+	y : Int
+	  = let {
+	       w : Int = z
+	    } w end
+     } y end ;
+	         
+
 x1 : Bool = True ;
 
 x2 : String

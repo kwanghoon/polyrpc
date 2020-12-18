@@ -21,7 +21,7 @@ module Expr(Expr(..), ExprVar, AST(..), BindingDecl(..), DataTypeDecl(..)
   , toASTIdTypeLocSeq, toASTIdTypeLoc
   , toASTAlternativeSeq, toASTAlternative
   , toASTTriple, toASTLit
-  , subst, substs, tyExprSubst, tyExprSubsts, locExprSubst, locExprSubsts
+  , subst, substs, substs_, tyExprSubst, tyExprSubsts, locExprSubst, locExprSubsts
   ) where
 
 import Location
@@ -404,7 +404,7 @@ instance Pretty Expr where
       fb (last bindDecls) .
       showString " } " .
       bpretty 0 e .
-      showString "end"
+      showString " end"
       where
          fb (Binding istop x ty e) =
            showString (x ++ " : ") .
@@ -493,10 +493,15 @@ subst e' x (Abs vTyLocs e)
   where
     fst3 (x,y,z) = x
 
-subst e' x (Let bindingDecls e) =
-  Let (fmap f bindingDecls) (subst e' x e)
+subst e' x (Let bindingDecls e) = Let (fmap f bindingDecls) (g e)
   where
-    f (Binding b x ty e) = Binding b x ty (subst e' x e)
+    f (Binding b y ty e)
+      | x == y    = Binding b y ty e
+      | otherwise = Binding b y ty (subst e' x e)
+
+    g e
+      | x `elem` [ y | (Binding _ y _ _) <- bindingDecls ] = e
+      | otherwise = subst e' x e
 
 subst e' x (Case e maybety alts) =
   Case (subst e' x e) maybety (fmap f alts)
@@ -522,6 +527,8 @@ subst e' x (Constr c locs tys es argtys) =
 
 substs es' xs' e = 
   foldl (\ e0 (e',x) -> subst e' x e0) e (zip es' xs')
+
+substs_ exs e = let (es, xs) = unzip exs in substs es xs e
 
 -- | tyExprSubst ty alpha e = [ty/alpha]e
 tyExprSubst :: Type -> TypeVar -> Expr -> Expr

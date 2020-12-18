@@ -904,7 +904,7 @@ typecheckExpr_ gti gamma loc (Abs [(x,mty,loc0)] e) (FunType a loc' b) = do
   let loc0' = loc0
   x' <- lift $ freshVar
   gamma0 <- subloc gamma loc' loc0'
-  (gamma1, e') <- typecheckExpr_ gti (gamma0 >: CVar x' a) loc0' (subst (Var x') x e) b
+  (gamma1, e') <- typecheckExpr_ gti (gamma0 >++ [CVar x' a]) loc0' (subst (Var x') x e) b
   let instgamma1 = instUnsolved (CVar x' a) gamma1
   let delta = dropMarker (CVar x' a) gamma1
   return (delta, Abs [(x,Just a, loc0')] (subst (Var x) x' (eapply instgamma1 e')))
@@ -914,7 +914,7 @@ typecheckExpr_ gti gamma loc (Abs ((x,mty,loc0):xmtyls) e) (FunType a loc' b) = 
   let loc0' = loc0
   x' <- lift $ freshVar
   gamma0 <- subloc gamma loc' loc0'
-  (gamma1, e') <- typecheckExpr_ gti (gamma0 >: CVar x' a) loc0' (subst (Var x') x (Abs xmtyls e)) b
+  (gamma1, e') <- typecheckExpr_ gti (gamma0 >++ [CVar x' a]) loc0' (subst (Var x') x (Abs xmtyls e)) b
   let instgamma1 = instUnsolved (CVar x' a) gamma1
   let delta = dropMarker (CVar x' a) gamma1
 
@@ -999,21 +999,30 @@ typesynthExpr_ gti gamma loc (Let letBindingDecls expr) = do
   let typeInfo = _typeInfo gti
   partial_elab_letBindingDecls
      <- elabBindingTypes typeInfo (typeVars gamma) (locVars gamma) letBindingDecls
-  let gti1 = gti
-  (gamma', letBindingDecls') <- bidi gti1 gamma loc partial_elab_letBindingDecls
-
-  letBindingTypeInfo <- bindingTypes partial_elab_letBindingDecls -- for let body
-  let xs = map fst letBindingTypeInfo
-  xs' <- lift $ replicateM (length xs) freshVar
-  let letBindingTypeInfo' = map (\(x',(_,ty))-> (x',ty)) (zip xs' letBindingTypeInfo)
-
-  (letty, delta, expr') <-
-    typesynthExpr gti (gamma >++ map (uncurry CVar) letBindingTypeInfo') loc
-      (substs (map Var xs') xs expr)
-
-  let delta' = dropMarker (CVar (last xs') (snd (last letBindingTypeInfo'))) delta
         
-  return (letty, delta', Let letBindingDecls' (substs (map Var xs) xs' expr'))
+  letBindingTypeInfo <- bindingTypes partial_elab_letBindingDecls -- for let body
+
+  (gammaExt, letBindingDecls', subst') <-
+    foldM
+      (\ (gamma0, binds0, subst0) (Binding istop name ty0 expr0) -> do
+          name' <- lift $ freshVar
+          let gamma1 = gamma0 >++ [CVar name' ty0]
+          let subst1 = subst0 ++ [(Var name', name)]
+          (gamma1', expr0') <-
+            typecheckExpr gti gamma1 loc (substs_ subst1 expr0) ty0
+          let revsubst1 = [(Var x, x') | (Var x', x) <- subst1]
+          let binds1 = binds0 ++ [Binding istop name ty0 (substs_ revsubst1 expr0')]
+          return (gamma1', binds1, subst1))
+      (gamma, [], []) partial_elab_letBindingDecls
+
+  (letty, delta, expr') <- typesynthExpr gti gammaExt loc (substs_ subst' expr)
+
+  let (lastx, lastty) = head letBindingTypeInfo
+  let lastx' = head [ x' | (Var x', x) <- subst', lastx == x ]
+  let delta' = dropMarker (CVar lastx' lastty) delta
+  let revsubst' = [(Var x, x') | (Var x', x) <- subst']
+        
+  return (apply delta letty, delta', Let letBindingDecls' (substs_ revsubst' expr')) -- Todo: confirm letty vs. apply delta letty
 
 -- Case
 typesynthExpr_ gti gamma loc (Case expr _ alts) = do
