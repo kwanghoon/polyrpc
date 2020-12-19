@@ -559,7 +559,7 @@ instantiateLocL gamma l loc
         | otherwise ->
             throwError $ "instantiateLocL: not ended with ^: " ++ l'
       _ -> throwError $ "The impossible happened! instantiateLocL: "
-                ++ pretty (gamma, l, loc)
+                ++ pretty (gamma, LocVar l, loc)
 
   | otherwise =
     throwError $ "instantiateLocL: not ended with ^: " ++ l
@@ -585,7 +585,7 @@ instantiateLocR gamma loc l
               throwError $ "instantiateLocR: not ended with ^: " ++ l'
 
         _ -> throwError $ "The impossible happened! instantiateLocR: "
-                  ++ pretty (gamma, loc, l)
+                  ++ pretty (gamma, loc, LocVar l)
 
   | otherwise =
     throwError $ "instantiateLocR: not ended with ^: " ++ l
@@ -729,7 +729,7 @@ instantiateL' gamma alpha a
 instantiateL_ gamma alpha a =
   checkwftype gamma a $ checkwftype gamma (TypeVarType alpha) $
   case solve gamma alpha =<< monotype a of
-    -- InstLSolve
+    -- InstLSolve :
     Just gamma' -> return gamma'
     Nothing -> case a of
       -- InstLReach
@@ -775,22 +775,35 @@ instantiateL_ gamma alpha a =
       -- Note: TupleType and ConType should be monomorphic types that
       --       will be handled above.
 
-      -- InstLTupleType
-      -- TupleType tys -> do
-      --   alphas <- lift $ replicateM (length tys) freshExistsTypeVar
-      --   foldM (\gamma (alphai, ai) ->
-      --            instantiateL gamma alphai (apply gamma ai))
-      --          (gamma >++ map CExists alphas
-      --                 >++ [CExistsSolved alpha (TupleType (map TypeVarType alphas))])
-      --          (zip alphas tys)
-
       -- InstLConstr
-      -- ConType c locs tys -> do
-      --   throwError "instantiateL: ConType: Not implemented"
+      ConType c locs tys -> do
+        ls <- lift $ replicateM (length locs) freshExistsLocationVar
+        betas <- lift $ replicateM (length tys) freshExistsTypeVar
+        let gammaReplace = context
+               $ map CLExists ls ++ map CExists betas ++ 
+                 [CExistsSolved alpha
+                    (ConType c (map LocVar ls) (map TypeVarType betas))]
+        let gamma0 = insertAt gamma (CExists alpha) gammaReplace
+        
+        gamma1 <- foldM (\gamma (l, loc) -> instantiateLocL gamma l loc)
+                    gamma0 (zip ls locs)
+               
+        foldM (\gamma (beta, argty) -> instantiateL gamma beta argty)
+                 gamma1 (zip betas tys)
 
-
+      -- InstLTupleType
+      TupleType argTys -> do
+        betas <- lift $ replicateM (length argTys) freshExistsTypeVar
+        let gammaReplace = context
+               $ map CExists betas ++
+                 [CExistsSolved alpha (TupleType (map TypeVarType betas))]
+        let gamma0 = insertAt gamma (CExists alpha) gammaReplace
+        
+        foldM (\gamma (beta, argty) -> instantiateL gamma beta argty)
+                 gamma0 (zip betas argTys)
+        
       _ -> throwError $ "The impossible happened! instantiateL: "
-                ++ pretty (gamma, alpha, a)
+                ++ pretty (gamma, TypeVarType alpha, a)
 
 
 -- | Algorithmic instantiation (right):
@@ -852,21 +865,35 @@ instantiateR_ gamma a alpha =
       -- Note: TupleType and ConType should be monomorphic types that
       --       will be handled above.
 
-      -- InstRTupleType
-      -- TupleType tys -> do
-      --   alphas <- lift $ replicateM (length tys) freshExistsTypeVar
-      --   foldM (\gamma (alphai, ai) ->
-      --            instantiateR gamma (apply gamma ai) alphai)
-      --          (gamma >++ map CExists alphas
-      --                 >++ [CExistsSolved alpha (TupleType (map TypeVarType alphas))])
-      --          (zip alphas tys)
-
       -- InstRConstr
-      -- ConType c locs tys -> do
-      --   throwError "instantiateR: ConType: Not implemented"
+      ConType c locs tys -> do
+        ls <- lift $ replicateM (length locs) freshExistsLocationVar
+        betas <- lift $ replicateM (length tys) freshExistsTypeVar
+        let gammaReplace = context
+               $ map CLExists ls ++ map CExists betas ++ 
+                 [CExistsSolved alpha
+                    (ConType c (map LocVar ls) (map TypeVarType betas))]
+        let gamma0 = insertAt gamma (CExists alpha) gammaReplace
+        
+        gamma1 <- foldM (\gamma (l, loc) -> instantiateLocR gamma loc l)
+                    gamma0 (zip ls locs)
+               
+        foldM (\gamma (beta, argty) -> instantiateR gamma argty beta)
+                 gamma1 (zip betas tys)
 
+      -- InstRTuple
+      TupleType argTys -> do
+        betas <- lift $ replicateM (length argTys) freshExistsTypeVar
+        let gammaReplace = context
+               $ map CExists betas ++
+                 [CExistsSolved alpha (TupleType (map TypeVarType betas))]
+        let gamma0 = insertAt gamma (CExists alpha) gammaReplace
+
+        foldM (\gamma (argty, beta) -> instantiateR gamma argty beta)
+                 gamma0 (zip argTys betas)
+        
       _ -> throwError $ "The impossible happened! instantiateR: "
-                ++ pretty (gamma, a, alpha)
+                ++ pretty (gamma, a, TypeVarType alpha)
 
 
 -- | Type checking:
@@ -1165,19 +1192,18 @@ typesynthAlt gti gamma loc alt =
 -- Tuple alternative
 typesynthAlt_ gti gamma loc (TupleAlternative args expr) = do
   alphas <- lift $ replicateM (length args) freshExistsTypeVar
-  beta   <- lift $ freshExistsTypeVar
+  -- beta   <- lift $ freshExistsTypeVar
   xs     <- lift $ replicateM (length args) freshVar
   let expr0 = substs (map Var xs) args expr
-  (delta, expr')
-     <- typecheckExpr gti
+  (exprTy, delta, expr')
+     <- typesynthExpr gti
           (gamma >++ map CExists alphas
-                 >++ [CExists beta]
-                 >++ [ cvar arg (TypeVarType alpha)
-                     | (arg, alpha) <- zip args alphas ])
-          loc expr0 (TypeVarType beta)
+                 -- >++ [CExists beta]
+                 >++ [ cvar x (TypeVarType alpha) | (x, alpha) <- zip xs alphas ])
+          loc expr0 -- (TypeVarType beta)
   let expr0' = substs (map Var args) xs expr'          
   return (TupleType (map TypeVarType alphas)
-         , TypeVarType beta, delta, TupleAlternative args expr0')
+         , exprTy, delta, TupleAlternative args expr0')
 
 -- Data constructor alternative
 typesynthAlt_ gti gamma loc (Alternative con args expr) = do
@@ -1193,9 +1219,6 @@ typesynthAlt_ gti gamma loc (Alternative con args expr) = do
         let substTy = zip tyvars (map TypeVarType alphas)
 
         let substedArgtys = map (doSubst substTy . doSubstLoc substLoc) argtys
-        -- let substedConty =
-        --       doSubst substTy $ doSubstLoc substLoc
-        --          $ ConType datatypename (map LocVar locvars) (map TypeVarType tyvars)
 
         let expr0 = substs (map Var xs) args expr
         
