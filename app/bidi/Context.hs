@@ -20,7 +20,7 @@ data ContextKind = Complete | Incomplete
 --   Only Incomplete contexts can have unsolved existentials.
 data ContextElem :: ContextKind -> * where
   CForall        :: TypeVar -> ContextElem a          -- ^ alpha
-  CVar           :: ExprVar -> Type -> ContextElem a  -- ^ x : A
+  CVar           :: ExprVar -> Bool -> Type -> ContextElem a  -- ^ x : A  -- extern lib: True, local var: False
   CExists        :: TypeVar -> ContextElem Incomplete -- ^ alpha^
   CExistsSolved  :: TypeVar -> Type -> ContextElem a  -- ^ alpha^ = tau
   CMarker        :: TypeVar -> ContextElem a          -- ^ |> alpha^
@@ -31,6 +31,8 @@ data ContextElem :: ContextKind -> * where
   CLMarker       :: LocationVar -> ContextElem a             -- ^ |> l^
 deriving instance Eq (ContextElem a)
 deriving instance Show (ContextElem a)
+
+cvar x ty = CVar x False ty -- for local var context
 
 --
 newtype GContext a   = Context [ContextElem a]
@@ -102,7 +104,7 @@ lunsolved :: Context -> [LocationVar]
 lunsolved (Context gamma) = [l | CLExists l <- gamma]
 
 vars :: Context -> [ExprVar]
-vars (Context gamma) = [x | CVar x _ <- gamma]
+vars (Context gamma) = [x | CVar x _ _ <- gamma]
 
 foralls :: Context -> [TypeVar]
 foralls (Context gamma) = [alpha | CForall alpha <- gamma]
@@ -161,7 +163,7 @@ wf (Context gamma) = case gamma of
     -- UvarCtx
     CForall alpha -> alpha `notElem` foralls gamma'
     -- VarCtx
-    CVar x a -> x `notElem` vars gamma' && typewf gamma' a
+    CVar x _ a -> x `notElem` vars gamma' && typewf gamma' a
     -- EvarCtx
     CExists alpha -> alpha `notElem` existentials gamma'
     -- SolvedEvarCtx
@@ -208,7 +210,7 @@ findSolved (Context gamma) v = listToMaybe [t | CExistsSolved v' t <- gamma, v =
 
 -- | findVarType (ΓL,x : A,ΓR) x = Just A
 findVarType :: Context -> ExprVar -> Maybe Type
-findVarType (Context gamma) v = listToMaybe [t | CVar v' t <- gamma, v == v']
+findVarType (Context gamma) v = listToMaybe [t | CVar v' _ t <- gamma, v == v']
 
 -- | findLSolved (ΓL,l^ = τ,ΓR) l = Just τ
 findLSolved :: Context -> LocationVar -> Maybe Location
@@ -312,16 +314,22 @@ lordered gamma l1 l2 =
 -- Pretty
 instance Pretty (GContext a) where
   bpretty d (Context []) = showString "[" . showString "]"
-  bpretty d (Context xs) =
-    let ys = map (bpretty d) $ reverse xs in
-    showString "[" .
-    foldl (\f g -> f . showString ", " . g) (head ys) (tail ys) .
-    showString "]"
+  bpretty d (Context xs) = 
+    let  f [] = []
+         f ((CVar _ True _):xs) = []
+         f (x:xs) = x: f xs
+    in
+      case f xs of
+        [] -> showString "[" . showString "]"
+        zs -> let ys = map (bpretty d) $ reverse zs in
+              showString "[" .
+              foldl (\f g -> f . showString ", " . g) (head ys) (tail ys) .
+              showString "]"
 
 instance Pretty (ContextElem a) where
   bpretty d cxte = case cxte of
     CForall v  -> showString v
-    CVar v t -> showParen (d > hastype_prec) $
+    CVar v _ t -> showParen (d > hastype_prec) $
       showString v . showString " : " . bpretty hastype_prec t
     CExists v -> showParen (d > exists_prec) $
       showString ("∃" ++ v)

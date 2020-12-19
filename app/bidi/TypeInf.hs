@@ -83,7 +83,9 @@ typeInf toplevelDecls = do
   -- let initEnv = (emptyEnv{_varEnv=_bindingTypeInfo gti ++ bindingTypeInfo})
   -- elab_bindingDecls <- elaborate gti initEnv clientLoc partial_elab_bindingDecls
 
-  let initGamma = mempty >++ map (uncurry CVar) (_bindingTypeInfo gti ++ bindingTypeInfo)
+  let libGamma = map (\(x,ty) -> CVar x True ty)
+                   (_bindingTypeInfo gti ++ bindingTypeInfo)
+  let initGamma = mempty >++ libGamma
   let (elab_bindingDecls) =
         case evalNameGen
                $ runExceptT
@@ -716,12 +718,15 @@ subtype gamma loc0 typ1 typ2 =
 -- | Algorithmic instantiation (left):
 --   instantiateL Γ α A = Δ <=> Γ |- α^ :=< A -| Δ
 instantiateL :: Context -> TypeVar -> Type -> TIMonad Context
-instantiateL gamma alpha a
+instantiateL gamma alpha a = 
+  traceNS "instantiateL" (nolib gamma, TypeVarType alpha, a) $
+  instantiateL' gamma alpha a
+
+instantiateL' gamma alpha a
   | cExists alpha = instantiateL_ gamma alpha a
   | otherwise = throwError $ "instantiateL: not ended with ^: " ++ alpha
 
 instantiateL_ gamma alpha a =
-  traceNS "instantiateL" (nolib gamma, alpha, a) $
   checkwftype gamma a $ checkwftype gamma (TypeVarType alpha) $
   case solve gamma alpha =<< monotype a of
     -- InstLSolve
@@ -791,12 +796,15 @@ instantiateL_ gamma alpha a =
 -- | Algorithmic instantiation (right):
 --   instantiateR Γ A α = Δ <=> Γ |- A =:< α -| Δ
 instantiateR :: Context -> Type -> TypeVar -> TIMonad Context
-instantiateR gamma a alpha
+instantiateR gamma a alpha =
+  traceNS "instantiateR" (nolib gamma, a, TypeVarType alpha) $
+  instantiateR' gamma a alpha
+  
+instantiateR' gamma a alpha
   | cExists alpha = instantiateR_ gamma a alpha
   | otherwise = throwError $ "instantiateR: not ended with ^: " ++ alpha
 
 instantiateR_ gamma a alpha =
-  traceNS "instantiateR" (nolib gamma, a, alpha) $
   checkwftype gamma a $ checkwftype gamma (TypeVarType alpha) $
   case solve gamma alpha =<< monotype a of
     Just gamma' -> return gamma'
@@ -904,9 +912,9 @@ typecheckExpr_ gti gamma loc (Abs [(x,mty,loc0)] e) (FunType a loc' b) = do
   let loc0' = loc0
   x' <- lift $ freshVar
   gamma0 <- subloc gamma loc' loc0'
-  (gamma1, e') <- typecheckExpr_ gti (gamma0 >++ [CVar x' a]) loc0' (subst (Var x') x e) b
-  let instgamma1 = instUnsolved (CVar x' a) gamma1
-  let delta = dropMarker (CVar x' a) gamma1
+  (gamma1, e') <- typecheckExpr_ gti (gamma0 >++ [cvar x' a]) loc0' (subst (Var x') x e) b
+  let instgamma1 = instUnsolved (cvar x' a) gamma1
+  let delta = dropMarker (cvar x' a) gamma1
   return (delta, Abs [(x,Just a, loc0')] (subst (Var x) x' (eapply instgamma1 e')))
 
 typecheckExpr_ gti gamma loc (Abs ((x,mty,loc0):xmtyls) e) (FunType a loc' b) = do
@@ -914,9 +922,9 @@ typecheckExpr_ gti gamma loc (Abs ((x,mty,loc0):xmtyls) e) (FunType a loc' b) = 
   let loc0' = loc0
   x' <- lift $ freshVar
   gamma0 <- subloc gamma loc' loc0'
-  (gamma1, e') <- typecheckExpr_ gti (gamma0 >++ [CVar x' a]) loc0' (subst (Var x') x (Abs xmtyls e)) b
-  let instgamma1 = instUnsolved (CVar x' a) gamma1
-  let delta = dropMarker (CVar x' a) gamma1
+  (gamma1, e') <- typecheckExpr_ gti (gamma0 >++ [cvar x' a]) loc0' (subst (Var x') x (Abs xmtyls e)) b
+  let instgamma1 = instUnsolved (cvar x' a) gamma1
+  let delta = dropMarker (cvar x' a) gamma1
 
   return (delta, Abs [(x,Just a,loc0')] (subst (Var x) x' (eapply instgamma1 e')))
 
@@ -970,11 +978,11 @@ typesynthExpr_ gti gamma loc expr@(Abs xmtyls e) = do
   (gamma', e') <- typecheckExpr gti
                     (gamma >++ map CExists alphas
                            >++ [CExists beta]
-                           >++ map (uncurry CVar)
+                           >++ map (uncurry cvar)
                                    (zip xs' (map TypeVarType alphas)))
                       (last locs) (substs (map Var xs') xs e) (TypeVarType beta)
-  let instgamma' = instUnsolved (CVar (last xs') (TypeVarType (last alphas))) gamma'
-  let delta = dropMarker (CVar (head xs') (TypeVarType (head alphas))) gamma'  -- Todo: Confirm head not last.
+  let instgamma' = instUnsolved (cvar (last xs') (TypeVarType (last alphas))) gamma'
+  let delta = dropMarker (cvar (head xs') (TypeVarType (head alphas))) gamma'  -- Todo: Confirm head not last.
   return (apply delta funty, delta,
           singleAbs $
           Abs (map (\ ((x,_,loc), ty)-> (x,ty,loc))
@@ -1006,7 +1014,7 @@ typesynthExpr_ gti gamma loc (Let letBindingDecls expr) = do
     foldM
       (\ (gamma0, binds0, subst0) (Binding istop name ty0 expr0) -> do
           name' <- lift $ freshVar
-          let gamma1 = gamma0 >++ [CVar name' ty0]
+          let gamma1 = gamma0 >++ [cvar name' ty0]
           let subst1 = subst0 ++ [(Var name', name)]
           (gamma1', expr0') <-
             typecheckExpr gti gamma1 loc (substs_ subst1 expr0) ty0
@@ -1019,7 +1027,7 @@ typesynthExpr_ gti gamma loc (Let letBindingDecls expr) = do
 
   let (headx, headty) = head letBindingTypeInfo
   let headx' = head [ x' | (Var x', x) <- subst', headx == x ]
-  let delta' = dropMarker (CVar headx' headty) delta
+  let delta' = dropMarker (cvar headx' headty) delta
   let revsubst' = [(Var x, x') | (Var x', x) <- subst']
         
   return (apply delta letty, delta', Let letBindingDecls' (substs_ revsubst' expr')) -- Todo: confirm letty vs. apply delta letty
@@ -1145,9 +1153,9 @@ typesynthAlts_ gti gamma loc (alt:alts) = do  -- Always more than zero!
   (ty,ty',gamma',alt') <- typesynthAlt gti gamma loc alt
   foldM (\ (ty0,ty0',gamma0,alts0) alt0 -> do
            (ty1,ty1',gamma1,alt1) <- typesynthAlt gti gamma0 loc alt0
-           (gamma2, _) <- subtype gamma1 loc ty0  ty1
-           (gamma3, _) <- subtype gamma2 loc ty0' ty1'
-           return (ty1, ty1', gamma3, alts0++[alt1])
+           (gamma2, _) <- subtype gamma1 loc (apply gamma1 ty0)  (apply gamma1 ty1)
+           (gamma3, _) <- subtype gamma2 loc (apply gamma2 ty0') (apply gamma2 ty1')
+           return (apply gamma3 ty1, apply gamma3 ty1', gamma3, alts0++[alt1])
         ) (ty,ty',gamma',[alt']) alts
 
 typesynthAlt gti gamma loc alt =
@@ -1158,15 +1166,18 @@ typesynthAlt gti gamma loc alt =
 typesynthAlt_ gti gamma loc (TupleAlternative args expr) = do
   alphas <- lift $ replicateM (length args) freshExistsTypeVar
   beta   <- lift $ freshExistsTypeVar
+  xs     <- lift $ replicateM (length args) freshVar
+  let expr0 = substs (map Var xs) args expr
   (delta, expr')
      <- typecheckExpr gti
           (gamma >++ map CExists alphas
                  >++ [CExists beta]
-                 >++ [ CVar arg (TypeVarType alpha)
+                 >++ [ cvar arg (TypeVarType alpha)
                      | (arg, alpha) <- zip args alphas ])
-          loc expr (TypeVarType beta)
+          loc expr0 (TypeVarType beta)
+  let expr0' = substs (map Var args) xs expr'          
   return (TupleType (map TypeVarType alphas)
-         , TypeVarType beta, delta, TupleAlternative args expr')
+         , TypeVarType beta, delta, TupleAlternative args expr0')
 
 -- Data constructor alternative
 typesynthAlt_ gti gamma loc (Alternative con args expr) = do
@@ -1175,23 +1186,29 @@ typesynthAlt_ gti gamma loc (Alternative con args expr) = do
       if length argtys==length args
       then do
         ls <- lift $ replicateM (length locvars) freshExistsLocationVar
-        alphas <- lift $ replicateM (length locvars) freshExistsTypeVar
+        alphas <- lift $ replicateM (length tyvars) freshExistsTypeVar
+        xs <- lift $ replicateM (length args) freshVar
 
         let substLoc = zip locvars (map LocVar ls)
         let substTy = zip tyvars (map TypeVarType alphas)
 
         let substedArgtys = map (doSubst substTy . doSubstLoc substLoc) argtys
-        let substedRetty =
-              doSubst substTy $ doSubstLoc substLoc
-                 $ ConType datatypename (map LocVar locvars) (map TypeVarType tyvars)
+        -- let substedConty =
+        --       doSubst substTy $ doSubstLoc substLoc
+        --          $ ConType datatypename (map LocVar locvars) (map TypeVarType tyvars)
 
-        (gamma', expr') <-
-          typecheckExpr gti
-            (gamma >++ map CExists alphas >++ map CLExists ls)
-               loc expr substedRetty
+        let expr0 = substs (map Var xs) args expr
+        
+        (exprTy, gamma', expr') <-
+          typesynthExpr gti
+            (gamma >++ map CLExists ls >++ map CExists alphas 
+                   >++ map (uncurry cvar) (zip xs substedArgtys))
+               loc expr0 
+
+        let expr0' = substs (map Var args) xs expr'
 
         return (ConType datatypename (map LocVar ls) (map TypeVarType alphas)
-               , substedRetty, gamma', Alternative con args expr')
+               , exprTy, gamma', Alternative con args expr0')
 
       else throwError $ "[TypeInf] typesynthAlt: invalid arg length: " ++ con ++ show args
 
