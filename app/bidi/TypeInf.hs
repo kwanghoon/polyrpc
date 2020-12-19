@@ -942,7 +942,7 @@ typecheckExpr_ gti gamma loc (Abs [(x,mty,loc0)] e) (FunType a loc' b) = do
   (gamma1, e') <- typecheckExpr_ gti (gamma0 >++ [cvar x' a]) loc0' (subst (Var x') x e) b
   let instgamma1 = instUnsolved (cvar x' a) gamma1
   let delta = dropMarker (cvar x' a) gamma1
-  return (delta, Abs [(x,Just a, loc0')] (subst (Var x) x' (eapply instgamma1 e')))
+  return (delta, Abs [(x,Just (apply delta a), loc0')] (subst (Var x) x' (eapply instgamma1 e')))
 
 typecheckExpr_ gti gamma loc (Abs ((x,mty,loc0):xmtyls) e) (FunType a loc' b) = do
   -- loc0' <- elabLocation (locVars gamma) loc0
@@ -953,7 +953,7 @@ typecheckExpr_ gti gamma loc (Abs ((x,mty,loc0):xmtyls) e) (FunType a loc' b) = 
   let instgamma1 = instUnsolved (cvar x' a) gamma1
   let delta = dropMarker (cvar x' a) gamma1
 
-  return (delta, Abs [(x,Just a,loc0')] (subst (Var x) x' (eapply instgamma1 e')))
+  return (delta, Abs [(x,Just (apply delta a),loc0')] (subst (Var x) x' (eapply instgamma1 e')))
 
 -- Sub
 typecheckExpr_ gti gamma loc e b = do

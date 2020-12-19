@@ -338,7 +338,7 @@
                                                                                         [{"ConType": ["Int",
                                                                                                       [],
                                                                                                       []]}]]}]}]}},
-                                        {"Abs": [[["x", {"Just": {"TypeVarType": "'l^"}},
+                                        {"Abs": [[["x", {"Just": {"ConType": ["Int", [], []]}},
                                                    {"Location": "client"}]],
                                                  {"Prim": ["AddPrimOp", [{"Location": "client"}],
                                                            [],
