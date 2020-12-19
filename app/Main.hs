@@ -79,7 +79,6 @@ doProcess cmd file = do
   print_rpc cmd file elab_toplevelDecls
 -}
 
-{-
   putStrLn "[Compiling]"
   (t_gti, funStore, t_expr) <- compile gti elab_toplevelDecls
   verbose (_flag_debug_compile cmd) $ putStrLn "Dumping...\nGlobal type information:\n"
@@ -109,7 +108,7 @@ doProcess cmd file = do
   putStrLn "[Executing codes]"
   v <- execute (_flag_debug_run cmd) t_gti funStore t_expr
   verbose (_flag_debug_run cmd) $ putStrLn $ "[Result]\n" ++ show v
--}
+
   putStrLn "[Success]"
 
 

@@ -218,7 +218,7 @@ compExpr s_gti env loc (ST.TypeAbsType tyvars0 s_ty) funStore (SE.TypeAbs tyvars
   return (funStore2, TE.ValExpr $ TE.UnitM closure)
 
 compExpr s_gti env loc s_ty funStore (SE.TypeAbs tyvars expr) = do
-  error $ "[compVal] Not type-abstraction type: " ++ show s_ty
+  error $ "[compVal] Not type-abstraction type: " ++ show s_ty ++ " in " ++ show (SE.TypeAbs tyvars expr)
 
 
 compExpr s_gti env loc (ST.LocAbsType locvars0 s_ty) funStore (SE.LocAbs locvars1 expr) = do

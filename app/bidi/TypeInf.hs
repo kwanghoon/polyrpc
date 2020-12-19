@@ -955,6 +955,13 @@ typecheckExpr_ gti gamma loc (Abs ((x,mty,loc0):xmtyls) e) (FunType a loc' b) = 
 
   return (delta, Abs [(x,Just (apply delta a),loc0')] (subst (Var x) x' (eapply instgamma1 e')))
 
+-- Case
+typecheckExpr_ gti gamma loc (Case expr _ alts) caseExprTy = do
+  (ty1, gamma0, alts') <- typecheckAlts gti gamma loc alts caseExprTy
+  (gamma', expr') <- typecheckExpr gti gamma0 loc expr ty1
+  return (gamma', eapply gamma' (Case expr' (Just ty1) alts'))
+
+
 -- Sub
 typecheckExpr_ gti gamma loc e b = do
   (a, theta, e') <- typesynthExpr gti gamma loc e
@@ -963,6 +970,89 @@ typecheckExpr_ gti gamma loc e b = do
 
 -- typecheckExpr_ gti gamma loc e typ = do
 --   throwError $ "typecheckExpr: not implemented yet"
+
+-- | Alternative synthesising:
+--   typesynthAlt Γ loc alts = (D B, A, Δ) <=> Γ |- alt => D B, A -| Δ
+typecheckAlts :: GlobalTypeInfo -> Context -> Location -> [Alternative] -> Type -> TIMonad (Type, Context, [Alternative])
+typecheckAlts gti gamma loc alts altsRetTy =
+  traceNS "typecheckAlts" (nolib gamma, loc, alts, altsRetTy) $ checkwf gamma $
+  if valid alts then typecheckAlts_ gti gamma loc alts altsRetTy
+  else throwError $ "[TypeInf] typecheckAlts: invalid alternatives"
+
+  where
+    valid alts = oneTupleAlt alts || conAlts alts
+
+    oneTupleAlt [TupleAlternative _ _] = True
+    oneTupleAlt _ = False
+
+    conAlts [] = False   -- Having an empty alternative is error!!
+    conAlts [Alternative _ _ _] = True
+    conAlts ((Alternative _ _ _):alts) = conAlts alts
+
+typecheckAlts_ :: GlobalTypeInfo -> Context -> Location -> [Alternative] -> Type -> TIMonad (Type, Context, [Alternative])
+typecheckAlts_ gti gamma loc (alt:alts) altsRetTy = do  -- Always more than zero!
+  alpha <- lift $ freshTypeVar
+  (ty,gamma',alt') <- typecheckAlt gti gamma loc alt altsRetTy
+  foldM (\ (ty0,gamma0,alts0) alt0 -> do
+           (ty1,gamma1,alt1) <- typecheckAlt gti gamma0 loc alt0 altsRetTy
+           (gamma2, _) <- subtype gamma1 loc (apply gamma1 ty0)  (apply gamma1 ty1)
+           return (apply gamma2 ty1, gamma2, alts0++[alt1])
+        ) (ty,gamma',[alt']) alts
+
+typecheckAlt gti gamma loc alt altsRetTy =
+  traceNS "typecheckAlt" (nolib gamma, loc, alt) $ checkwf gamma $
+  typecheckAlt_ gti gamma loc alt altsRetTy
+
+-- Tuple alternative
+typecheckAlt_ gti gamma loc (TupleAlternative args expr) altsRetTy = do
+  alphas <- lift $ replicateM (length args) freshExistsTypeVar
+  -- beta   <- lift $ freshExistsTypeVar
+  xs     <- lift $ replicateM (length args) freshVar
+  let expr0 = substs (map Var xs) args expr
+  (delta, expr')
+     <- typecheckExpr gti
+          (gamma >++ map CExists alphas
+                 -- >++ [CExists beta]
+                 >++ [ cvar x (TypeVarType alpha) | (x, alpha) <- zip xs alphas ])
+          loc expr0 altsRetTy 
+  let expr0' = substs (map Var args) xs expr'          
+  return (TupleType (map (apply delta) (map TypeVarType alphas))
+         , delta, TupleAlternative args expr0')
+
+-- Data constructor alternative
+typecheckAlt_ gti gamma loc (Alternative con args expr) altsRetTy = do
+  case lookupConFromDataTypeInfo gti con loc of
+    ((locvars,tyvars,argtys,datatypename):_) ->
+      if length argtys==length args
+      then do
+        ls <- lift $ replicateM (length locvars) freshExistsLocationVar
+        alphas <- lift $ replicateM (length tyvars) freshExistsTypeVar
+        xs <- lift $ replicateM (length args) freshVar
+
+        let substLoc = zip locvars (map LocVar ls)
+        let substTy = zip tyvars (map TypeVarType alphas)
+
+        let substedArgtys = map (doSubst substTy . doSubstLoc substLoc) argtys
+
+        let expr0 = substs (map Var xs) args expr
+        
+        (gamma', expr') <-
+          typecheckExpr gti
+            (gamma >++ map CLExists ls >++ map CExists alphas 
+                   >++ map (uncurry cvar) (zip xs substedArgtys))
+               loc expr0 altsRetTy
+
+        let expr0' = substs (map Var args) xs expr'
+
+        return (ConType datatypename
+                  (map (lapply gamma') (map LocVar ls))
+                  (map (apply gamma') (map TypeVarType alphas))
+               , gamma', Alternative con args expr0')
+
+      else throwError $ "[TypeInf] typecheckAlt: invalid arg length: " ++ con ++ show args
+
+    [] -> throwError $ "[TypeInf] typecheckAlt: constructor not found" ++ con
+
 
 
 -- | Type synthesising:
@@ -1060,10 +1150,10 @@ typesynthExpr_ gti gamma loc (Let letBindingDecls expr) = do
   return (apply delta letty, delta', Let letBindingDecls' (substs_ revsubst' expr')) -- Todo: confirm letty vs. apply delta letty
 
 -- Case
-typesynthExpr_ gti gamma loc (Case expr _ alts) = do
-  (ty1, ty2, gamma0, alts') <- typesynthAlts gti gamma loc alts
-  (gamma', expr') <- typecheckExpr gti gamma0 loc expr ty1
-  return (apply gamma' ty2, gamma', eapply gamma' (Case expr' (Just ty1) alts'))
+-- typesynthExpr_ gti gamma loc (Case expr _ alts) = do
+--   (ty1, ty2, gamma0, alts') <- typesynthAlts gti gamma loc alts
+--   (gamma', expr') <- typecheckExpr gti gamma0 loc expr ty1
+--   return (apply gamma' ty2, gamma', eapply gamma' (Case expr' (Just ty1) alts'))
 
 -- ->E
 typesynthExpr_ gti gamma loc expr@(App e1 maybeTy e2 maybeLoc) = do
@@ -1159,85 +1249,86 @@ typesynthExpr_ gti gamma loc expr = do
 
 -- | Alternative synthesising:
 --   typesynthAlt Γ loc alts = (D B, A, Δ) <=> Γ |- alt => D B, A -| Δ
-typesynthAlts :: GlobalTypeInfo -> Context -> Location -> [Alternative] -> TIMonad (Type, Type, Context, [Alternative])
-typesynthAlts gti gamma loc alts =
-  traceNS "typesynthAlts" (nolib gamma, loc, alts) $ checkwf gamma $
-  if valid alts then typesynthAlts_ gti gamma loc alts
-  else throwError $ "[TypeInf] typesynthAlts: invalid alternatives"
+-- typesynthAlts :: GlobalTypeInfo -> Context -> Location -> [Alternative] -> TIMonad (Type, Type, Context, [Alternative])
+-- typesynthAlts gti gamma loc alts =
+--   traceNS "typesynthAlts" (nolib gamma, loc, alts) $ checkwf gamma $
+--   if valid alts then typesynthAlts_ gti gamma loc alts
+--   else throwError $ "[TypeInf] typesynthAlts: invalid alternatives"
 
-  where
-    valid alts = oneTupleAlt alts || conAlts alts
+--   where
+--     valid alts = oneTupleAlt alts || conAlts alts
 
-    oneTupleAlt [TupleAlternative _ _] = True
-    oneTupleAlt _ = False
+--     oneTupleAlt [TupleAlternative _ _] = True
+--     oneTupleAlt _ = False
 
-    conAlts [] = False   -- Having an empty alternative is error!!
-    conAlts [Alternative _ _ _] = True
-    conAlts ((Alternative _ _ _):alts) = conAlts alts
+--     conAlts [] = False   -- Having an empty alternative is error!!
+--     conAlts [Alternative _ _ _] = True
+--     conAlts ((Alternative _ _ _):alts) = conAlts alts
 
-typesynthAlts_ :: GlobalTypeInfo -> Context -> Location -> [Alternative] -> TIMonad (Type, Type, Context, [Alternative])
-typesynthAlts_ gti gamma loc (alt:alts) = do  -- Always more than zero!
-  (ty,ty',gamma',alt') <- typesynthAlt gti gamma loc alt
-  foldM (\ (ty0,ty0',gamma0,alts0) alt0 -> do
-           (ty1,ty1',gamma1,alt1) <- typesynthAlt gti gamma0 loc alt0
-           (gamma2, _) <- subtype gamma1 loc (apply gamma1 ty0)  (apply gamma1 ty1)
-           (gamma3, _) <- subtype gamma2 loc (apply gamma2 ty0') (apply gamma2 ty1')
-           return (apply gamma3 ty1, apply gamma3 ty1', gamma3, alts0++[alt1])
-        ) (ty,ty',gamma',[alt']) alts
+-- typesynthAlts_ :: GlobalTypeInfo -> Context -> Location -> [Alternative] -> TIMonad (Type, Type, Context, [Alternative])
+-- typesynthAlts_ gti gamma loc (alt:alts) = do  -- Always more than zero!
+--   alpha <- lift $ freshTypeVar
+--   (ty,ty',gamma',alt') <- typesynthAlt gti gamma loc alt
+--   foldM (\ (ty0,ty0',gamma0,alts0) alt0 -> do
+--            (ty1,ty1',gamma1,alt1) <- typesynthAlt gti gamma0 loc alt0
+--            (gamma2, _) <- subtype gamma1 loc (apply gamma1 ty0)  (apply gamma1 ty1)
+--            (gamma3, _) <- subtype gamma2 loc (apply gamma2 ty0') (apply gamma2 ty1')
+--            return (apply gamma3 ty1, apply gamma3 ty1', gamma3, alts0++[alt1])
+--         ) (ty,ty',gamma',[alt']) alts
 
-typesynthAlt gti gamma loc alt =
-  traceNS "typesynthAlt" (nolib gamma, loc, alt) $ checkwf gamma $
-  typesynthAlt_ gti gamma loc alt
+-- typesynthAlt gti gamma loc alt =
+--   traceNS "typesynthAlt" (nolib gamma, loc, alt) $ checkwf gamma $
+--   typesynthAlt_ gti gamma loc alt
 
 -- Tuple alternative
-typesynthAlt_ gti gamma loc (TupleAlternative args expr) = do
-  alphas <- lift $ replicateM (length args) freshExistsTypeVar
-  -- beta   <- lift $ freshExistsTypeVar
-  xs     <- lift $ replicateM (length args) freshVar
-  let expr0 = substs (map Var xs) args expr
-  (exprTy, delta, expr')
-     <- typesynthExpr gti
-          (gamma >++ map CExists alphas
-                 -- >++ [CExists beta]
-                 >++ [ cvar x (TypeVarType alpha) | (x, alpha) <- zip xs alphas ])
-          loc expr0 -- (TypeVarType beta)
-  let expr0' = substs (map Var args) xs expr'          
-  return (TupleType (map (apply delta) (map TypeVarType alphas))
-         , exprTy, delta, TupleAlternative args expr0')
+-- typesynthAlt_ gti gamma loc (TupleAlternative args expr) = do
+--   alphas <- lift $ replicateM (length args) freshExistsTypeVar
+--   -- beta   <- lift $ freshExistsTypeVar
+--   xs     <- lift $ replicateM (length args) freshVar
+--   let expr0 = substs (map Var xs) args expr
+--   (exprTy, delta, expr')
+--      <- typesynthExpr gti
+--           (gamma >++ map CExists alphas
+--                  -- >++ [CExists beta]
+--                  >++ [ cvar x (TypeVarType alpha) | (x, alpha) <- zip xs alphas ])
+--           loc expr0 -- (TypeVarType beta)
+--   let expr0' = substs (map Var args) xs expr'          
+--   return (TupleType (map (apply delta) (map TypeVarType alphas))
+--          , exprTy, delta, TupleAlternative args expr0')
 
 -- Data constructor alternative
-typesynthAlt_ gti gamma loc (Alternative con args expr) = do
-  case lookupConFromDataTypeInfo gti con loc of
-    ((locvars,tyvars,argtys,datatypename):_) ->
-      if length argtys==length args
-      then do
-        ls <- lift $ replicateM (length locvars) freshExistsLocationVar
-        alphas <- lift $ replicateM (length tyvars) freshExistsTypeVar
-        xs <- lift $ replicateM (length args) freshVar
+-- typesynthAlt_ gti gamma loc (Alternative con args expr) = do
+--   case lookupConFromDataTypeInfo gti con loc of
+--     ((locvars,tyvars,argtys,datatypename):_) ->
+--       if length argtys==length args
+--       then do
+--         ls <- lift $ replicateM (length locvars) freshExistsLocationVar
+--         alphas <- lift $ replicateM (length tyvars) freshExistsTypeVar
+--         xs <- lift $ replicateM (length args) freshVar
 
-        let substLoc = zip locvars (map LocVar ls)
-        let substTy = zip tyvars (map TypeVarType alphas)
+--         let substLoc = zip locvars (map LocVar ls)
+--         let substTy = zip tyvars (map TypeVarType alphas)
 
-        let substedArgtys = map (doSubst substTy . doSubstLoc substLoc) argtys
+--         let substedArgtys = map (doSubst substTy . doSubstLoc substLoc) argtys
 
-        let expr0 = substs (map Var xs) args expr
+--         let expr0 = substs (map Var xs) args expr
         
-        (exprTy, gamma', expr') <-
-          typesynthExpr gti
-            (gamma >++ map CLExists ls >++ map CExists alphas 
-                   >++ map (uncurry cvar) (zip xs substedArgtys))
-               loc expr0 
+--         (exprTy, gamma', expr') <-
+--           typesynthExpr gti
+--             (gamma >++ map CLExists ls >++ map CExists alphas 
+--                    >++ map (uncurry cvar) (zip xs substedArgtys))
+--                loc expr0 
 
-        let expr0' = substs (map Var args) xs expr'
+--         let expr0' = substs (map Var args) xs expr'
 
-        return (ConType datatypename
-                  (map (lapply gamma') (map LocVar ls))
-                  (map (apply gamma') (map TypeVarType alphas))
-               , exprTy, gamma', Alternative con args expr0')
+--         return (ConType datatypename
+--                   (map (lapply gamma') (map LocVar ls))
+--                   (map (apply gamma') (map TypeVarType alphas))
+--                , exprTy, gamma', Alternative con args expr0')
 
-      else throwError $ "[TypeInf] typesynthAlt: invalid arg length: " ++ con ++ show args
+--       else throwError $ "[TypeInf] typesynthAlt: invalid arg length: " ++ con ++ show args
 
-    [] -> throwError $ "[TypeInf] typesynthAlt: constructor not found" ++ con
+--     [] -> throwError $ "[TypeInf] typesynthAlt: constructor not found" ++ con
 
 
 -- | Type application synthesising

@@ -440,13 +440,13 @@ instance Pretty Expr where
     Prim op locs tys es -> showParen (d > 0) $
       showString (show op) .
       showString " " . showLocs locs .
-      showString " " . showLocs tys .
+      showString " " . showTys tys .
       foldl (\f e -> f . showString " " . bpretty (app_prec +1) e) (\x -> x) es
     Lit lit -> showString (show lit)
     Constr c locs tys es argtys ->
       showString c .
       showString " " . showLocs locs .
-      showString " " . showLocs tys .
+      showString " " . showTys tys .
       foldl (\f e -> f . showString " " . bpretty (app_prec +1) e) (\x -> x) es
     where
       abs_prec  = 1
