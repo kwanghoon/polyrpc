@@ -646,7 +646,7 @@ subtype gamma loc0 typ1 typ2 =
            (gamma,[]) (zip (map monotype tys1) (map monotype tys2))
          xs <- lift $ replicateM (length tys1) freshVar
          return (delta,
-                 \x -> Case x (Just (TupleType tys2))
+                 \x -> Case x (Just (TupleType (map (apply delta) tys2)))
                          [TupleAlternative xs
                             (Tuple [f (Var x) | (f,x) <- zip fs xs])])
 
@@ -1063,7 +1063,7 @@ typesynthExpr_ gti gamma loc (Let letBindingDecls expr) = do
 typesynthExpr_ gti gamma loc (Case expr _ alts) = do
   (ty1, ty2, gamma0, alts') <- typesynthAlts gti gamma loc alts
   (gamma', expr') <- typecheckExpr gti gamma0 loc expr ty1
-  return (apply gamma' ty2, gamma', Case expr' (Just . apply gamma' $ ty1) alts')
+  return (apply gamma' ty2, gamma', eapply gamma' (Case expr' (Just ty1) alts'))
 
 -- ->E
 typesynthExpr_ gti gamma loc expr@(App e1 maybeTy e2 maybeLoc) = do
@@ -1202,7 +1202,7 @@ typesynthAlt_ gti gamma loc (TupleAlternative args expr) = do
                  >++ [ cvar x (TypeVarType alpha) | (x, alpha) <- zip xs alphas ])
           loc expr0 -- (TypeVarType beta)
   let expr0' = substs (map Var args) xs expr'          
-  return (TupleType (map TypeVarType alphas)
+  return (TupleType (map (apply delta) (map TypeVarType alphas))
          , exprTy, delta, TupleAlternative args expr0')
 
 -- Data constructor alternative
@@ -1230,7 +1230,9 @@ typesynthAlt_ gti gamma loc (Alternative con args expr) = do
 
         let expr0' = substs (map Var args) xs expr'
 
-        return (ConType datatypename (map LocVar ls) (map TypeVarType alphas)
+        return (ConType datatypename
+                  (map (lapply gamma') (map LocVar ls))
+                  (map (apply gamma') (map TypeVarType alphas))
                , exprTy, gamma', Alternative con args expr0')
 
       else throwError $ "[TypeInf] typesynthAlt: invalid arg length: " ++ con ++ show args
