@@ -36,8 +36,8 @@ import Debug.Trace
 
 type TIMonad = ExceptT String (State NameState) -- 'ExceptT String NameGen'
 
-typeInf :: Monad m => [TopLevelDecl] -> m (GlobalTypeInfo, [TopLevelDecl], [TopLevelDecl], [TopLevelDecl])
-typeInf toplevelDecls = do
+typeInf :: Monad m => Bool -> [TopLevelDecl] -> m (GlobalTypeInfo, [TopLevelDecl], [TopLevelDecl], [TopLevelDecl])
+typeInf debug toplevelDecls = do
   -- 1. split
   (bindingDecls, userDatatypes) <- splitTopLevelDecls toplevelDecls
 
@@ -89,7 +89,8 @@ typeInf toplevelDecls = do
   let (elab_bindingDecls) =
         case evalNameGen
                $ runExceptT
-                   (bidi gti initGamma clientLoc partial_elab_bindingDecls) of
+                   (do lift $ setDebug debug
+                       bidi gti initGamma clientLoc partial_elab_bindingDecls) of
           Left err_msg -> error err_msg -- Uncaught error!!
           Right (_,x) -> x
 
@@ -1420,10 +1421,18 @@ locsapplysynth gti gamma loc typ locs0 = traceNS "locsapplysynth" (nolib gamma, 
 -- | Print some debugging info
 traceNS :: (Pretty a, Pretty b) => String -> a -> TIMonad b -> TIMonad b
 traceNS f args x = do
+  flag <- gets debug
   ilevel <- gets indent
   let ind = replicate (ilevel * 3) ' '
-  trace (ind ++ f ++ pretty args) $ do
+  log flag ind $ do
     modify $ \s -> s {indent = ilevel + 1}
     res <- x
     modify $ \s -> s {indent = ilevel}
-    trace (ind ++ "=" ++ pretty res) $ return res
+    log_ flag ind res $ return res
+  where
+    log True  ind x = trace (ind ++ f ++ pretty args) x
+    log False ind x = x
+
+    log_ True  ind res x = trace (ind ++ "=" ++ pretty res) $ x
+    log_ False ind res x = x
+

@@ -15,6 +15,7 @@ data NameState = NameState
   , tvarNames :: [TypeVar]
   , lvarNames :: [LocationVar]
   , indent    :: Int -- This has no place here, but useful for debugging
+  , debug     :: Bool
   }
 
 -- data EVar = EVar ExprVar
@@ -27,6 +28,7 @@ initialNameState = NameState
   , tvarNames = map ({- TVar . -} ('\'':)) namelist
   , lvarNames = map ({- LVar . -} ("\'l_"++)) namelist
   , indent    = 0
+  , debug     = False
   }
   where
     namelist = [1..] >>= flip replicateM ['a'..'z']
@@ -74,3 +76,7 @@ freshExistsLocationVar = do
   l <- freshLocationVar
   return $ mkExists l
 
+setDebug :: Bool -> NameGen ()
+setDebug flag = do
+  modify $ \s -> s {debug = flag}
+  return ()
