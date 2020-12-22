@@ -66,8 +66,8 @@ doProcess cmd file = do
 
   let elab_toplevelDecls = lib_toplevelDecls ++ elab_toplevelDecls0 ++ elab_toplevelDecls1
   
-  verbose (_flag_debug_typecheck cmd) $ putStrLn "Dumping..."
-  verbose (_flag_debug_typecheck cmd) $ putStrLn $ show $ elab_toplevelDecls1
+  verbose (_flag_dump_typecheck cmd) $ putStrLn "Dumping..."
+  verbose (_flag_dump_typecheck cmd) $ putStrLn $ show $ elab_toplevelDecls1
 
   print_rpc cmd file elab_toplevelDecls1
 
@@ -171,6 +171,7 @@ data Cmd =
       , _flag_debug_lex :: Bool
       , _flag_debug_parse :: Bool
       , _flag_debug_typecheck :: Bool
+      , _flag_dump_typecheck :: Bool
       , _flag_debug_compile :: Bool
       , _flag_debug_simpl :: Bool
       , _flag_debug_verify :: Bool
@@ -185,6 +186,7 @@ initCmd =
       , _flag_debug_lex = False
       , _flag_debug_parse = False
       , _flag_debug_typecheck = False
+      , _flag_dump_typecheck = False
       , _flag_debug_compile = False
       , _flag_debug_simpl = False
       , _flag_debug_verify = False
@@ -223,6 +225,10 @@ collect cmd ("--debug-parse":args) = do
 
 collect cmd ("--debug-typecheck":args) = do
   let new_cmd = cmd { _flag_debug_typecheck = True }
+  collect new_cmd args
+
+collect cmd ("--dump-typecheck":args) = do
+  let new_cmd = cmd { _flag_dump_typecheck = True }
   collect new_cmd args
 
 collect cmd ("--debug-compile":args) = do
