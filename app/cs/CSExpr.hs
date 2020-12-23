@@ -139,10 +139,10 @@ addFun loc funstore name ty@(CodeType locvars tyvars fvtys somety) code =
   addServerFun (addClientFun funstore name ty code) name ty code
 
 newName :: FunctionStore -> (String, FunctionStore)
-newName fnstore = let n = _new fnstore in ("f" ++ show n, fnstore{_new =n+1})
+newName fnstore = let n = _new fnstore in ("csF_" ++ show n, fnstore{_new =n+1})
 
 newVar :: FunctionStore -> (String, FunctionStore)
-newVar fnstore = let n = _new fnstore in ("x" ++ show n, fnstore{_new =n+1})
+newVar fnstore = let n = _new fnstore in ("csX_" ++ show n, fnstore{_new =n+1})
 
 newVars :: Int -> FunctionStore -> ([String], FunctionStore)
 newVars 0 funStore = ([], funStore)
