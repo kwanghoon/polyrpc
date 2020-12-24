@@ -22,6 +22,7 @@ module Expr(Expr(..), ExprVar, AST(..), BindingDecl(..), DataTypeDecl(..)
   , toASTAlternativeSeq, toASTAlternative
   , toASTTriple, toASTLit
   , subst, substs, substs_, tyExprSubst, tyExprSubsts, locExprSubst, locExprSubsts
+  , typeconOrVar
   ) where
 
 import Location
@@ -33,6 +34,8 @@ import Type
 -- import Data.Aeson
 import Text.JSON.Generic
 import Pretty
+
+import Data.Char
 
 --
 data Expr =
@@ -66,6 +69,15 @@ data Expr =
 --------------------------------------------------------------------
 
 type ExprVar = String
+
+--
+isTypeVar s = null s == False && isLower (head s)
+
+isTypeConr s  = null s == False && isUpper (head s)
+
+typeconOrVar s
+  | isTypeVar s = TypeVarType s
+  | otherwise   = ConType s [] []
 
 --
 lookupDataTypeName gti x = [info | (y,info) <- _dataTypeInfo gti, x==y]

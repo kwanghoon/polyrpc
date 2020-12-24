@@ -45,12 +45,12 @@ parserSpec = ParserSpec
 
 
       {- Location -}
-      ("Location -> identifier", \rhs -> toASTLocation (Location (getText rhs 1)) ),
+      ("Location -> identifier", \rhs -> toASTLocation (locOrVar (getText rhs 1)) ),
 
 
       {- Locations -}
       ("Locations -> Identifiers", \rhs ->
-        toASTLocationSeq (map Location (fromASTIdSeq (get rhs 1))) ),
+        toASTLocationSeq (map locOrVar (fromASTIdSeq (get rhs 1))) ),
 
 
       {- Type -}
@@ -75,7 +75,7 @@ parserSpec = ParserSpec
               loc = init (init (tail locfun))  -- extract Loc from -Loc-> ( a bit hard-coded!!)
           in  toASTType (FunType
                           (fromASTType (get rhs 1))
-                          (Location loc)
+                          (locOrVar loc)
                           (fromASTType (get rhs 3))) ),
 
 
@@ -90,7 +90,7 @@ parserSpec = ParserSpec
               error $ "[Parser] Not supported: types and then locations: " ++ show locs ++ " " ++ show tys
             ConType name locs' tys ->
               error $ "[Parser] Not supported: multiple locations" ++ name ++ " " ++ show locs' ++ " " ++ show locs
-            TypeVarType name -> toASTType (ConType name locs [])
+            TypeVarType name -> toASTType (ConType name locs []) -- Now this will never happen!
             ty ->
               error $ "[Parser] Not supported yet: " ++ show ty ++ " not ConType: " ++ show locs),
 
@@ -100,7 +100,7 @@ parserSpec = ParserSpec
             ConType name locs [] -> toASTType (ConType name locs tys)
             ConType name locs tys' ->
               error $ "[Parser] Not supported: multiple types: " ++ name ++ " " ++ show tys' ++ " " ++ show tys
-            TypeVarType name -> toASTType (ConType name [] tys)
+            TypeVarType name -> toASTType (ConType name [] tys) -- Now this will never happen!
             ty ->
               error $ "[Parser] Not supported yet: " ++ show ty ++ " not ConType: " ++ show tys),
 
@@ -110,7 +110,7 @@ parserSpec = ParserSpec
 
       ("AtomicType -> ( Type )", \rhs -> get rhs 2 ),
 
-      ("AtomicType -> identifier", \rhs -> toASTType (TypeVarType (getText rhs 1)) ),
+      ("AtomicType -> identifier", \rhs -> toASTType (typeconOrVar (getText rhs 1)) ),
 
 
       {- TupleType -}
@@ -279,7 +279,7 @@ parserSpec = ParserSpec
       --   \rhs -> toASTExpr (singleTypeApp (TypeApp (fromASTExpr (get rhs 1)) Nothing (fromASTTypeSeq (get rhs 3)))) ),
 
       ("Expr -> Expr { Identifiers }",
-        \rhs -> toASTExpr (singleLocApp (LocApp (fromASTExpr (get rhs 1)) Nothing (map Location (fromASTIdSeq (get rhs 3))))) ),
+        \rhs -> toASTExpr (singleLocApp (LocApp (fromASTExpr (get rhs 1)) Nothing (map locOrVar (fromASTIdSeq (get rhs 3))))) ),
 
       ("Expr -> Tuple", \rhs -> get rhs 1 ),
 
@@ -308,7 +308,7 @@ parserSpec = ParserSpec
           (App
             (singleLocApp ( LocApp (Var ":=")
                                    Nothing
-                                   (map Location (fromASTIdSeq (get rhs 4))) ) )
+                                   (map locOrVar (fromASTIdSeq (get rhs 4))) ) )
             Nothing
             (fromASTExpr (get rhs 1))
             Nothing )
@@ -326,7 +326,7 @@ parserSpec = ParserSpec
          (App
            (singleLocApp (LocApp (Var "!")
                                  Nothing
-                                 (map Location (fromASTIdSeq (get rhs 3)))))
+                                 (map locOrVar (fromASTIdSeq (get rhs 3)))))
            Nothing
            (fromASTExpr (get rhs 5)) Nothing) ),
 

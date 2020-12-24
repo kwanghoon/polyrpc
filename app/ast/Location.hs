@@ -54,6 +54,15 @@ isClient _ = False
 isServer (Location str) = str == serverLocName
 isServer _ = False
 
+--
+knownLocations = [clientLocName, serverLocName]
+
+isLocationVar s = s `elem` knownLocations
+
+locOrVar :: String -> Location
+locOrVar s
+  | s `elem` knownLocations = Location s
+  | otherwise               = LocVar s
 
 --
 doSubstLocOverLoc :: String -> Location -> Location -> Location

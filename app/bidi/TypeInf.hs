@@ -51,8 +51,10 @@ typeInf debug toplevelDecls = do
 
   -- 3. elaborate data types
   -- elab_datatypeDecls <- elabDataTypeDecls typeInfo datatypeDecls
-  elab_datatypeDecls0 <- elabDataTypeDecls typeInfo datatypeDecls0
-  elab_datatypeDecls1 <- elabDataTypeDecls typeInfo datatypeDecls1
+  -- elab_datatypeDecls0 <- elabDataTypeDecls typeInfo datatypeDecls0
+  -- elab_datatypeDecls1 <- elabDataTypeDecls typeInfo datatypeDecls1
+  let elab_datatypeDecls0 = datatypeDecls0
+  let elab_datatypeDecls1 = datatypeDecls1
   let elab_datatypeDecls = elab_datatypeDecls0 ++ elab_datatypeDecls1
   dataTypeInfo <- collectDataTypeInfo elab_datatypeDecls
 
@@ -60,7 +62,8 @@ typeInf debug toplevelDecls = do
   conTypeInfo <- elabConTypeDecls elab_datatypeDecls
 
   -- 5. elaborate types declared in the bindings
-  partial_elab_bindingDecls <- elabBindingTypes typeInfo [] [] bindingDecls
+  -- partial_elab_bindingDecls <- elabBindingTypes typeInfo [] [] bindingDecls
+  let partial_elab_bindingDecls = bindingDecls
 
 --------------------------------
 -- for fully recursive bindings:
@@ -170,19 +173,19 @@ collectDataTypeDecl (DataType name locvars tyvars typeConDecls) =
 --     checking duplicate constructor names in all datatype declarations.
 ----------------------------------------------------------------------------
 
-elabDataTypeDecls :: Monad m => TypeInfo -> [DataTypeDecl] -> m [DataTypeDecl]
-elabDataTypeDecls typeInfo datatypeDecls =
-  mapM (elabDataTypeDecl typeInfo) datatypeDecls
+-- elabDataTypeDecls :: Monad m => TypeInfo -> [DataTypeDecl] -> m [DataTypeDecl]
+-- elabDataTypeDecls typeInfo datatypeDecls =
+--   mapM (elabDataTypeDecl typeInfo) datatypeDecls
 
-elabDataTypeDecl :: Monad m => TypeInfo -> DataTypeDecl -> m DataTypeDecl
-elabDataTypeDecl typeInfo (DataType name locvars tyvars typeConDecls) = do
-  elab_typeConDecls <- mapM (elabTypeConDecl typeInfo locvars tyvars) typeConDecls
-  return (DataType name locvars tyvars elab_typeConDecls)
+-- elabDataTypeDecl :: Monad m => TypeInfo -> DataTypeDecl -> m DataTypeDecl
+-- elabDataTypeDecl typeInfo (DataType name locvars tyvars typeConDecls) = do
+--   elab_typeConDecls <- mapM (elabTypeConDecl typeInfo locvars tyvars) typeConDecls
+--   return (DataType name locvars tyvars elab_typeConDecls)
 
-elabTypeConDecl :: Monad m => TypeInfo -> [String] -> [String] -> TypeConDecl -> m TypeConDecl
-elabTypeConDecl typeInfo locvars tyvars (TypeCon con tys) = do
-  elab_tys <- mapM (elabType typeInfo tyvars locvars ) tys
-  return (TypeCon con elab_tys)
+-- elabTypeConDecl :: Monad m => TypeInfo -> [String] -> [String] -> TypeConDecl -> m TypeConDecl
+-- elabTypeConDecl typeInfo locvars tyvars (TypeCon con tys) = do
+--   elab_tys <- mapM (elabType typeInfo tyvars locvars ) tys
+--   return (TypeCon con elab_tys)
 
 ----------------------------------------------------------------------------
 -- 4. Elaboration of constructor types
@@ -211,12 +214,13 @@ elabConTypeDecl (DataType name locvars tyvars typeConDecls) = do
 
 -- type BindingTypeInfo = [(String, Type)]
 
-elabBindingTypes :: Monad m => TypeInfo -> [String] -> [String] -> [BindingDecl] -> m [BindingDecl]
-elabBindingTypes typeInfo tyvars locvars bindingDecls =
-  mapM (\(Binding istop f ty expr)-> do
-           elab_ty <- elabType typeInfo tyvars locvars ty
-           elab_expr <- elabExpr typeInfo tyvars locvars expr
-           return (Binding istop f elab_ty elab_expr)) bindingDecls
+-- elabBindingTypes :: Monad m => TypeInfo -> [String] -> [String] -> [BindingDecl] -> m [BindingDecl]
+-- elabBindingTypes typeInfo tyvars locvars bindingDecls =
+--   mapM (\(Binding istop f ty expr)-> do
+--            -- elab_ty <- elabType typeInfo tyvars locvars ty
+--            -- elab_expr <- elabExpr typeInfo tyvars locvars expr
+--            -- return (Binding istop f elab_ty elab_expr)) bindingDecls
+--            return (Binding istop f ty expr)) bindingDecls
 
 bindingTypes :: Monad m => [BindingDecl] -> m [(String,Type)]
 bindingTypes partial_elab_bindingDecls =
@@ -267,173 +271,173 @@ bidiBindingDecl gti gamma loc (Binding istop name ty expr) = do -- ToDo: When na
 ----------------------------------------------------------------------------
 -- [Common] Elaboration of types
 ----------------------------------------------------------------------------
-elabType :: Monad m => TypeInfo -> [TypeVar] -> [LocationVar] -> Type -> m Type
-elabType typeInfo tyvars locvars (TypeVarType x) = do
-  if elem x tyvars then return (TypeVarType x)
-  else if isConstructorName x then
-          do (_locvars, _tyvars) <- lookupTypeCon typeInfo x
-             if _locvars ==[] && _tyvars == []
-             then return (ConType x [] [])
-             else error $ "[TypeCheck]: elabType: Invalid type constructor: " ++ x
-       else
-          error $ "[TypeCheck] elabType: Not found: " ++ x ++ " in " ++ show tyvars
+-- elabType :: Monad m => TypeInfo -> [TypeVar] -> [LocationVar] -> Type -> m Type
+-- elabType typeInfo tyvars locvars (TypeVarType x) = do
+--   if elem x tyvars then return (TypeVarType x)
+--   else if isConstructorName x then
+--           do (_locvars, _tyvars) <- lookupTypeCon typeInfo x
+--              if _locvars ==[] && _tyvars == []
+--              then return (ConType x [] [])
+--              else error $ "[TypeCheck]: elabType: Invalid type constructor: " ++ x
+--        else
+--           error $ "[TypeCheck] elabType: Not found: " ++ x ++ " in " ++ show tyvars
 
-elabType typeInfo tyvars locvars (TupleType tys) = do
-  elab_tys <- mapM (elabType typeInfo tyvars locvars) tys
-  return (TupleType elab_tys)
+-- elabType typeInfo tyvars locvars (TupleType tys) = do
+--   elab_tys <- mapM (elabType typeInfo tyvars locvars) tys
+--   return (TupleType elab_tys)
 
-elabType typeInfo tyvars locvars (FunType ty1 (Location loc) ty2) = do
-  elab_ty1 <- elabType typeInfo tyvars locvars ty1
-  elab_ty2 <- elabType typeInfo tyvars locvars ty2
-  let loc0 = if loc `elem` locvars
-             then LocVar loc else Location loc
-  return (FunType elab_ty1 loc0 elab_ty2)
+-- elabType typeInfo tyvars locvars (FunType ty1 (Location loc) ty2) = do
+--   elab_ty1 <- elabType typeInfo tyvars locvars ty1
+--   elab_ty2 <- elabType typeInfo tyvars locvars ty2
+--   let loc0 = if loc `elem` locvars
+--              then LocVar loc else Location loc
+--   return (FunType elab_ty1 loc0 elab_ty2)
 
-elabType typeInfo tyvars locvars (FunType ty1 loc0@(LocVar _) ty2) = do
-  elab_ty1 <- elabType typeInfo tyvars locvars ty1
-  elab_ty2 <- elabType typeInfo tyvars locvars ty2
-  return (FunType elab_ty1 loc0 elab_ty2)
+-- elabType typeInfo tyvars locvars (FunType ty1 loc0@(LocVar _) ty2) = do
+--   elab_ty1 <- elabType typeInfo tyvars locvars ty1
+--   elab_ty2 <- elabType typeInfo tyvars locvars ty2
+--   return (FunType elab_ty1 loc0 elab_ty2)
 
-elabType typeInfo tyvars locvars (TypeAbsType abs_tyvars ty) = do
-  elab_ty <- elabType typeInfo (abs_tyvars ++ tyvars) locvars ty
-  return (TypeAbsType abs_tyvars elab_ty)
+-- elabType typeInfo tyvars locvars (TypeAbsType abs_tyvars ty) = do
+--   elab_ty <- elabType typeInfo (abs_tyvars ++ tyvars) locvars ty
+--   return (TypeAbsType abs_tyvars elab_ty)
 
-elabType typeInfo tyvars locvars (LocAbsType abs_locvars ty) = do
-  elab_ty <- elabType typeInfo tyvars (abs_locvars ++ locvars) ty
-  return (LocAbsType abs_locvars elab_ty)
+-- elabType typeInfo tyvars locvars (LocAbsType abs_locvars ty) = do
+--   elab_ty <- elabType typeInfo tyvars (abs_locvars ++ locvars) ty
+--   return (LocAbsType abs_locvars elab_ty)
 
-elabType typeInfo tyvars locvars (ConType name locs tys) = do
-  (_locvars, _tyvars) <- lookupTypeCon typeInfo name
-  if length _locvars == length locs && length _tyvars == length tys
-    then do elab_locs <- mapM (elabLocation locvars) locs
-            elab_tys <- mapM (elabType typeInfo tyvars locvars) tys
-            return (ConType name elab_locs elab_tys)
-    else error $ "[TypeCheck]: elabType: Invalud args for ConType: " ++ name
+-- elabType typeInfo tyvars locvars (ConType name locs tys) = do
+--   (_locvars, _tyvars) <- lookupTypeCon typeInfo name
+--   if length _locvars == length locs && length _tyvars == length tys
+--     then do elab_locs <- mapM (elabLocation locvars) locs
+--             elab_tys <- mapM (elabType typeInfo tyvars locvars) tys
+--             return (ConType name elab_locs elab_tys)
+--     else error $ "[TypeCheck]: elabType: Invalud args for ConType: " ++ name
 
 
 ----------------------------------------------------------------------------
 -- [Common] Elaboration of locations
 ----------------------------------------------------------------------------
 
-elabLocation :: Monad m => [LocationVar] -> Location -> m Location
-elabLocation locvars (Location loc)
-  | loc `elem` locvars = return (LocVar loc)
-  | otherwise = return (Location loc)
-elabLocation locvars (LocVar x)
-  | x `elem` locvars = return (LocVar x)
-  | otherwise = error $ "[TypeCheck] elabLocation: Not found LocVar " ++ x
+-- elabLocation :: Monad m => [LocationVar] -> Location -> m Location
+-- elabLocation locvars (Location loc)
+--   | loc `elem` locvars = return (LocVar loc)
+--   | otherwise = return (Location loc)
+-- elabLocation locvars (LocVar x)
+--   | x `elem` locvars = return (LocVar x)
+--   | otherwise = error $ "[TypeCheck] elabLocation: Not found LocVar " ++ x
 
 ----------------------------------------------------------------------------
 -- [Common] Elaboration of expressions
 ----------------------------------------------------------------------------
 
-elabExpr :: Monad m => TypeInfo -> [TypeVar] -> [LocationVar] -> Expr -> m Expr
-elabExpr typeInfo tyvars locvars (Var x) = return $ Var x
+-- elabExpr :: Monad m => TypeInfo -> [TypeVar] -> [LocationVar] -> Expr -> m Expr
+-- elabExpr typeInfo tyvars locvars (Var x) = return $ Var x
 
-elabExpr typeInfo tyvars locvars (TypeAbs alphas e) = do
-  e' <- elabExpr typeInfo (alphas++tyvars) locvars e
-  return $ TypeAbs alphas e'
+-- elabExpr typeInfo tyvars locvars (TypeAbs alphas e) = do
+--   e' <- elabExpr typeInfo (alphas++tyvars) locvars e
+--   return $ TypeAbs alphas e'
 
-elabExpr typeInfo tyvars locvars (LocAbs ls e) = do
-  e' <- elabExpr typeInfo tyvars (ls++locvars) e
-  return $ LocAbs ls e'
+-- elabExpr typeInfo tyvars locvars (LocAbs ls e) = do
+--   e' <- elabExpr typeInfo tyvars (ls++locvars) e
+--   return $ LocAbs ls e'
 
-elabExpr typeInfo tyvars locvars (Abs xMaybetyLocs e) = do
-  xMaybetyLocs' <- mapM ftriple xMaybetyLocs
-  e' <- elabExpr typeInfo tyvars locvars e
-  return $ Abs xMaybetyLocs' e'
-  where
-    ftriple (x,Nothing,loc) = do
-      loc' <- elabLocation locvars loc
-      return (x, Nothing, loc')
-    ftriple (x,Just ty,loc) = do
-      ty' <- elabType typeInfo tyvars locvars ty
-      loc' <- elabLocation locvars loc
-      return (x, Just ty', loc')
+-- elabExpr typeInfo tyvars locvars (Abs xMaybetyLocs e) = do
+--   xMaybetyLocs' <- mapM ftriple xMaybetyLocs
+--   e' <- elabExpr typeInfo tyvars locvars e
+--   return $ Abs xMaybetyLocs' e'
+--   where
+--     ftriple (x,Nothing,loc) = do
+--       loc' <- elabLocation locvars loc
+--       return (x, Nothing, loc')
+--     ftriple (x,Just ty,loc) = do
+--       ty' <- elabType typeInfo tyvars locvars ty
+--       loc' <- elabLocation locvars loc
+--       return (x, Just ty', loc')
 
-elabExpr typeInfo tyvars locvars (Let bindingDecls e) = do
-  bindingDecls' <- mapM fBindDecl bindingDecls
-  e' <- elabExpr typeInfo tyvars locvars e
-  return $ Let bindingDecls' e'
-  where
-    fBindDecl (Binding istop x ty expr) = do
-      ty' <- elabType typeInfo tyvars locvars ty
-      expr' <- elabExpr typeInfo tyvars locvars expr
-      return $ Binding istop x ty' expr'
+-- elabExpr typeInfo tyvars locvars (Let bindingDecls e) = do
+--   bindingDecls' <- mapM fBindDecl bindingDecls
+--   e' <- elabExpr typeInfo tyvars locvars e
+--   return $ Let bindingDecls' e'
+--   where
+--     fBindDecl (Binding istop x ty expr) = do
+--       ty' <- elabType typeInfo tyvars locvars ty
+--       expr' <- elabExpr typeInfo tyvars locvars expr
+--       return $ Binding istop x ty' expr'
 
-elabExpr typeInfo tyvars locvars (Case e maybeTy alts) = do
-  e' <- elabExpr typeInfo tyvars locvars e
-  maybeTy' <- mapM (elabType typeInfo tyvars locvars) maybeTy
-  alts' <- mapM fAlt alts
-  return $ Case e' maybeTy' alts'
-  where
-    fAlt (Alternative c xs expr) = do
-      expr' <- elabExpr typeInfo tyvars locvars expr
-      return $ Alternative c xs expr'
-    fAlt (TupleAlternative xs expr) = do
-      expr' <- elabExpr typeInfo tyvars locvars expr
-      return $ TupleAlternative xs expr'
+-- elabExpr typeInfo tyvars locvars (Case e maybeTy alts) = do
+--   e' <- elabExpr typeInfo tyvars locvars e
+--   maybeTy' <- mapM (elabType typeInfo tyvars locvars) maybeTy
+--   alts' <- mapM fAlt alts
+--   return $ Case e' maybeTy' alts'
+--   where
+--     fAlt (Alternative c xs expr) = do
+--       expr' <- elabExpr typeInfo tyvars locvars expr
+--       return $ Alternative c xs expr'
+--     fAlt (TupleAlternative xs expr) = do
+--       expr' <- elabExpr typeInfo tyvars locvars expr
+--       return $ TupleAlternative xs expr'
 
-elabExpr typeInfo tyvars locvars (App e1 maybeTy e2 maybeLoc) = do
-  e1' <- elabExpr typeInfo tyvars locvars e1
-  maybeTy' <- fMaybety maybeTy
-  e2' <- elabExpr typeInfo tyvars locvars e2
-  maybeLoc' <- fMaybeloc maybeLoc
-  return $ App e1' maybeTy' e2' maybeLoc'
+-- elabExpr typeInfo tyvars locvars (App e1 maybeTy e2 maybeLoc) = do
+--   e1' <- elabExpr typeInfo tyvars locvars e1
+--   maybeTy' <- fMaybety maybeTy
+--   e2' <- elabExpr typeInfo tyvars locvars e2
+--   maybeLoc' <- fMaybeloc maybeLoc
+--   return $ App e1' maybeTy' e2' maybeLoc'
 
-  where
-    fMaybety Nothing = return Nothing
-    fMaybety (Just ty) = do
-      ty' <- elabType typeInfo tyvars locvars ty
-      return (Just ty')
+--   where
+--     fMaybety Nothing = return Nothing
+--     fMaybety (Just ty) = do
+--       ty' <- elabType typeInfo tyvars locvars ty
+--       return (Just ty')
 
-    fMaybeloc Nothing = return Nothing
-    fMaybeloc (Just loc) = do
-      loc' <- elabLocation locvars loc
-      return (Just loc')
+--     fMaybeloc Nothing = return Nothing
+--     fMaybeloc (Just loc) = do
+--       loc' <- elabLocation locvars loc
+--       return (Just loc')
 
-elabExpr typeInfo tyvars locvars (TypeApp e1 maybeTy tys) = do
-  e1' <- elabExpr typeInfo tyvars locvars e1
-  maybeTy' <- fMaybety maybeTy
-  tys' <- mapM (elabType typeInfo tyvars locvars) tys
-  return $ TypeApp e1' maybeTy' tys'
+-- elabExpr typeInfo tyvars locvars (TypeApp e1 maybeTy tys) = do
+--   e1' <- elabExpr typeInfo tyvars locvars e1
+--   maybeTy' <- fMaybety maybeTy
+--   tys' <- mapM (elabType typeInfo tyvars locvars) tys
+--   return $ TypeApp e1' maybeTy' tys'
 
-  where
-    fMaybety Nothing = return Nothing
-    fMaybety (Just ty) = do
-      ty' <- elabType typeInfo tyvars locvars ty
-      return (Just ty')
+--   where
+--     fMaybety Nothing = return Nothing
+--     fMaybety (Just ty) = do
+--       ty' <- elabType typeInfo tyvars locvars ty
+--       return (Just ty')
 
-elabExpr typeInfo tyvars locvars (LocApp e1 maybeTy locs) = do
-  e1' <- elabExpr typeInfo tyvars locvars e1
-  maybeTy' <- fMaybety maybeTy
-  locs' <- mapM (elabLocation locvars) locs
-  return $ LocApp e1' maybeTy' locs'
+-- elabExpr typeInfo tyvars locvars (LocApp e1 maybeTy locs) = do
+--   e1' <- elabExpr typeInfo tyvars locvars e1
+--   maybeTy' <- fMaybety maybeTy
+--   locs' <- mapM (elabLocation locvars) locs
+--   return $ LocApp e1' maybeTy' locs'
 
-  where
-    fMaybety Nothing = return Nothing
-    fMaybety (Just ty) = do
-      ty' <- elabType typeInfo tyvars locvars ty
-      return (Just ty')
+--   where
+--     fMaybety Nothing = return Nothing
+--     fMaybety (Just ty) = do
+--       ty' <- elabType typeInfo tyvars locvars ty
+--       return (Just ty')
 
-elabExpr typeInfo tyvars locvars (Tuple exprs) = do
-  exprs' <- mapM (elabExpr typeInfo tyvars locvars) exprs
-  return $ Tuple exprs'
+-- elabExpr typeInfo tyvars locvars (Tuple exprs) = do
+--   exprs' <- mapM (elabExpr typeInfo tyvars locvars) exprs
+--   return $ Tuple exprs'
 
-elabExpr typeInfo tyvars locvars (Prim op locs tys exprs) = do
-  locs' <- mapM (elabLocation locvars) locs
-  tys' <- mapM (elabType typeInfo tyvars locvars) tys
-  exprs' <- mapM (elabExpr typeInfo tyvars locvars) exprs
-  return $ Prim op locs' tys' exprs'
+-- elabExpr typeInfo tyvars locvars (Prim op locs tys exprs) = do
+--   locs' <- mapM (elabLocation locvars) locs
+--   tys' <- mapM (elabType typeInfo tyvars locvars) tys
+--   exprs' <- mapM (elabExpr typeInfo tyvars locvars) exprs
+--   return $ Prim op locs' tys' exprs'
 
-elabExpr typeInfo tyvars locvars (Lit lit) = return $ Lit lit
+-- elabExpr typeInfo tyvars locvars (Lit lit) = return $ Lit lit
 
-elabExpr typeInfo tyvars locvars (Constr c locs tys exprs argtys) = do
-  locs' <- mapM (elabLocation locvars) locs
-  tys' <- mapM (elabType typeInfo tyvars locvars) tys
-  exprs' <- mapM (elabExpr typeInfo tyvars locvars) exprs
-  argtys' <- mapM (elabType typeInfo tyvars locvars) argtys
-  return $ Constr c locs' tys' exprs' argtys'
+-- elabExpr typeInfo tyvars locvars (Constr c locs tys exprs argtys) = do
+--   locs' <- mapM (elabLocation locvars) locs
+--   tys' <- mapM (elabType typeInfo tyvars locvars) tys
+--   exprs' <- mapM (elabExpr typeInfo tyvars locvars) exprs
+--   argtys' <- mapM (elabType typeInfo tyvars locvars) argtys
+--   return $ Constr c locs' tys' exprs' argtys'
 
 -- data Env = Env
 --        { _locVarEnv  :: [String]
@@ -1123,8 +1127,9 @@ typesynthExpr_ gti gamma loc expr@(LocAbs locvars e) = do
 -- Let
 typesynthExpr_ gti gamma loc (Let letBindingDecls expr) = do
   let typeInfo = _typeInfo gti
-  partial_elab_letBindingDecls
-     <- elabBindingTypes typeInfo (typeVars gamma) (locVars gamma) letBindingDecls
+  -- partial_elab_letBindingDecls
+  --   <- elabBindingTypes typeInfo (typeVars gamma) (locVars gamma) letBindingDecls
+  let partial_elab_letBindingDecls = letBindingDecls
         
   letBindingTypeInfo <- bindingTypes partial_elab_letBindingDecls -- for let body
 
@@ -1194,7 +1199,11 @@ typesynthExpr_ gti gamma loc expr@(Tuple es) = do
 typesynthExpr_ gti gamma loc expr@(Prim op op_locs@[] op_tys@[] exprs) =
   typesynthExpr_ gti gamma loc (Prim op [loc] op_tys exprs)
 
-typesynthExpr_ gti gamma loc expr@(Prim op op_locs op_tys exprs) =
+typesynthExpr_ gti gamma loc expr@(Prim op op_locs0 op_tys0 exprs) = do
+  let op_locs = op_locs0
+  let op_tys  = op_tys0
+  -- op_locs <- mapM (elabLocation (locVars gamma)) op_locs0
+  -- op_tys  <- mapM (elabType (_typeInfo gti) (typeVars gamma) (locVars gamma)) op_tys0
   case op of
     EqPrimOp -> overloadedEq op_locs op_tys exprs -- EqPrimOp by Parser!!
     NeqPrimOp -> overloadedNeq op_locs op_tys exprs -- NeqPrimOp by Parser!!
@@ -1229,7 +1238,7 @@ typesynthExpr_ gti gamma loc expr@(Prim op op_locs op_tys exprs) =
                  (gamma'', expr'') <- typecheckExpr gti gamma' loc expr' (apply gamma' ty')
                  return (gamma'', exprs'++[expr'']) )
                     (gamma,[]) (zip substed_argtys exprs)
-            return (apply gamma0 substed_retty, gamma0, Prim op op_locs op_tys exprs0)
+            return (apply gamma0 substed_retty, gamma0, Prim op locs tys exprs0)
 
 
           else throwError $ "[TypeInf] typesynthExpr: incorrect arg locations/types in Prim: " ++ show op
