@@ -522,6 +522,14 @@ subloc gamma loc1 loc2 =
     (LocVar l1, LocVar l2)
       | (not (clExists l1)) && (not (clExists l2)) && l1 == l2 -> return gamma
       | clExists l1 && clExists l2 && l1 == l2 -> return gamma
+      | clExists l1
+          && l1 `elem` lexistentials gamma
+          && l1 `S.notMember` freeLVarsIn (LocVar l2) -> do
+            instantiateLocL gamma l1 (LocVar l2)
+      | clExists l2
+          && l2 `elem` lexistentials gamma
+          && l2 `S.notMember` freeLVarsIn (LocVar l1) -> do
+            instantiateLocR gamma (LocVar l1) l2
       | otherwise ->
          throwError $ "subloc, don't know what to do with: "
                           ++ pretty (gamma, loc1, loc2)
@@ -713,7 +721,7 @@ subtype gamma loc0 typ1 typ2 =
                              return g'
                         _ -> throwError $ "subtype: ConType: not monotype: "
                                      ++ pretty (gamma, typ1, typ2))
-                    gamma (zip (map monotype tys1) (map monotype tys2))
+                    delta (zip (map monotype tys1) (map monotype tys2))
           return (delta', \x->x) -- TODO: transform functions for sum types !!
 
     _ -> throwError $ "subtype, don't know what to do with: "
