@@ -34,6 +34,12 @@ import Debug.Trace
 --   6. Type application terms in an argumnet, (...) expr, do not have
 --      type annotations. The subtype returns a transformer? [Done]
 
+--   [Remaining questions]
+--   7. Should we introduce lambdas over type variables?
+--      For example, ... (\x@l. let y: ... a ... = expr) ...
+--      How do we know the name of this type variable a when it comes from
+--      the inferred type polymorphism as [a]. \x@l. ...?
+
 type TIMonad = ExceptT String (State NameState) -- 'ExceptT String NameGen'
 
 typeInf :: Monad m => Bool -> [TopLevelDecl] -> m (GlobalTypeInfo, [TopLevelDecl], [TopLevelDecl], [TopLevelDecl])
