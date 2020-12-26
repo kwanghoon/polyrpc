@@ -8,11 +8,13 @@ import Token
 import Lexer
 import Terminal
 import Parser
+import qualified ParserBidi as PB
 import Type
 import Expr
 import qualified CSType as TT
 import qualified CSExpr as TE
 import TypeCheck
+import TypeInf
 import Compile
 import Simpl
 import Verify
@@ -47,22 +49,36 @@ doProcess cmd file = do
   verbose (_flag_debug_lex cmd) $ mapM_ (putStrLn) (map terminalToString terminalList)
 
 
-  putStrLn "[Parsing]"
-  exprSeqAst <- parsing parserSpec terminalList
+  -- putStrLn "[Parsing]"
+  -- exprSeqAst <- parsing parserSpec terminalList
+  
+  putStrLn "[Parsing-Surface syntax]"
+  exprSeqAst <- parsing PB.parserSpec terminalList
 
   verbose (_flag_debug_parse cmd) $ putStrLn "Dumping..."
   verbose (_flag_debug_parse cmd) $ putStrLn $ show $ fromASTTopLevelDeclSeq exprSeqAst
 
   let toplevelDecls = fromASTTopLevelDeclSeq exprSeqAst
 
+  putStrLn "[Bidirectional type checking]"
+  (gti, elab_toplevelDecls1, elab_toplevelDecls0, lib_toplevelDecls)
+    <- typeInf (_flag_debug_typecheck cmd) toplevelDecls
 
+  let elab_toplevelDecls = lib_toplevelDecls ++ elab_toplevelDecls0 ++ elab_toplevelDecls1
+  
+  verbose (_flag_dump_typecheck cmd) $ putStrLn "Dumping..."
+  verbose (_flag_dump_typecheck cmd) $ putStrLn $ show $ elab_toplevelDecls1
+
+  print_rpc cmd file elab_toplevelDecls1
+
+{-
   putStrLn "[Type checking]"
   (gti, elab_toplevelDecls) <- typeCheck toplevelDecls
   verbose (_flag_debug_typecheck cmd) $ putStrLn "Dumping..."
   verbose (_flag_debug_typecheck cmd) $ putStrLn $ show $ elab_toplevelDecls
 
   print_rpc cmd file elab_toplevelDecls
-
+-}
 
   putStrLn "[Compiling]"
   (t_gti, funStore, t_expr) <- compile gti elab_toplevelDecls
@@ -155,6 +171,7 @@ data Cmd =
       , _flag_debug_lex :: Bool
       , _flag_debug_parse :: Bool
       , _flag_debug_typecheck :: Bool
+      , _flag_dump_typecheck :: Bool
       , _flag_debug_compile :: Bool
       , _flag_debug_simpl :: Bool
       , _flag_debug_verify :: Bool
@@ -169,6 +186,7 @@ initCmd =
       , _flag_debug_lex = False
       , _flag_debug_parse = False
       , _flag_debug_typecheck = False
+      , _flag_dump_typecheck = False
       , _flag_debug_compile = False
       , _flag_debug_simpl = False
       , _flag_debug_verify = False
@@ -207,6 +225,10 @@ collect cmd ("--debug-parse":args) = do
 
 collect cmd ("--debug-typecheck":args) = do
   let new_cmd = cmd { _flag_debug_typecheck = True }
+  collect new_cmd args
+
+collect cmd ("--dump-typecheck":args) = do
+  let new_cmd = cmd { _flag_dump_typecheck = True }
   collect new_cmd args
 
 collect cmd ("--debug-compile":args) = do

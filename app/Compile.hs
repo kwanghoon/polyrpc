@@ -218,7 +218,7 @@ compExpr s_gti env loc (ST.TypeAbsType tyvars0 s_ty) funStore (SE.TypeAbs tyvars
   return (funStore2, TE.ValExpr $ TE.UnitM closure)
 
 compExpr s_gti env loc s_ty funStore (SE.TypeAbs tyvars expr) = do
-  error $ "[compVal] Not type-abstraction type: " ++ show s_ty
+  error $ "[compVal] Not type-abstraction type: " ++ show s_ty ++ " in " ++ show (SE.TypeAbs tyvars expr)
 
 
 compExpr s_gti env loc (ST.LocAbsType locvars0 s_ty) funStore (SE.LocAbs locvars1 expr) = do
@@ -241,7 +241,7 @@ compExpr s_gti env loc (ST.FunType s_argty s_loc s_resty) funStore (SE.Abs xtylo
   t_argty <- compValType s_argty
   t_resty <- compType s_resty
   let target_ty = TT.FunType t_argty s_loc t_resty
-  let s_xtys = [(x,ty) | (x,ty,_) <- xtylocs]
+  let s_xtys = [(x,ty) | (x,Just ty,_) <- xtylocs]  -- Todo: Maybe error-prone. Should not Nothing but unnoticeable!!
   t_xtys <- mapM (\(x,ty) -> do { t_ty <- compValType ty; return (x,t_ty) }) s_xtys
   let env1 = env {SE._varEnv = (s_xtys ++ SE._varEnv env)}
   (funStore1, target_expr) <- compExpr s_gti env1 s_loc s_resty funStore expr

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: d20bab1caed0214a353f1ddddf88965187d5858dd0862167fd9e8186c5dd5093
+-- hash: e920dd14df54b33bde05fdce632b0bdb85ef4149171f4802050a7430cf6bfa38
 
 name:           polyrpc
 version:        0.1.0.0
@@ -34,6 +34,7 @@ executable polyrpc
       Execute
       Lexer
       Parser
+      ParserBidi
       Simpl
       Token
       TypeCheck
@@ -44,6 +45,11 @@ executable polyrpc
       Location
       Prim
       Type
+      Context
+      NameGen
+      Naming
+      Pretty
+      TypeInf
       CSExpr
       CSSubst
       CSType
@@ -51,6 +57,7 @@ executable polyrpc
   hs-source-dirs:
       app
       app/ast
+      app/bidi
       app/cs
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
@@ -60,10 +67,12 @@ executable polyrpc
     , bytestring
     , containers >=0.6.0 && <0.7
     , json >=0.10 && <0.11
+    , mtl >=2.2.2 && <=2.2.2
     , pretty >=1.1.3 && <1.2
     , prettyprinter >=1.6.1 && <1.7
     , regex-tdfa
     , unordered-containers >=0.2.10.0 && <=0.2.12.0
+    , utility-ht >=0.0.15 && <=0.0.15
     , yapb >=0.1.0 && <=0.1.0
   default-language: Haskell2010
 
@@ -82,10 +91,12 @@ test-suite polyrpc-test
     , bytestring
     , containers >=0.6.0 && <0.7
     , json >=0.10 && <0.11
+    , mtl >=2.2.2 && <=2.2.2
     , polyrpc
     , pretty >=1.1.3 && <1.2
     , prettyprinter >=1.6.1 && <1.7
     , regex-tdfa
     , unordered-containers >=0.2.10.0 && <=0.2.12.0
+    , utility-ht >=0.0.15 && <=0.0.15
     , yapb >=0.1.0 && <=0.1.0
   default-language: Haskell2010

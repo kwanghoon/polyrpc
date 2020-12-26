@@ -408,7 +408,11 @@ calc' EqBoolPrimOp [loc] [] [BoolLit x, BoolLit y] = BoolLit (x==y)
 
 calc' EqIntPrimOp [loc] [] [IntLit x, IntLit y] = BoolLit (x==y)
 
-calc' NeqPrimOp [loc] [] [IntLit x, IntLit y] = BoolLit (x/=y)
+calc' NeqStringPrimOp [loc] [] [StrLit x, StrLit y] = BoolLit (x/=y)
+
+calc' NeqBoolPrimOp [loc] [] [BoolLit x, BoolLit y] = BoolLit (x/=y)
+
+calc' NeqIntPrimOp [loc] [] [IntLit x, IntLit y] = BoolLit (x/=y)
 
 calc' LtPrimOp [loc] [] [IntLit x, IntLit y] = BoolLit (x<y)
 

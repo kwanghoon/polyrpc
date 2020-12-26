@@ -139,10 +139,10 @@ addFun loc funstore name ty@(CodeType locvars tyvars fvtys somety) code =
   addServerFun (addClientFun funstore name ty code) name ty code
 
 newName :: FunctionStore -> (String, FunctionStore)
-newName fnstore = let n = _new fnstore in ("f" ++ show n, fnstore{_new =n+1})
+newName fnstore = let n = _new fnstore in ("csF_" ++ show n, fnstore{_new =n+1})
 
 newVar :: FunctionStore -> (String, FunctionStore)
-newVar fnstore = let n = _new fnstore in ("x" ++ show n, fnstore{_new =n+1})
+newVar fnstore = let n = _new fnstore in ("csX_" ++ show n, fnstore{_new =n+1})
 
 newVars :: Int -> FunctionStore -> ([String], FunctionStore)
 newVars 0 funStore = ([], funStore)
@@ -164,10 +164,15 @@ primOpTypes =
   [ (NotPrimOp, (["l"], [], [bool_type], bool_type))
   , (OrPrimOp,  (["l"], [], [bool_type, bool_type], bool_type))
   , (AndPrimOp, (["l"], [], [bool_type, bool_type], bool_type))
+  
   , (EqStringPrimOp,  (["l"], [], [string_type, string_type], bool_type))
   , (EqBoolPrimOp,  (["l"], [], [bool_type, bool_type], bool_type))
   , (EqIntPrimOp,  (["l"], [], [int_type, int_type], bool_type))
-  , (NeqPrimOp, (["l"], [], [bool_type, bool_type], bool_type))
+  
+  , (NeqStringPrimOp, (["l"], [], [string_type, string_type], bool_type))
+  , (NeqBoolPrimOp, (["l"], [], [bool_type, bool_type], bool_type))
+  , (NeqIntPrimOp, (["l"], [], [int_type, int_type], bool_type))
+  
   , (LtPrimOp,  (["l"], [], [int_type, int_type], bool_type))
   , (LePrimOp,  (["l"], [], [int_type, int_type], bool_type))
   , (GtPrimOp,  (["l"], [], [int_type, int_type], bool_type))

@@ -4,11 +4,15 @@ module Type where
 
 import Prim
 import Data.Char
+import Data.Set(Set)
+import qualified Data.Set as S
 -- For aeson
 -- import GHC.Generics
 -- import Data.Aeson
 import Text.JSON.Generic
 
+import Naming
+import Pretty
 import Location
 
 data Type =
@@ -18,7 +22,7 @@ data Type =
   | TypeAbsType [TypeVar] Type
   | LocAbsType [LocationVar] Type
   | ConType String [Location] [Type]
-  deriving (Show, Typeable, Data)
+  deriving (Show, Typeable, Data, Eq)
 
 type TypeVar = String
 
@@ -32,6 +36,9 @@ singleLocAbsType (LocAbsType [a] expr) = LocAbsType [a] expr
 singleLocAbsType (LocAbsType (a:as) expr) = LocAbsType [a] (singleLocAbsType (LocAbsType as expr))
 singleLocAbsType other = other
 
+mkFunType :: [Type] -> Location -> Type -> Type
+mkFunType [] loc retty = retty
+mkFunType (ty:tys) loc retty = FunType ty loc (mkFunType tys loc retty)
 
 --
 -- For aeson
@@ -107,6 +114,12 @@ doSubstLoc :: [(String, Location)] -> Type -> Type
 doSubstLoc [] ty = ty
 doSubstLoc ((x,loc):substLoc) ty =
   doSubstLoc substLoc (doSubstLocOne x loc ty)
+
+locSubst :: Location -> LocationVar -> Type -> Type 
+locSubst loc l ty = doSubstLocOne l loc ty
+
+locSubsts :: [Location] -> [LocationVar] -> Type -> Type
+locSubsts locs ls ty = doSubstLoc (zip ls locs) ty
 
 --
 equalType :: Type -> Type -> Bool
@@ -186,4 +199,84 @@ unifyTypes (ty1:tys1) (ty2:tys2) =
       case unifyTypes (map (doSubst subst1) tys1) (map (doSubst subst1) tys2) of
         Nothing -> Nothing
         Just subst2 -> Just (subst1 ++ subst2)
+
+-- | Is the type a Monotype?
+monotype :: Type -> Maybe Type
+monotype typ = case typ of
+  TypeVarType v     -> Just $ TypeVarType v -- TVar and TExists
+  TupleType tys     -> TupleType <$> mapM monotype tys
+  FunType t1 loc t2 -> FunType <$> monotype t1 <*> Just loc <*> monotype t2
+  TypeAbsType _ _   -> Nothing
+  LocAbsType _ _    -> Nothing
+  ConType c locs tys -> ConType c <$> Just locs <*> mapM monotype tys
+
+-- | Any type is a Polytype since Monotype is a subset of Polytype
+polytype :: Type -> Type
+polytype typ = case typ of
+  TypeVarType v  -> TypeVarType v   -- TVar and TExists
+  TupleType tys  -> TupleType (map polytype tys)
+  FunType t1 loc t2 -> FunType (polytype t1) loc (polytype t2)
+  TypeAbsType v t    -> TypeAbsType v (polytype t)
+  LocAbsType loc t  -> LocAbsType loc (polytype t)
+  ConType c locs tys -> ConType c locs (map polytype tys)
         
+-- Pretty
+
+instance Pretty Type where
+  bpretty d typ = case typ of
+    TypeVarType v ->
+      if cExists v
+      then showParen (d > exists_prec) $
+           showString $ "∃" ++ v
+      else showString v
+    TupleType tys ->
+      showString "(" . showTuple tys . showString ")"
+    FunType t1 loc t2 -> showParen (d > fun_prec) $
+      bpretty (fun_prec + 1) t1 .
+      showString " -" . bpretty d loc  . showString "-> " .
+      bpretty fun_prec t2
+    TypeAbsType vs t -> showParen (d > forall_prec) $
+      showString "[" . showWithComma vs .
+      showString "]. "      . bpretty forall_prec t
+    LocAbsType ls t -> showParen (d > forall_prec) $
+      showString "{" . showWithComma ls .
+      showString "}. "      . bpretty forall_prec t
+    ConType c ls tys ->
+      showString c . showSpace (not (null ls)) (showLocs ls)
+                   . showSpace (not (null tys)) (showTys tys)
+    where
+      exists_prec = 10
+      forall_prec :: Int
+      forall_prec = 1
+      fun_prec    = 1
+
+-- | typeSubst A α B = [A/α]B
+typeSubst :: Type -> TypeVar -> Type -> Type
+typeSubst t' v typ = doSubstOne v t' typ
+
+typeSubsts :: [Type] -> [TypeVar] -> Type -> Type
+typeSubsts ts' vs typ = doSubst (zip vs ts') typ
+
+
+--
+-- | The free type variables in a type
+freeTVars :: Type -> Set TypeVar
+freeTVars typ = case typ of
+  TypeVarType v    -> S.singleton v
+  TupleType tys    -> foldl mappend mempty (map freeTVars tys)
+  FunType t1 _ t2  -> freeTVars t1 `mappend` freeTVars t2
+  TypeAbsType vs t -> foldl (\set v -> S.delete v set) (freeTVars t) vs
+  LocAbsType ls t  -> freeTVars t
+  ConType c ls tys -> foldl mappend mempty (map freeTVars tys)
+
+--
+-- | The free location variables in a type
+freeLVars :: Type -> Set LocationVar
+freeLVars typ = case typ of
+  TypeVarType v     -> mempty
+  TupleType tys     -> foldl mappend mempty (map freeLVars tys)
+  FunType t1 loc t2 -> freeLVars t1 `mappend` freeLVarsIn loc `mappend` freeLVars t2
+  TypeAbsType vs ty -> freeLVars ty
+  LocAbsType ls t   -> foldl (\set l -> S.delete l set) (freeTVars t) ls
+  ConType c ls tys  -> foldl mappend mempty (map freeLVarsIn ls)
+                         `mappend` foldl mappend mempty (map freeLVars tys)

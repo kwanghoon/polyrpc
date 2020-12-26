@@ -304,8 +304,8 @@ doSubstBindM useInfo bindDecls expr exprty@(MonType valty) = do
   (bindDecls1, expr1, changed1) <- doSubstBindDecls useInfo bindDecls expr exprty
   case (bindDecls1, expr1) of
     ([], ValExpr val) -> return (val, changed1)
-    ([], _) -> return (BindM [Binding False "$x" valty expr1]  --Todo: infinite loop!!
-                      (ValExpr (UnitM (Var "$x")))
+    ([], _) -> return (BindM [Binding False "simpl$x" valty expr1]  --Todo: infinite loop!!
+                      (ValExpr (UnitM (Var "simpl$x")))
                       , changed1)
     (_ , _) -> return (BindM bindDecls1 expr1, changed1)
 

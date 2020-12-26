@@ -1,4 +1,4 @@
-module Parser where
+module ParserBidi where
 
 import CommonParserUtil
 import Location
@@ -45,12 +45,12 @@ parserSpec = ParserSpec
 
 
       {- Location -}
-      ("Location -> identifier", \rhs -> toASTLocation (Location (getText rhs 1)) ),
+      ("Location -> identifier", \rhs -> toASTLocation (locOrVar (getText rhs 1)) ),
 
 
       {- Locations -}
       ("Locations -> Identifiers", \rhs ->
-        toASTLocationSeq (map Location (fromASTIdSeq (get rhs 1))) ),
+        toASTLocationSeq (map locOrVar (fromASTIdSeq (get rhs 1))) ),
 
 
       {- Type -}
@@ -75,7 +75,7 @@ parserSpec = ParserSpec
               loc = init (init (tail locfun))  -- extract Loc from -Loc-> ( a bit hard-coded!!)
           in  toASTType (FunType
                           (fromASTType (get rhs 1))
-                          (Location loc)
+                          (locOrVar loc)
                           (fromASTType (get rhs 3))) ),
 
 
@@ -90,7 +90,7 @@ parserSpec = ParserSpec
               error $ "[Parser] Not supported: types and then locations: " ++ show locs ++ " " ++ show tys
             ConType name locs' tys ->
               error $ "[Parser] Not supported: multiple locations" ++ name ++ " " ++ show locs' ++ " " ++ show locs
-            TypeVarType name -> toASTType (ConType name locs [])
+            TypeVarType name -> toASTType (ConType name locs []) -- Now this will never happen!
             ty ->
               error $ "[Parser] Not supported yet: " ++ show ty ++ " not ConType: " ++ show locs),
 
@@ -100,7 +100,7 @@ parserSpec = ParserSpec
             ConType name locs [] -> toASTType (ConType name locs tys)
             ConType name locs tys' ->
               error $ "[Parser] Not supported: multiple types: " ++ name ++ " " ++ show tys' ++ " " ++ show tys
-            TypeVarType name -> toASTType (ConType name [] tys)
+            TypeVarType name -> toASTType (ConType name [] tys) -- Now this will never happen!
             ty ->
               error $ "[Parser] Not supported yet: " ++ show ty ++ " not ConType: " ++ show tys),
 
@@ -110,7 +110,7 @@ parserSpec = ParserSpec
 
       ("AtomicType -> ( Type )", \rhs -> get rhs 2 ),
 
-      ("AtomicType -> identifier", \rhs -> toASTType (TypeVarType (getText rhs 1)) ),
+      ("AtomicType -> identifier", \rhs -> toASTType (typeconOrVar (getText rhs 1)) ),
 
 
       {- TupleType -}
@@ -218,8 +218,9 @@ parserSpec = ParserSpec
       ("LExpr -> { Identifiers } . LExpr",
         \rhs -> toASTExpr (singleLocAbs (LocAbs (fromASTIdSeq (get rhs 2)) (fromASTExpr (get rhs 5)))) ),
 
-      ("LExpr -> [ Identifiers ] . LExpr",
-        \rhs -> toASTExpr (singleTypeAbs (TypeAbs (fromASTIdSeq (get rhs 2)) (fromASTExpr (get rhs 5)))) ),
+      -- No type abstractions in the surface syntax:
+      -- ("LExpr -> [ Identifiers ] . LExpr",
+      --   \rhs -> toASTExpr (singleTypeAbs (TypeAbs (fromASTIdSeq (get rhs 2)) (fromASTExpr (get rhs 5)))) ),
 
       ("LExpr -> \\ IdTypeLocSeq . LExpr",
         \rhs -> toASTExpr (singleAbs (Abs (fromASTIdTypeLocSeq (get rhs 2)) (fromASTExpr (get rhs 4)))) ),
@@ -246,8 +247,10 @@ parserSpec = ParserSpec
 
 
       {- IdTypeLoc -}
-      ("IdTypeLoc -> identifier : Type @ Location",
-        \rhs -> toASTIdTypeLoc (getText rhs 1, Just (fromASTType (get rhs 3)), fromASTLocation (get rhs 5)) ),
+      -- No type annotation to lambda bound variable in the surface syntax:
+      -- ("IdTypeLoc -> identifier : Type @ Location",
+      ("IdTypeLoc -> identifier @ Location",
+        \rhs -> toASTIdTypeLoc (getText rhs 1, Nothing, fromASTLocation (get rhs 3)) ),
 
 
       {- Alternatives -}
@@ -271,11 +274,12 @@ parserSpec = ParserSpec
       ("Expr -> Expr Term",
         \rhs -> toASTExpr (App (fromASTExpr (get rhs 1)) Nothing (fromASTExpr (get rhs 2)) Nothing) ),
 
-      ("Expr -> Expr [ LocFunTypes ]",
-        \rhs -> toASTExpr (singleTypeApp (TypeApp (fromASTExpr (get rhs 1)) Nothing (fromASTTypeSeq (get rhs 3)))) ),
+      -- No type applications in the surface syntax:
+      -- ("Expr -> Expr [ LocFunTypes ]",
+      --   \rhs -> toASTExpr (singleTypeApp (TypeApp (fromASTExpr (get rhs 1)) Nothing (fromASTTypeSeq (get rhs 3)))) ),
 
       ("Expr -> Expr { Identifiers }",
-        \rhs -> toASTExpr (singleLocApp (LocApp (fromASTExpr (get rhs 1)) Nothing (map Location (fromASTIdSeq (get rhs 3))))) ),
+        \rhs -> toASTExpr (singleLocApp (LocApp (fromASTExpr (get rhs 1)) Nothing (map locOrVar (fromASTIdSeq (get rhs 3))))) ),
 
       ("Expr -> Tuple", \rhs -> get rhs 1 ),
 
@@ -297,41 +301,36 @@ parserSpec = ParserSpec
       {- AssignExpr -}
       ("AssignExpr -> DerefExpr", \rhs -> get rhs 1 ),
 
-      ("AssignExpr -> DerefExpr := { Identifiers } [ LocFunTypes ] AssignExpr",
+      ("AssignExpr -> DerefExpr := { Identifiers } AssignExpr",
        \rhs ->
          toASTExpr
          (App
           (App
-           (singleTypeApp (TypeApp
             (singleLocApp ( LocApp (Var ":=")
                                    Nothing
-                                   (map Location (fromASTIdSeq (get rhs 4))) ) )
+                                   (map locOrVar (fromASTIdSeq (get rhs 4))) ) )
             Nothing
-            (fromASTTypeSeq (get rhs 7)) ) )
-           Nothing
-           (fromASTExpr (get rhs 1))
-           Nothing )
+            (fromASTExpr (get rhs 1))
+            Nothing )
           Nothing
-          (fromASTExpr (get rhs 9))
+          (fromASTExpr (get rhs 6))
           Nothing) ),
 
 
       {- DerefExpr -}
-      ("DerefExpr -> LogicNot", \rhs -> get rhs 1 ),
-
-      ("DerefExpr -> ! { Identifiers } [ LocFunTypes ] DerefExpr",
+      -- ("DerefExpr -> LogicNot", \rhs -> get rhs 1 ),
+      
+      ("DerefExpr -> ! { Identifiers } DerefExpr",
        \rhs ->
          toASTExpr
          (App
-          (singleTypeApp (TypeApp
            (singleLocApp (LocApp (Var "!")
                                  Nothing
-                                 (map Location (fromASTIdSeq (get rhs 3)))))
+                                 (map locOrVar (fromASTIdSeq (get rhs 3)))))
            Nothing
-           (fromASTTypeSeq (get rhs 6)) ))
-          Nothing
-          (fromASTExpr (get rhs 8)) Nothing) ),
+           (fromASTExpr (get rhs 5)) Nothing) ),
 
+      
       ("DerefExpr -> LogicOr", \rhs -> get rhs 1 ),
 
 
@@ -347,7 +346,7 @@ parserSpec = ParserSpec
       ("LogicAnd -> CompEqNeq", \rhs -> get rhs 1),
 
       ("CompEqNeq -> CompEqNeq == Comp",  -- Assume EqIntPrimOp, which may change to EqBoolOp or EqStringOp later
-        \rhs -> toASTExpr (Prim EqIntPrimOp [] [] [fromASTExpr (get rhs 1), fromASTExpr (get rhs 3)]) ),
+        \rhs -> toASTExpr (Prim EqPrimOp [] [] [fromASTExpr (get rhs 1), fromASTExpr (get rhs 3)]) ),
 
       ("CompEqNeq -> CompEqNeq != Comp",
         \rhs -> toASTExpr (Prim NeqPrimOp [] [] [fromASTExpr (get rhs 1), fromASTExpr (get rhs 3)]) ),

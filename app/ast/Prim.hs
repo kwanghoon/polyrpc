@@ -8,10 +8,14 @@ data PrimOp =
     NotPrimOp  --{l}. Bool -l-> Bool
   | OrPrimOp   --{l}. (Bool, Bool) -l-> Bool
   | AndPrimOp  --{l}. (Bool, Bool) -l-> Bool
+  | EqPrimOp  --{l}. (?, ?) -l-> Bool    (Overloaded)
   | EqStringPrimOp  --{l}. (String, String) -l-> Bool
   | EqBoolPrimOp    --{l}. (Bool, Bool) -l-> Bool
   | EqIntPrimOp     --{l}. (Int, Int) -l-> Bool
-  | NeqPrimOp  --{l}. (Int, Int) -l-> Bool
+  | NeqPrimOp  --{l}. (?, ?) -l-> Bool    (Overloaded)
+  | NeqStringPrimOp  --{l}. (String, String) -l-> Bool
+  | NeqBoolPrimOp  --{l}. (Bool, Bool) -l-> Bool
+  | NeqIntPrimOp  --{l}. (Int, Int) -l-> Bool
   | LtPrimOp   --{l}. (Int, Int) -l-> Bool
   | LePrimOp   --{l}. (Int, Int) -l-> Bool
   | GtPrimOp   --{l}. (Int, Int) -l-> Bool

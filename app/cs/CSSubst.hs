@@ -22,14 +22,20 @@ doSubstExpr :: [(String,Value)] -> Expr -> Expr
 doSubstExpr subst (ValExpr v) = ValExpr (doSubstValue subst v)
 
 doSubstExpr subst (Let bindingDecls expr) =
-  let bindingDecls1 =
-       map (\(Binding istop x ty expr) ->
-              Binding istop x ty (doSubstExpr (elim x subst) expr)) bindingDecls
+  -- let bindingDecls1 =
+  --      map (\(Binding istop x ty expr) ->
+  --             Binding istop x ty (doSubstExpr (elim x subst) expr)) bindingDecls
 
-      elimed_subst = elims (map (\(Binding _ x _ _) -> x) bindingDecls) subst
+  --     elimed_subst = elims (map (\(Binding _ x _ _) -> x) bindingDecls) subst
 
-      expr1 = doSubstExpr elimed_subst expr
-  in Let bindingDecls1 expr1
+  --     expr1 = doSubstExpr elimed_subst expr
+  -- in Let bindingDecls1 expr1
+  let (subst1, bindingDecls1) =
+         foldl (\ (subst0, binds0) (Binding istop x ty expr) ->
+            let subst1 = elim x subst0 in
+                (subst1, binds0 ++ [Binding istop x ty (doSubstExpr subst1 expr)])
+         ) (subst, []) bindingDecls
+  in Let bindingDecls1 (doSubstExpr subst1 expr)          
 
 doSubstExpr subst (Case v casety [TupleAlternative xs expr]) =
   let subst1 = elims xs subst
@@ -76,15 +82,21 @@ doSubstValue subst (Closure vs fvtys (CodeName fname locs tys) recf) =
 doSubstValue subst (UnitM v) = UnitM (doSubstValue subst v)
 
 doSubstValue subst (BindM bindingDecls expr) =
-  let bindingDecls1 =
-         (map (\(Binding istop x ty bexpr) ->
-                let subst1 = elim x subst
-                in  Binding istop x ty (doSubstExpr subst1 bexpr))) bindingDecls
+  -- let bindingDecls1 =
+  --        (map (\(Binding istop x ty bexpr) ->
+  --               let subst1 = elim x subst
+  --               in  Binding istop x ty (doSubstExpr subst1 bexpr))) bindingDecls
 
-      elimed_subst = elims (map (\(Binding _ x _ _) -> x) bindingDecls) subst
+  --     elimed_subst = elims (map (\(Binding _ x _ _) -> x) bindingDecls) subst
 
-      expr1 = doSubstExpr elimed_subst expr
-  in  BindM bindingDecls1 expr1
+  --     expr1 = doSubstExpr elimed_subst expr
+  -- in  BindM bindingDecls1 expr1
+  let (subst1, bindingDecls1) =
+        foldl (\ (subst0, binds0) (Binding istop x ty expr) ->
+           let subst1 = elim x subst0 in
+             (subst1, binds0 ++ [Binding istop x ty (doSubstExpr subst1 expr)])
+        ) (subst, []) bindingDecls
+  in  BindM bindingDecls1 (doSubstExpr subst1 expr)
 
 doSubstValue subst (Req f funty arg) =
   Req (doSubstValue subst f) funty (doSubstValue subst arg)

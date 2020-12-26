@@ -1,4 +1,4 @@
-module TypeCheck(typeCheck, lookupCon) where
+module TypeCheck(typeCheck) where
 
 import Data.Either
 
@@ -311,7 +311,7 @@ mkAbs loc cname tyname locvars tyvars argtys =
       varNames = take (length argtys) ["arg"++show i | i<- [1..]]
       vars = map Var varNames
       abslocs = loc : abslocs
-      varTypeLocList = zip3 varNames argtys abslocs
+      varTypeLocList = zip3 varNames (map Just argtys) abslocs
   in  (singleAbs (Abs varTypeLocList (Constr cname locs tys vars argtys))
       , foldr ( \ ty ty0 -> FunType ty loc ty0) (ConType tyname locs tys) argtys)
 
@@ -341,25 +341,25 @@ elabExpr gti env loc (LocAbs locvars expr) = do
   (elab_expr, elab_ty) <- elabExpr gti (env{_locVarEnv=locVarEnv'}) loc expr
   return (singleLocAbs (LocAbs locvars elab_expr), singleLocAbsType (LocAbsType locvars elab_ty))
 
-elabExpr gti env loc_0 (Abs [(var,argty,loc)] expr)  = do
+elabExpr gti env loc_0 (Abs [(var,Just argty,loc)] expr)  = do
   elab_argty <- elabType (_typeInfo gti) (_typeVarEnv env) (_locVarEnv env) argty
   elab_loc <- elabLocation (_locVarEnv env) loc
   let varEnv = _varEnv env
   let varEnv' = (var,elab_argty):varEnv
   (elab_expr, ret_ty) <- elabExpr gti (env{_varEnv=varEnv'}) elab_loc expr
-  return (Abs [(var,elab_argty,elab_loc)] elab_expr, FunType elab_argty elab_loc ret_ty)
+  return (Abs [(var,Just elab_argty,elab_loc)] elab_expr, FunType elab_argty elab_loc ret_ty)
 
-elabExpr gti env loc_0 (Abs ((var,argty,loc):varTypeLocList) expr)  = do
+elabExpr gti env loc_0 (Abs ((var,Just argty,loc):varTypeLocList) expr)  = do
   elab_argty <- elabType (_typeInfo gti) (_typeVarEnv env) (_locVarEnv env) argty
   elab_loc <- elabLocation (_locVarEnv env) loc
   let varEnv = _varEnv env
   let varEnv' = (var,elab_argty):varEnv
   (elab_expr, ret_ty) <-
     elabExpr gti (env{_varEnv=varEnv'}) elab_loc (singleAbs (Abs varTypeLocList expr))
-  return (Abs [(var,elab_argty,elab_loc)] elab_expr, FunType elab_argty elab_loc ret_ty)
+  return (Abs [(var,Just elab_argty,elab_loc)] elab_expr, FunType elab_argty elab_loc ret_ty)
 
-elabExpr gti env loc_0 (Abs [] expr)  =
-  error $ "[TypeCheck] elabExpr: empty argument Abs"
+elabExpr gti env loc_0 (Abs triple expr)  =
+  error $ "[TypeCheck] elabExpr: Abs argument: empty triple or no annotated type" ++ show triple
 
 elabExpr gti env loc (Let letBindingDecls expr) = do
   let typeInfo = _typeInfo gti
@@ -463,15 +463,15 @@ elabExpr gti env loc (Prim op op_locs op_tys exprs) = do
      overloaded elab_op_locs elab_op_tys elab_exprs tys  = do
        matchInt <- nonoverloaded elab_op_locs elab_op_tys elab_exprs tys EqIntPrimOp
        case matchInt of
-         Left expr -> return expr
+         Left exprTy -> return exprTy
          Right err -> do
             matchBool <- nonoverloaded elab_op_locs elab_op_tys elab_exprs tys EqBoolPrimOp
             case matchBool of
-              Left expr -> return expr
+              Left exprTy -> return exprTy
               Right err -> do
                 matchString <- nonoverloaded elab_op_locs elab_op_tys elab_exprs tys EqStringPrimOp
                 case matchString of
-                  Left expr -> return expr
+                  Left exprTy -> return exprTy
                   Right err -> error $ err
 
      nonoverloaded elab_op_locs elab_op_tys elab_exprs tys  op =

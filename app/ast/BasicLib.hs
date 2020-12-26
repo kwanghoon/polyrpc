@@ -19,7 +19,7 @@ basicLib =
      , LocAbsType [l]
           (FunType unit_type (LocVar l) string_type)
      , LocAbs [l]
-          (Abs [(x,unit_type,LocVar l)]
+          (Abs [(x,Just unit_type,LocVar l)]
                (Prim PrimReadOp [LocVar l] [] [Var x]))
      ),
 
@@ -34,7 +34,7 @@ basicLib =
      , LocAbsType [l]
           (FunType string_type (LocVar l) unit_type)
      , LocAbs [l]
-          (Abs [(x,string_type,LocVar l)]
+          (Abs [(x,Just string_type,LocVar l)]
                (Prim PrimPrintOp [LocVar l] [] [Var x]))
      ),
     
@@ -49,7 +49,7 @@ basicLib =
       , LocAbsType [l]
           (FunType int_type (LocVar l) string_type)
       , LocAbs [l]
-          (Abs [(x,int_type,LocVar l)]
+          (Abs [(x,Just int_type,LocVar l)]
             (Prim PrimIntToStringOp [LocVar l] [] [Var x]))
       ),
 
@@ -66,8 +66,8 @@ basicLib =
            (FunType string_type (LocVar l)
               (FunType string_type (LocVar l) string_type))
       , LocAbs [l]
-           (Abs [(x,string_type,LocVar l)]
-             (Abs [(y,string_type,LocVar l)]
+           (Abs [(x,Just string_type,LocVar l)]
+             (Abs [(y,Just string_type,LocVar l)]
                  (Prim PrimConcatOp [LocVar l] [] [Var x, Var y])))
       ),
     
@@ -91,7 +91,7 @@ basicLib =
                 (ConType refType [LocVar l1] [tyvar_a])))
       , LocAbs [l1]
              (TypeAbs [a]
-                 (Abs [(x,tyvar_a,LocVar l1)]
+                 (Abs [(x,Just tyvar_a,LocVar l1)]
                     (Prim PrimRefCreateOp [LocVar l1] [tyvar_a] [Var x])))
       ),
 
@@ -112,7 +112,7 @@ basicLib =
                  (LocVar l1) tyvar_a))
      , LocAbs [l1]
           (TypeAbs [a]
-             (Abs [(x,ConType refType [LocVar l1] [tyvar_a],LocVar l1)]
+             (Abs [(x,Just $ ConType refType [LocVar l1] [tyvar_a],LocVar l1)]
                  (Prim PrimRefReadOp [LocVar l1] [tyvar_a] [Var x])))
      ),
 
@@ -137,8 +137,8 @@ basicLib =
                    (FunType tyvar_a (LocVar l1) unit_type)))
      , LocAbs [l1]
           (TypeAbs [a]
-              (Abs [(x,ConType refType [LocVar l1] [tyvar_a],LocVar l1)]
-                   (Abs [(y,tyvar_a,LocVar l1)]
+              (Abs [(x,Just $ ConType refType [LocVar l1] [tyvar_a],LocVar l1)]
+                   (Abs [(y,Just tyvar_a,LocVar l1)]
                        (Prim PrimRefWriteOp [LocVar l1] [tyvar_a] [Var x, Var y]))))
      )
   ]
