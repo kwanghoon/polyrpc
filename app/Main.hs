@@ -15,6 +15,7 @@ import qualified CSType as TT
 import qualified CSExpr as TE
 import TypeCheck
 import TypeInf
+import Monomorphization
 import Compile
 import Simpl
 import Verify
@@ -79,6 +80,19 @@ doProcess cmd file = do
 
   print_rpc cmd file elab_toplevelDecls
 -}
+
+  elab_toplevelDecls <-
+    if _flag_monomorphization cmd || _flag_debug_monomorphization cmd
+    then do
+      putStrLn "[Monomorphization]"
+      mono_toplevelDecls <- mono gti elab_toplevelDecls
+
+      verbose (_flag_debug_monomorphization cmd) $ putStrLn "Dumping..."
+      verbose (_flag_debug_monomorphization cmd) $ putStrLn $ show $ elab_toplevelDecls1
+
+      return mono_toplevelDecls 
+      
+    else return elab_toplevelDecls
 
   putStrLn "[Compiling]"
   (t_gti, funStore, t_expr) <- compile gti elab_toplevelDecls
@@ -172,6 +186,8 @@ data Cmd =
       , _flag_debug_parse :: Bool
       , _flag_debug_typecheck :: Bool
       , _flag_dump_typecheck :: Bool
+      , _flag_monomorphization :: Bool
+      , _flag_debug_monomorphization :: Bool
       , _flag_debug_compile :: Bool
       , _flag_debug_simpl :: Bool
       , _flag_debug_verify :: Bool
@@ -187,6 +203,8 @@ initCmd =
       , _flag_debug_parse = False
       , _flag_debug_typecheck = False
       , _flag_dump_typecheck = False
+      , _flag_monomorphization = False
+      , _flag_debug_monomorphization = False
       , _flag_debug_compile = False
       , _flag_debug_simpl = False
       , _flag_debug_verify = False
@@ -229,6 +247,14 @@ collect cmd ("--debug-typecheck":args) = do
 
 collect cmd ("--dump-typecheck":args) = do
   let new_cmd = cmd { _flag_dump_typecheck = True }
+  collect new_cmd args
+
+collect cmd ("--monomorphization":args) = do
+  let new_cmd = cmd { _flag_monomorphization = True }
+  collect new_cmd args
+
+collect cmd ("--debug-monomorphization":args) = do
+  let new_cmd = cmd { _flag_debug_monomorphization = True }
   collect new_cmd args
 
 collect cmd ("--debug-compile":args) = do
