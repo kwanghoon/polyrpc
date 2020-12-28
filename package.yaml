@@ -1,10 +1,10 @@
 name:                polyrpc
-version:             0.1.0.0
+version:             0.2.1.0
 github:              "kwanghoon/polyrpc"
 license:             BSD3
 author:              "Kwanghoon Choi"
 maintainer:          "lazyswamp@gmail.com"
-copyright:           "2020 Kwanghoon Choi"
+copyright:           "2020- Kwanghoon Choi"
 
 extra-source-files:
 - README.md

@@ -62,10 +62,10 @@ doProcess cmd file = do
   let toplevelDecls = fromASTTopLevelDeclSeq exprSeqAst
 
   putStrLn "[Bidirectional type checking]"
-  (gti, elab_toplevelDecls1, elab_toplevelDecls0, lib_toplevelDecls)
+  (gti, elab_toplevelDecls1, elab_builtinDatatypes, lib_toplevelDecls)
     <- typeInf (_flag_debug_typecheck cmd) toplevelDecls
 
-  let elab_toplevelDecls = lib_toplevelDecls ++ elab_toplevelDecls0 ++ elab_toplevelDecls1
+  let elab_toplevelDecls = lib_toplevelDecls ++ elab_builtinDatatypes ++ elab_toplevelDecls1
   
   verbose (_flag_dump_typecheck cmd) $ putStrLn "Dumping..."
   verbose (_flag_dump_typecheck cmd) $ putStrLn $ show $ elab_toplevelDecls1
@@ -282,5 +282,5 @@ collect cmd (arg:args) = do
 verbose b action = if b then action else return ()
 
 --
-version = "0.1.0"
+version = "0.2.1"
 printVersion = putStrLn $ "POLYRPC, version " ++ version ++ ": http://github.com/kwanghoon/polyrpc/"

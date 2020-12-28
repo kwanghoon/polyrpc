@@ -113,6 +113,9 @@ typeInf debug toplevelDecls = do
 
   let gti1 = gti {_bindingTypeInfo=basicLibTypeInfo ++ bindingTypeInfo}
 
+  -- elab_toplevels0 : built-in datatypes
+  -- elab_toplevels1 : user-defined datatypes + bindings
+  -- lib_toplevels : basic libraries
   return (gti1, elab_toplevels1, elab_toplevels0, lib_toplevels)
 
 ----------------------------------------------------------------------------
