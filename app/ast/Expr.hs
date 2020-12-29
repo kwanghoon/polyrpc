@@ -22,7 +22,7 @@ module Expr(Expr(..), ExprVar, AST(..), BindingDecl(..), DataTypeDecl(..)
   , toASTAlternativeSeq, toASTAlternative
   , toASTTriple, toASTLit
   , subst, substs, substs_, tyExprSubst, tyExprSubsts, locExprSubst, locExprSubsts
-  , typeconOrVar
+  , typeconOrVar, isRec
   ) where
 
 import Location
@@ -60,7 +60,7 @@ data Expr =
 -- On location annotations:
 --------------------------------------------------------------------
 -- In Abs, the location is given by programmers.
--- In App, the location is inferred automatically.  
+-- In App, the location is inferred automatically.
 -- In LocApp, the locations are given by programmers.
 -- In Prim, locations in primitives except (ref), (!), and (:=) are
 --    set with the current location. For (ref), (!), and (:=), the
@@ -346,56 +346,50 @@ lookupPrimOpType primop =
   [ (locvars, tyvars, tys,ty)
   | (primop1,(locvars, tyvars, tys,ty)) <- primOpTypes, primop==primop1]
 
---
--- recursive = "$rec"
+-- | is this recursive?
+isRec :: String -> Expr -> Bool
 
+isRec name (Var x) = name==x
 
--- isRecName :: String -> Bool
+isRec name (TypeAbs tyvars expr) = isRec name expr
 
--- isRecName name = reverse (take 4 (reverse name)) == recursive
+isRec name (LocAbs locvars expr) = isRec name expr
 
+isRec name (Abs xTyLocs expr) =
+  let (xs,tys,locs) = unzip3 xTyLocs in
+  if name `elem` xs then False else isRec name expr
 
--- isRec :: String -> Expr -> Bool
+isRec name (Let bindingDecls expr) =
+  or (map (\ (Binding _ x ty bexpr) -> name/=x && isRec name bexpr
+  ) bindingDecls)
+  || isRec name expr
 
--- isRec name (Var x) = name==x
+  -- if name `elem` xs then False
+  -- else or (isRec name expr : map (isRec name) exprs)
+  -- where
+  --   (xs,tys, exprs) = unzip3 [(x,ty,expr) | Binding _ x ty expr<-bindingDecls]
 
--- isRec name (TypeAbs tyvars expr) = isRec name expr
+isRec name (Case expr casety [TupleAlternative xs alt_expr]) =
+  isRec name expr || if name `elem` xs then False else isRec name alt_expr
 
--- isRec name (LocAbs locvars expr) = isRec name expr
+isRec name (Case expr casety alts) =
+  isRec name expr
+  || or (map (\ (Alternative cname xs alt_expr) ->
+                not (name `elem` xs) && isRec name alt_expr) alts)
 
--- isRec name (Abs xTyLocs expr) =
---   let (xs,tys,locs) = unzip3 xTyLocs in
---   if name `elem` xs then False
---   else isRec name expr
+isRec name (App expr maybefunty arg maybloc) = isRec name expr || isRec name arg
 
--- isRec name (Let bindingDecls expr) =
---   let xTyExprs = [(x,ty,expr) | Binding istop x ty expr<-bindingDecls]
---       (xs,tys, exprs) = unzip3 xTyExprs
---   in
---   if name `elem` xs then False
---   else or (isRec name expr : map (isRec name) exprs)
+isRec name (TypeApp expr maybefunty tys) = isRec name expr
 
--- isRec name (Case expr casety [TupleAlternative xs alt_expr]) =
---   isRec name expr || if name `elem` xs then False else isRec name alt_expr
+isRec name (LocApp expr maybefunty locs) = isRec name expr
 
--- isRec name (Case expr casety alts) =
---   isRec name expr
---   || or (map (\(Alternative cname xs alt_expr) ->
---                 if name `elem` xs then False else isRec name alt_expr) alts)
+isRec name (Tuple exprs) = or (map (isRec name) exprs)
 
--- isRec name (App expr maybefunty arg maybloc) = isRec name expr || isRec name arg
+isRec name (Prim op locs tys exprs) = or (map (isRec name) exprs)
 
--- isRec name (TypeApp expr maybefunty tys) = isRec name expr
+isRec name (Lit lit) = False
 
--- isRec name (LocApp expr maybefunty locs) = isRec name expr
-
--- isRec name (Tuple exprs) = or (map (isRec name) exprs)
-
--- isRec name (Prim op locs tys exprs) = or (map (isRec name) exprs)
-
--- isRec name (Lit lit) = False
-
--- isRec name (Constr cname locs tys exprs argtys) = or (map (isRec name) exprs)
+isRec name (Constr cname locs tys exprs argtys) = or (map (isRec name) exprs)
 
 -----
 instance Pretty Expr where
