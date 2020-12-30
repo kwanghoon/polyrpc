@@ -11,11 +11,70 @@ import BasicLib
 import Data.List (lookup)
 import Control.Monad.State
 
--- | TODO
---    1. Build pairs for libraries
+-- | [Design Memo]
+--
+--    1. Library
+--
+--         (LibDecl): For f : /\l.ty,
+--           f$mono : [[ /\l.ty ]]
+--           f$mono = ( f [client] , f [server] )
+--
+--         (Var):  [[f]] = f$mono
+--
+--      Assumption: all libraries should have type in the form of
+--         /\l1...lk. /\a1...an.monoty. 
+--
+--    2. Datatype
+--
+--         (Datatype): For data D ls alphas = ... | C tys | ...
+--
+--            data D$mono$as1 [] alphas = ... | C$mono$as1 tys[as1/ls] | ...
+--               ...
+--            data D$mono$ask [] alphas = ... | C$mono$ask tys[ask/ls] | ...
+--
+--         (Con): [[C locs tys args]] = C$mono$locs [] tys args
 
 mono :: Monad m => GlobalTypeInfo -> [TopLevelDecl] -> m [TopLevelDecl]
 mono gti toplevelDecls = return toplevelDecls
+  -- foldM
+  --   (\ mono_tops top -> mono_tops ++ monoToplevel (Location clientLocName) top)
+  --   [] toplevelDecls
+
+-- | Toplevel declaration monomorphization
+
+monoToplevel loc (BindingTopLevel bindingDecl) = do
+  mono_bindingDecls <- monoBindingDecl loc bindingDecl
+  return $ map BindingTopLevel mono_bindingDecls
+
+monoToplevel loc (DataTypeTopLevel datatypeDecl) =
+  return $ [DataTypeTopLevel (monoDataTypeDecl datatypeDecl)]
+  where
+    monoDataTypeDecl (DataType d ls alphas typeconDecls) =
+      DataType d ls alphas (map monoTypeConDecl typeconDecls)
+
+    monoTypeConDecl (TypeCon c tys) = TypeCon c (map monoType tys)
+
+-- monoToplevel loc (LibDeclTopLevel x ty) = x    -- Todo!!
+
+
+monoBindingDecl loc (Binding istop x ty bexpr)
+  | isRec x bexpr = do
+      recx <- freshName
+      argunit <- freshName
+      let mono_ty = monoType ty
+      mono_bexpr <- monoExpr loc bexpr
+      let funty = FunType unit_type loc mono_ty
+      let app_recx_unit = App (Var recx) (Just funty) (Lit UnitLit) (Just loc)
+      return [ Binding istop recx funty
+               (Abs [(argunit, Just unit_type, loc)]
+                (subst app_recx_unit recx mono_bexpr))
+             , Binding istop x mono_ty app_recx_unit ]
+        
+  | otherwise = do
+      mono_bexpr <- monoExpr loc bexpr
+      let mono_ty = monoType ty
+      return [ Binding istop x mono_ty mono_bexpr ]
+
 
 -- | Type monomorphization
 
@@ -58,23 +117,26 @@ monoExpr loc (Let bindingDecls expr) = do
   mono_expr <- monoExpr loc expr
   return $ Let mono_bindingDecls mono_expr
   where
-    f bindingDecls0 (Binding istop x ty bexpr)
-      | isRec x bexpr = do
-          recx <- freshName
-          argunit <- freshName
-          let mono_ty = monoType ty
-          mono_bexpr <- monoExpr loc bexpr
-          let funty = FunType unit_type loc mono_ty
-          let app_recx_unit = App (Var recx) (Just funty) (Lit UnitLit) (Just loc)
-          return (bindingDecls0 ++ [ Binding istop recx funty
-                                       (Abs [(argunit, Just unit_type, loc)]
-                                          (subst app_recx_unit recx mono_bexpr))
-                                   , Binding istop x mono_ty app_recx_unit ] )
+    f bindingDecls0 binding = do
+      bindings <- monoBindingDecl loc binding
+      return $ bindingDecls0 ++ bindings
+      
+      -- | isRec x bexpr = do
+      --     recx <- freshName
+      --     argunit <- freshName
+      --     let mono_ty = monoType ty
+      --     mono_bexpr <- monoExpr loc bexpr
+      --     let funty = FunType unit_type loc mono_ty
+      --     let app_recx_unit = App (Var recx) (Just funty) (Lit UnitLit) (Just loc)
+      --     return (bindingDecls0 ++ [ Binding istop recx funty
+      --                                  (Abs [(argunit, Just unit_type, loc)]
+      --                                     (subst app_recx_unit recx mono_bexpr))
+      --                              , Binding istop x mono_ty app_recx_unit ] )
 
-      | otherwise = do
-          mono_bexpr <- monoExpr loc bexpr
-          let mono_ty = monoType ty
-          return (bindingDecls0 ++ [ Binding istop x mono_ty mono_bexpr ])
+      -- | otherwise = do
+      --     mono_bexpr <- monoExpr loc bexpr
+      --     let mono_ty = monoType ty
+      --     return (bindingDecls0 ++ [ Binding istop x mono_ty mono_bexpr ])
 
 monoExpr loc (Case expr maybeTy alts) = do
   mono_expr <- monoExpr loc expr
@@ -108,8 +170,36 @@ monoExpr loc (LocApp expr maybeTy locs) = do
   foldM f mono_expr locs
   where
     f mono_expr0 (Location loc_name)
-      | loc_name == clientLocName = return mono_expr0  -- Todo!!
-      | loc_name == serverLocName = return mono_expr0
+      | loc_name == clientLocName = mkFst mono_expr0 maybeTy
+      | loc_name == serverLocName = mkSnd mono_expr0 maybeTy
+
+monoExpr loc (Tuple exprs) = do
+  mono_exprs <- mapM (monoExpr loc) exprs
+  return $ Tuple mono_exprs
+
+monoExpr loc (Prim op locs tys exprs) = do
+  mono_exprs <- mapM (monoExpr loc) exprs
+  return $ Prim op locs (map monoType tys) mono_exprs
+
+monoExpr loc (Lit lit) = return $ Lit lit
+
+monoExpr loc (Constr c locs tys exprs argTys) = do
+  mono_exprs <- mapM (monoExpr loc) exprs
+  return $ Constr c locs (map monoType tys) mono_exprs (map monoType argTys)
+  
+
+mkFst :: Expr -> Maybe Type -> NameGen Expr
+mkFst expr maybeTy = do
+  x <- freshName
+  y <- freshName
+  return $ Case expr maybeTy [TupleAlternative [x,y] (Var x)]
+
+mkSnd :: Expr -> Maybe Type -> NameGen Expr
+mkSnd expr maybeTy = do
+  x <- freshName
+  y <- freshName
+  return $ Case expr maybeTy [TupleAlternative [x,y] (Var y)]
+
 
 -- | A state monad for generating fresh names
 
@@ -137,5 +227,3 @@ freshName = do
       modify $ \s -> s {recNames = vs}
       return v
     [] -> error "No fresh variable can be created."
-
-
