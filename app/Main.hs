@@ -11,6 +11,7 @@ import Parser
 import qualified ParserBidi as PB
 import Type
 import Expr
+import BasicLib
 import qualified CSType as TT
 import qualified CSExpr as TE
 import TypeCheck
@@ -63,39 +64,47 @@ doProcess cmd file = do
 
   putStrLn "[Bidirectional type checking]"
   (gti, elab_toplevelDecls1, elab_builtinDatatypes, lib_toplevelDecls)
-    <- typeInf (_flag_debug_typecheck cmd) toplevelDecls
+    <- typeInf (_flag_debug_typecheck cmd) toplevelDecls basicLib
 
   let elab_toplevelDecls = lib_toplevelDecls ++ elab_builtinDatatypes ++ elab_toplevelDecls1
   
   verbose (_flag_dump_typecheck cmd) $ putStrLn "Dumping..."
   verbose (_flag_dump_typecheck cmd) $ putStrLn $ show $ elab_toplevelDecls1
 
-  print_rpc cmd file elab_toplevelDecls1
+  let jsonfile = prefixOf file ++ ".json"
+  print_rpc cmd jsonfile elab_toplevelDecls1
 
 {-
   putStrLn "[Type checking]"
-  (gti, elab_toplevelDecls) <- typeCheck toplevelDecls
+  (gti, elab_toplevelDecls) <- typeCheck toplevelDecls basicLib
   verbose (_flag_debug_typecheck cmd) $ putStrLn "Dumping..."
   verbose (_flag_debug_typecheck cmd) $ putStrLn $ show $ elab_toplevelDecls
 
   print_rpc cmd file elab_toplevelDecls
 -}
 
-  elab_toplevelDecls <-
+  (s_gti, s_toplevelDecls, s_basicLib) <-
     if _flag_monomorphization cmd || _flag_debug_monomorphization cmd
     then do
       putStrLn "[Monomorphization]"
-      mono_toplevelDecls <- mono gti elab_toplevelDecls
+      (mono_gti, mono_toplevelDecls, mono_basicLib) <-
+        mono gti elab_toplevelDecls basicLib
 
-      verbose (_flag_debug_monomorphization cmd) $ putStrLn "Dumping..."
-      verbose (_flag_debug_monomorphization cmd) $ putStrLn $ show $ elab_toplevelDecls1
+      -- verbose (_flag_debug_monomorphization cmd) $ putStrLn "Dumping..."
+      -- verbose (_flag_debug_monomorphization cmd) $ putStrLn $ show $ elab_toplevelDecls1
 
-      return mono_toplevelDecls 
+      let jsonfile = prefixOf file ++ "_mono.json"
+      verbose (_flag_debug_monomorphization cmd) $ print_rpc cmd jsonfile mono_toplevelDecls
+
+      putStrLn "mono_gti"
+      putStrLn (show mono_gti)
       
-    else return elab_toplevelDecls
+      return (mono_gti, mono_toplevelDecls, mono_basicLib)
+      
+    else return (gti, elab_toplevelDecls, basicLib)
 
   putStrLn "[Compiling]"
-  (t_gti, funStore, t_expr) <- compile gti elab_toplevelDecls
+  (t_gti, funStore, t_expr) <- compile s_gti s_toplevelDecls s_basicLib
   verbose (_flag_debug_compile cmd) $ putStrLn "Dumping...\nGlobal type information:\n"
   verbose (_flag_debug_compile cmd) $ putStrLn $ (show t_gti ++ "\n\nFunction stores:")
   verbose (_flag_debug_compile cmd) $ putStrLn $ (show funStore ++ "\n\nMain expression:")
@@ -128,8 +137,7 @@ doProcess cmd file = do
 
 
 --
-print_rpc cmd file elab_toplevelDecls = do
-  let jsonfile = prefixOf file ++ ".json"
+print_rpc cmd jsonfile elab_toplevelDecls = do
   if _flag_print_rpc_json cmd
   then do putStrLn $ "Writing to " ++ jsonfile
           writeFile jsonfile $ render

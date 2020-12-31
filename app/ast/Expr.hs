@@ -4,7 +4,7 @@ module Expr(Expr(..), ExprVar, AST(..), BindingDecl(..), DataTypeDecl(..)
   , initEnv
   , TopLevelDecl(..), TypeConDecl(..), Alternative(..)
   , TypeInfo, ConTypeInfo, BindingTypeInfo, DataTypeInfo
-  , GlobalTypeInfo(..), Env(..)
+  , GlobalTypeInfo(..), Env(..), BasicLibType
   , lookupConstr, lookupCon, lookupDataTypeName
   , lookupConFromDataTypeInfo, lookupPrimOpType
   , mainName, primOpTypes
@@ -23,6 +23,8 @@ module Expr(Expr(..), ExprVar, AST(..), BindingDecl(..), DataTypeDecl(..)
   , toASTTriple, toASTLit
   , subst, substs, substs_, tyExprSubst, tyExprSubsts, locExprSubst, locExprSubsts
   , typeconOrVar, isRec
+  , splitTopLevelDecls, collectDataTypeDecls, elabConTypeDecls, collectDataTypeInfo
+  , builtinDatatypes
   ) where
 
 import Location
@@ -34,6 +36,7 @@ import Type
 -- import Data.Aeson
 import Text.JSON.Generic
 import Pretty
+import Util
 
 import Data.Char
 
@@ -213,6 +216,75 @@ data Env = Env
        , _varEnv     :: BindingTypeInfo }
 
 initEnv = Env { _locVarEnv=[], _typeVarEnv=[], _varEnv=[] }
+
+type BasicLibType = (String, Type, Expr)
+
+-- | Built-in datatypes
+
+builtinDatatypes :: [DataTypeDecl]
+builtinDatatypes = [
+    (DataType unitType   [] [] []), -- data Unit
+    (DataType intType    [] [] []), -- data Int
+    (DataType boolType   [] []      -- data Bool = { True | False }
+      [ TypeCon trueLit  []
+      , TypeCon falseLit [] ]),
+    (DataType stringType [] [] []), -- data String
+    (DataType refType ["l"] ["a"] [])  -- data Ref
+  ]
+
+-- | datatype manipulation functions
+
+splitTopLevelDecls :: Monad m =>
+  [TopLevelDecl] -> m ([BindingDecl], [DataTypeDecl])
+splitTopLevelDecls toplevelDecls = do
+  bindingsDatatypeList <- mapM splitTopLevelDecl toplevelDecls
+  let (bindings,datatypes) = unzip bindingsDatatypeList
+  return (concat bindings, concat datatypes)
+
+splitTopLevelDecl :: Monad m =>
+  TopLevelDecl -> m ([BindingDecl], [DataTypeDecl])
+splitTopLevelDecl (BindingTopLevel bindingDecl)   = return ([bindingDecl], [])
+splitTopLevelDecl (DataTypeTopLevel datatypeDecl) = return ([], [datatypeDecl])
+splitTopLevelDecl (LibDeclTopLevel x ty) = return ([], [])
+
+
+-- 
+collectDataTypeDecls :: Monad m => [DataTypeDecl] -> m TypeInfo
+collectDataTypeDecls datatypeDecls = do
+  let nameTyvarsPairList = map collectDataTypeDecl datatypeDecls
+  return nameTyvarsPairList
+
+collectDataTypeDecl (DataType name locvars tyvars typeConDecls) =
+  if isTypeName name
+     && and (map isLocationVarName locvars)
+     && allUnique locvars == []
+     && and (map isTypeVarName tyvars)
+     && allUnique tyvars == []
+  then (name, locvars, tyvars)
+  else error $ "[TypeCheck] collectDataTypeDecls: Invalid datatype: "
+                 ++ name ++ " " ++ show locvars++ " " ++ show tyvars
+
+--
+elabConTypeDecls :: Monad m => [DataTypeDecl] -> m ConTypeInfo
+elabConTypeDecls elab_datatypeDecls = do
+  conTypeInfoList <- mapM elabConTypeDecl elab_datatypeDecls
+  let conTypeInfo = concat conTypeInfoList
+  case allUnique [con | (con,_) <- conTypeInfo] of
+    [] -> return conTypeInfo
+    (con:_) -> error $ "allConTypeDecls: duplicate constructor: " ++ con
+
+elabConTypeDecl :: Monad m => DataTypeDecl -> m ConTypeInfo
+elabConTypeDecl (DataType name locvars tyvars typeConDecls) = do
+  return [ (con, (argtys, name, locvars, tyvars)) | TypeCon con argtys <- typeConDecls ]
+
+--
+collectDataTypeInfo :: Monad m => [DataTypeDecl] -> m DataTypeInfo
+collectDataTypeInfo datatypeDecls = do
+  mapM get datatypeDecls
+  where get (DataType name locvars tyvars tycondecls) =
+          return (name, (locvars, tyvars,map f tycondecls))
+        f (TypeCon s tys) = (s,tys)
+
 
 --
 data AST =

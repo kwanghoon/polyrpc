@@ -10,7 +10,7 @@ import qualified Type as ST
 import qualified Expr as SE
 import Literal
 import Prim
-import BasicLib
+-- import BasicLib -- This basicLib should not be given. 
 
 import qualified CSType as TT
 import qualified CSExpr as TE
@@ -18,9 +18,9 @@ import qualified CSExpr as TE
 import Control.Monad
 
 compile :: Monad m =>
-  SE.GlobalTypeInfo -> [SE.TopLevelDecl] -> m (TE.GlobalTypeInfo, TE.FunctionStore, TE.Expr)
+  SE.GlobalTypeInfo -> [SE.TopLevelDecl] -> [(String, ST.Type, SE.Expr)] -> m (TE.GlobalTypeInfo, TE.FunctionStore, TE.Expr)
 
-compile s_gti s_topleveldecls = do
+compile s_gti s_topleveldecls basicLib = do
   let s_basiclib_topleveldecls =
         [SE.BindingTopLevel (SE.Binding False x ty expr) | (x,ty,expr) <- basicLib]
   -- let s_topleveldecls_with_basiclib =

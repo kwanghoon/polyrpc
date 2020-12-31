@@ -45,6 +45,7 @@ executables:
     - app/ast
     - app/bidi
     - app/cs
+    - app/util
 
     ghc-options:
     - -threaded

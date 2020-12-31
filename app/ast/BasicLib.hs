@@ -5,8 +5,7 @@ import Type
 import Prim
 import Expr
 
-
-basicLib :: [(String, Type, Expr)]
+basicLib :: [BasicLibType]
 basicLib =
   [
 

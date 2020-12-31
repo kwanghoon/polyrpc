@@ -201,7 +201,7 @@ verifyExpr gtigci loc env ty (TypeApp left (CloType (TypeAbsType tyvars bodyty))
   let substed_bodyty = doSubst subst bodyty
 
   assert (equalType substed_bodyty ty)
-    ("[verifyExpr] Not equal type: " ++ show substed_bodyty ++ " != " ++ show ty)
+    ("[verifyExpr] TypeApp: Not equal type: " ++ show substed_bodyty ++ " != " ++ show ty)
 
 verifyExpr gtigci loc env ty (LocApp left (CloType (LocAbsType locvars bodyty)) locs) = do
   assert (length locvars == length locs)  --   (1) length locvars == length locs
@@ -212,7 +212,7 @@ verifyExpr gtigci loc env ty (LocApp left (CloType (LocAbsType locvars bodyty)) 
   let substed_bodyty = doSubstLoc substLoc bodyty
 
   assert (equalType substed_bodyty ty)
-    ("[verifyExpr] Not equal type: " ++ show substed_bodyty ++ " != " ++ show ty)
+    ("[verifyExpr] LocApp: Not equal type: " ++ show substed_bodyty ++ " != " ++ show ty)
 
 verifyExpr gtigci loc env ty (Prim MkRecOp locs tys vs) = do -- locs=[], tys=[]
   return ()
@@ -272,11 +272,11 @@ verifyValue :: Monad m => GlobalInfo -> Location -> Env -> Type -> Value -> m ()
 verifyValue gtigci loc env ty (Var x) = do
   case [ty | (y,ty) <- _varEnv env, x==y] of
     (yty:_) -> assert (equalType yty ty)
-                  ("[verifyValue] Not equal type: " ++ show yty ++ " != " ++ show ty)
+                  ("[verifyValue] Var-env: Not equal type: " ++ show yty ++ " != " ++ show ty ++ " for " ++ x)
     []    ->
       case [ty | (z,ty) <- _libInfo $ fst $ gtigci, x==z] of
         (zty:_) -> assert (equalType zty ty)
-                     ("[verifyValue] Not equal type: " ++ show zty ++ " != " ++ show ty)
+                     ("[verifyValue] Var:lib: Not equal type: " ++ show zty ++ " != " ++ show ty)
         [] -> error $ "[verifyExpr] Variable not found: " ++ x ++ " in " ++ show (_varEnv env)
 
 verifyValue gtigci loc env ty (Lit lit) =

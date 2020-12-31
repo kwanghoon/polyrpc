@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f2835aa0e118faa3223b1ba778efac235fe3cebdfcb6a3324e1fd96c803ff63e
+-- hash: 349c125c233c57058e0037234154f6cea9182c1bf3f5d68dfccb93493290e1ca
 
 name:           polyrpc
 version:        0.2.1.0
@@ -54,12 +54,14 @@ executable polyrpc
       CSExpr
       CSSubst
       CSType
+      Util
       Paths_polyrpc
   hs-source-dirs:
       app
       app/ast
       app/bidi
       app/cs
+      app/util
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson >=1.4.7 && <1.5

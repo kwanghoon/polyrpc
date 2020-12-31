@@ -14,7 +14,7 @@ import Type
 import Literal
 import Prim
 import Expr
-import BasicLib
+import Util
 
 import Naming
 import NameGen
@@ -42,8 +42,8 @@ import Debug.Trace
 
 type TIMonad = ExceptT String (State NameState) -- 'ExceptT String NameGen'
 
-typeInf :: Monad m => Bool -> [TopLevelDecl] -> m (GlobalTypeInfo, [TopLevelDecl], [TopLevelDecl], [TopLevelDecl])
-typeInf debug toplevelDecls = do
+typeInf :: Monad m => Bool -> [TopLevelDecl] -> [BasicLibType] -> m (GlobalTypeInfo, [TopLevelDecl], [TopLevelDecl], [TopLevelDecl])
+typeInf debug toplevelDecls basicLib = do
   -- 1. split
   (bindingDecls, userDatatypes) <- splitTopLevelDecls toplevelDecls
 
@@ -122,17 +122,17 @@ typeInf debug toplevelDecls = do
 -- 1. Split toplevel declarations into datatypes and bindings
 ----------------------------------------------------------------------------
 
-splitTopLevelDecls :: Monad m =>
-  [TopLevelDecl] -> m ([BindingDecl], [DataTypeDecl])
-splitTopLevelDecls toplevelDecls = do
-  bindingsDatatypeList <- mapM splitTopLevelDecl toplevelDecls
-  let (bindings,datatypes) = unzip bindingsDatatypeList
-  return (concat bindings, concat datatypes)
+-- splitTopLevelDecls :: Monad m =>
+--   [TopLevelDecl] -> m ([BindingDecl], [DataTypeDecl])
+-- splitTopLevelDecls toplevelDecls = do
+--   bindingsDatatypeList <- mapM splitTopLevelDecl toplevelDecls
+--   let (bindings,datatypes) = unzip bindingsDatatypeList
+--   return (concat bindings, concat datatypes)
 
-splitTopLevelDecl :: Monad m =>
-  TopLevelDecl -> m ([BindingDecl], [DataTypeDecl])
-splitTopLevelDecl (BindingTopLevel bindingDecl)   = return ([bindingDecl], [])
-splitTopLevelDecl (DataTypeTopLevel datatypeDecl) = return ([], [datatypeDecl])
+-- splitTopLevelDecl :: Monad m =>
+--   TopLevelDecl -> m ([BindingDecl], [DataTypeDecl])
+-- splitTopLevelDecl (BindingTopLevel bindingDecl)   = return ([bindingDecl], [])
+-- splitTopLevelDecl (DataTypeTopLevel datatypeDecl) = return ([], [datatypeDecl])
 
 
 ----------------------------------------------------------------------------
@@ -148,32 +148,32 @@ lookupTypeCon typeInfo x = do
     then return (head found)
     else error $ "lookupConstr: Not found construct : " ++ x
 
-builtinDatatypes :: [DataTypeDecl]
-builtinDatatypes = [
-    (DataType unitType   [] [] []), -- data Unit
-    (DataType intType    [] [] []), -- data Int
-    (DataType boolType   [] []      -- data Bool = { True | False }
-      [ TypeCon trueLit  []
-      , TypeCon falseLit [] ]),
-    (DataType stringType [] [] []), -- data String
-    (DataType refType ["l"] ["a"] [])  -- data Ref
-  ]
+-- builtinDatatypes :: [DataTypeDecl]
+-- builtinDatatypes = [
+--     (DataType unitType   [] [] []), -- data Unit
+--     (DataType intType    [] [] []), -- data Int
+--     (DataType boolType   [] []      -- data Bool = { True | False }
+--       [ TypeCon trueLit  []
+--       , TypeCon falseLit [] ]),
+--     (DataType stringType [] [] []), -- data String
+--     (DataType refType ["l"] ["a"] [])  -- data Ref
+--   ]
 
 
-collectDataTypeDecls :: Monad m => [DataTypeDecl] -> m TypeInfo
-collectDataTypeDecls datatypeDecls = do
-  let nameTyvarsPairList = map collectDataTypeDecl datatypeDecls
-  return nameTyvarsPairList
+-- collectDataTypeDecls :: Monad m => [DataTypeDecl] -> m TypeInfo
+-- collectDataTypeDecls datatypeDecls = do
+--   let nameTyvarsPairList = map collectDataTypeDecl datatypeDecls
+--   return nameTyvarsPairList
 
-collectDataTypeDecl (DataType name locvars tyvars typeConDecls) =
-  if isTypeName name
-     && and (map isLocationVarName locvars)
-     && allUnique locvars == []
-     && and (map isTypeVarName tyvars)
-     && allUnique tyvars == []
-  then (name, locvars, tyvars)
-  else error $ "[TypeCheck] collectDataTypeDecls: Invalid datatype: "
-                 ++ name ++ " " ++ show locvars++ " " ++ show tyvars
+-- collectDataTypeDecl (DataType name locvars tyvars typeConDecls) =
+--   if isTypeName name
+--      && and (map isLocationVarName locvars)
+--      && allUnique locvars == []
+--      && and (map isTypeVarName tyvars)
+--      && allUnique tyvars == []
+--   then (name, locvars, tyvars)
+--   else error $ "[TypeCheck] collectDataTypeDecls: Invalid datatype: "
+--                  ++ name ++ " " ++ show locvars++ " " ++ show tyvars
 
 ----------------------------------------------------------------------------
 -- 3. Elaboration of datatype declarations
@@ -205,17 +205,17 @@ collectDataTypeDecl (DataType name locvars tyvars typeConDecls) =
 -- lookupConstr :: GlobalTypeInfo -> String -> [([Type], String, [String], [String])]
 -- lookupConstr gti x = [z | (con, z) <- _conTypeInfo gti, x==con]
 
-elabConTypeDecls :: Monad m => [DataTypeDecl] -> m ConTypeInfo
-elabConTypeDecls elab_datatypeDecls = do
-  conTypeInfoList <- mapM elabConTypeDecl elab_datatypeDecls
-  let conTypeInfo = concat conTypeInfoList
-  case allUnique [con | (con,_) <- conTypeInfo] of
-    [] -> return conTypeInfo
-    (con:_) -> error $ "allConTypeDecls: duplicate constructor: " ++ con
+-- elabConTypeDecls :: Monad m => [DataTypeDecl] -> m ConTypeInfo
+-- elabConTypeDecls elab_datatypeDecls = do
+--   conTypeInfoList <- mapM elabConTypeDecl elab_datatypeDecls
+--   let conTypeInfo = concat conTypeInfoList
+--   case allUnique [con | (con,_) <- conTypeInfo] of
+--     [] -> return conTypeInfo
+--     (con:_) -> error $ "allConTypeDecls: duplicate constructor: " ++ con
 
-elabConTypeDecl :: Monad m => DataTypeDecl -> m ConTypeInfo
-elabConTypeDecl (DataType name locvars tyvars typeConDecls) = do
-  return [ (con, (argtys, name, locvars, tyvars)) | TypeCon con argtys <- typeConDecls ]
+-- elabConTypeDecl :: Monad m => DataTypeDecl -> m ConTypeInfo
+-- elabConTypeDecl (DataType name locvars tyvars typeConDecls) = do
+--   return [ (con, (argtys, name, locvars, tyvars)) | TypeCon con argtys <- typeConDecls ]
 
 ----------------------------------------------------------------------------
 -- 5. Elaboration of types declared in bindings
@@ -469,12 +469,12 @@ lookupTypeVar env x = elem x (_typeVarEnv env)
 
 -- lookupDataTypeName gti x = [info | (y,info) <- _dataTypeInfo gti, x==y]
 
-collectDataTypeInfo :: Monad m => [DataTypeDecl] -> m DataTypeInfo
-collectDataTypeInfo datatypeDecls = do
-  mapM get datatypeDecls
-  where get (DataType name locvars tyvars tycondecls) =
-          return (name, (locvars, tyvars,map f tycondecls))
-        f (TypeCon s tys) = (s,tys)
+-- collectDataTypeInfo :: Monad m => [DataTypeDecl] -> m DataTypeInfo
+-- collectDataTypeInfo datatypeDecls = do
+--   mapM get datatypeDecls
+--   where get (DataType name locvars tyvars tycondecls) =
+--           return (name, (locvars, tyvars,map f tycondecls))
+--         f (TypeCon s tys) = (s,tys)
 
 --
 
@@ -509,9 +509,9 @@ mkAbs loc cname tyname locvars tyvars argtys =
 ----------------------------------------------------------------------------
 -- Common Utils
 ----------------------------------------------------------------------------
-allUnique [] = []
-allUnique (x:xs) =
-  if elem x xs then [x] else allUnique xs
+-- allUnique [] = []
+-- allUnique (x:xs) =
+--   if elem x xs then [x] else allUnique xs
 
 ----------------------------------------------------------------------------
 -- For bidirectional typechecking
