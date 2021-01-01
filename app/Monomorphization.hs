@@ -10,28 +10,14 @@ import Prim
 import Data.List (lookup)
 import Control.Monad.State
 
--- | [Design Memo]
---
---    1. Library
---
---         (LibDecl): For f : /\l.ty,
---           f$mono : [[ /\l.ty ]]
---           f$mono = ( f [client] , f [server] )
---
---         (Var):  [[f]] = f$mono
---
---      Assumption: all libraries should have type in the form of
---         /\l1...lk. /\a1...an.monoty. 
---
---    2. Datatype
---
---         (Datatype): For data D ls alphas = ... | C tys | ...
---
---            data D$mono$as1 [] alphas = ... | C$mono$as1 tys[as1/ls] | ...
---               ...
---            data D$mono$ask [] alphas = ... | C$mono$ask tys[ask/ls] | ...
---
---         (Con): [[C locs tys args]] = C$mono$locs [] tys args
+
+-- | The monomorphization translation
+
+-- Todo: Remove the unnecessary codes
+--   - no library name list
+--   - no datatype instantiations w.r.t. locations
+--   - no library name instantiations w.r.t. locations
+--   - no location name mangling
 
 mono :: Monad m => GlobalTypeInfo -> [TopLevelDecl] -> [BasicLibType] -> m (GlobalTypeInfo, [TopLevelDecl], [BasicLibType])
 mono gti toplevelDecls basicLib = do
@@ -87,16 +73,18 @@ monoToplevel loc (DataTypeTopLevel d@(DataType _ ls _ _)) =
   return $ [ DataTypeTopLevel dtDecl
            | dtDecl <- mkPair d ls [] ]
   where
-    mkPair d [] locs = [ monoDataTypeDecl d locs ]
-    mkPair d (l:ls) locs =
-      mkPair d ls (locs ++ [clientLoc]) ++ mkPair d ls (locs ++ [serverLoc])
+    mkPair d _ _ = [d]
     
-    monoDataTypeDecl (DataType d ls alphas typeconDecls) locs =
-      DataType (nameWithLocs d locs) [] alphas
-        (map (monoTypeConDecl locs ls) typeconDecls)
+    -- mkPair d [] locs = [ monoDataTypeDecl d locs ]
+    -- mkPair d (l:ls) locs =
+    --   mkPair d ls (locs ++ [clientLoc]) ++ mkPair d ls (locs ++ [serverLoc])
+    
+    -- monoDataTypeDecl (DataType d ls alphas typeconDecls) locs =
+    --   DataType (nameWithLocs d locs) (monoLocs ls) alphas
+    --     (map (monoTypeConDecl locs ls) typeconDecls)
 
-    monoTypeConDecl locs ls (TypeCon c tys) =
-      TypeCon (nameWithLocs c locs) (map monoType $ map (locSubsts locs ls) tys)
+    -- monoTypeConDecl locs ls (TypeCon c tys) =
+    --   TypeCon (nameWithLocs c locs) (map monoType $ map (locSubsts locs ls) tys)
 
 monoToplevel loc (LibDeclTopLevel x ty) = do
   let binding = Binding True (mkMonoLibName x) (monoType ty) (mkPair x ty)
@@ -148,7 +136,7 @@ monoType (LocAbsType ls ty) = f ls ty
     f (l:ls) ty = TupleType [
         monoType (locSubst clientLoc l (LocAbsType ls ty))
       , monoType (locSubst serverLoc l (LocAbsType ls ty))  ]
-monoType (ConType c locs tys) = ConType (nameWithLocs c locs) [] (map monoType tys)
+monoType (ConType c locs tys) = ConType (nameWithLocs c locs) (monoLocs locs) (map monoType tys)
 
 -- | Term monomorphization
 
@@ -158,7 +146,7 @@ monoExpr loc (Var x) = do
   b <- isLib x
   if not b
     then return (Var x)
-    else return (Var $ mkMonoLibName x)
+    else return (Var x) -- (Var $ mkMonoLibName x)
   
 
 monoExpr loc (TypeAbs xs expr) = do
@@ -244,7 +232,7 @@ monoExpr loc (Lit lit) = return $ Lit lit
 monoExpr loc (Constr c locs tys exprs argTys) = do
   mono_exprs <- mapM (monoExpr loc) exprs
   return $
-    Constr (nameWithLocs c locs) [] (map monoType tys)
+    Constr (nameWithLocs c locs) (monoLocs locs) (map monoType tys)
       mono_exprs (map monoType argTys)
 
 mkFst :: Expr -> Maybe Type -> NameGen Expr
@@ -300,11 +288,15 @@ infixMonoName = "$mono$"
 
 mkMonoLibName x = x ++ infixMonoName
 
-nameWithLocs x []   = x
-nameWithLocs x locs = nameWithLocs' (x ++ "$") locs
-  where
-    nameWithLocs' x [] = x
-    nameWithLocs' x (Location a : locs) =
-      nameWithLocs' (x ++ "_" ++ a) locs
-    -- nameWithLocs' x (LocVar a : locs) =
-    --   nameWithLocs' (x ++ "_error:" ++ a) locs
+monoLocs locs = locs -- []
+
+nameWithLocs x locs = x
+
+-- nameWithLocs x []   = x
+-- nameWithLocs x locs = nameWithLocs' (x ++ "$") locs
+--   where
+--     nameWithLocs' x [] = x
+--     nameWithLocs' x (Location a : locs) =
+--       nameWithLocs' (x ++ "_" ++ a) locs
+--     -- nameWithLocs' x (LocVar a : locs) =
+--     --   nameWithLocs' (x ++ "_error:" ++ a) locs

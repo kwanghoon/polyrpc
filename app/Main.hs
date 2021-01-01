@@ -96,8 +96,8 @@ doProcess cmd file = do
       let jsonfile = prefixOf file ++ "_mono.json"
       verbose (_flag_debug_monomorphization cmd) $ print_rpc cmd jsonfile mono_toplevelDecls
 
-      putStrLn "mono_gti"
-      putStrLn (show mono_gti)
+      -- putStrLn "mono_gti"
+      -- putStrLn (show mono_gti)
       
       return (mono_gti, mono_toplevelDecls, mono_basicLib)
       

@@ -158,6 +158,7 @@ initFunctionStore = FunctionStore
    }
 
 --
+-- Need to fix: the duplicate declarations, primOpTypes and lookupPrimOpType.
 --
 primOpTypes :: [(PrimOp, ([String], [String], [Type], Type))] -- (locvars, tyvars, argtys, retty)
 primOpTypes =
