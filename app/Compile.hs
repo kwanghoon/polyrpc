@@ -380,7 +380,11 @@ compExpr s_gti env loc s_ty funStore (SE.Prim primop op_locs op_tys exprs) = do
           t_ty <- compValType s_ty
           let g = TE.ValExpr . TE.BindM [TE.Binding False x t_ty target_expr] . f
           return (funStore1, g)) (funStore1, \x->x) (reverse (zip3 xs argtys exprs))
-      target_retty <- compValType retty
+      target_retty <-
+        compValType
+          (ST.doSubst (zip tyvars op_tys) .
+            ST.doSubstLoc (zip locvars op_locs) $
+              retty)
       return (funStore2,
                h (TE.Let [TE.Binding False y target_retty
                             (TE.Prim primop op_locs target_op_tys (map TE.Var xs))]

@@ -54,8 +54,10 @@ mono gti toplevelDecls basicLib = do
                 foldM (\ mono_tops top -> do
                           mono_top <- monoToplevel (Location clientLocName) top
                           return $ mono_tops ++ mono_top) []
-                  ( [ BindingTopLevel (Binding True x ty expr)
-                    | (x,ty,expr) <- basicLib ] ++ datatypes ++ binds )
+                  ( datatypes ++
+                    [ BindingTopLevel (Binding True x ty expr)
+                    | (x,ty,expr) <- basicLib ] ++
+                    binds )
                 
               return (mono_basicLib, mono_toplevelDecls))
 
