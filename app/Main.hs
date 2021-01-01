@@ -290,5 +290,5 @@ collect cmd (arg:args) = do
 verbose b action = if b then action else return ()
 
 --
-version = "0.2.1"
+version = "0.2.2"
 printVersion = putStrLn $ "POLYRPC, version " ++ version ++ ": http://github.com/kwanghoon/polyrpc/"
