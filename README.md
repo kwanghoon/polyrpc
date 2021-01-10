@@ -35,7 +35,7 @@ Hello World
    
  - A reference and its implementation extended with locations
    - [Jana Dunfield, Neelakantan R. Krishnaswami, Complete and Easy Bidirectional Typechecking for Higher-Rank Polymorphism, ICFP2013](https://arxiv.org/abs/1306.6032)
-   - [A simple extension with polymorphic locations](https://github.com/kwanghoon/bidi/tree/polyloc) based on [an implementation of the bidirectional type checking algorithm by [Olle Fredriksson](https://semantic-domain.blogspot.com/2013/04/thanks-to-olle-fredriksson.html).
+   - [A simple extension with polymorphic locations](https://github.com/kwanghoon/bidi/tree/polyloc) based on [an implementation of the bidirectional type checking algorithm by Olle Fredriksson](https://semantic-domain.blogspot.com/2013/04/thanks-to-olle-fredriksson.html).
 
  
 ### A web runtime system
