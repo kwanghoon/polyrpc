@@ -79,6 +79,9 @@ doSubstValue subst (Constr cname locs tys vs argtys) =
 doSubstValue subst (Closure vs fvtys (CodeName fname locs tys) recf) =
   Closure (map (doSubstValue subst) vs) fvtys (CodeName fname locs tys) recf
 
+doSubstValue subst (TypeAbs tyvars expr recf) =
+  TypeAbs tyvars (doSubstExpr subst expr) recf
+
 doSubstValue subst (UnitM v) = UnitM (doSubstValue subst v)
 
 doSubstValue subst (BindM bindingDecls expr) =
@@ -179,6 +182,9 @@ doSubstLocValue substLoc (Closure vs fvtys (CodeName f locs tys) recf) =
     (CodeName f (map (doSubstLocOverLocs substLoc) locs) (map (doSubstLoc substLoc) tys))
     recf
 
+doSubstLocValue substLoc (TypeAbs tyvars expr recf) =
+  TypeAbs tyvars (doSubstLocExpr substLoc expr) recf
+
 doSubstLocValue substLoc (UnitM v) = UnitM (doSubstLocValue substLoc v)
 
 doSubstLocValue substLoc (BindM bindingDecls expr) =
@@ -263,6 +269,10 @@ doSubstTyValue substTy (Closure vs fvtys (CodeName fname locs tys) recf) =
           (map (doSubst substTy) fvtys)
           (CodeName fname locs (map (doSubst substTy) tys))
           recf
+
+doSubstTyValue substTy (TypeAbs tyvars expr recf) =
+  let substTy' = [ (alpha,ty) | (alpha,ty) <- substTy, not $ alpha `elem` tyvars ] in
+  TypeAbs tyvars (doSubstTyExpr substTy' expr) recf
 
 doSubstTyValue substTy (BindM bindingDecls expr) =
   let bindingDecls1 =

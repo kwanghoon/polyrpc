@@ -113,7 +113,8 @@ compValType (ST.FunType ty1 loc ty2) = do
 
 compValType (ST.TypeAbsType alphas ty) = do
   t_ty <- compType ty
-  return (TT.CloType (TT.TypeAbsType alphas t_ty))
+--  return (TT.CloType (TT.TypeAbsType alphas t_ty))
+  return (TT.TypeAbsType alphas t_ty)
 
 compValType (ST.LocAbsType ls ty) = do
   t_ty <- compType ty
@@ -195,6 +196,9 @@ compBindingDecl s_gti env loc funStore (SE.Binding istop x ty expr) = do
         (True, TE.ValExpr (TE.UnitM (TE.Closure vs fvtys codename []))) -> do  --Todo: Ugly: ValExpr o UnitM
              return (funStore1, TE.Binding istop x target_ty
                                   (TE.ValExpr (TE.UnitM (TE.Closure vs fvtys codename [x]))))
+        (True, TE.ValExpr (TE.UnitM (TE.TypeAbs tyvars body_expr []))) -> do
+             return (funStore1, TE.Binding istop x target_ty
+                                  (TE.ValExpr (TE.UnitM (TE.TypeAbs tyvars body_expr [x]))))
         (True, _) -> error $ "[compRecBindingDecl] Not closure: " ++ show target_expr
         _ -> return (funStore1, TE.Binding istop x target_ty target_expr)
 
@@ -207,15 +211,24 @@ compExpr s_gti env loc s_ty funStore (SE.Var x) =
   return (funStore, TE.ValExpr $ TE.UnitM (TE.Var x))
 
 compExpr s_gti env loc (ST.TypeAbsType tyvars0 s_ty) funStore (SE.TypeAbs tyvars1 expr) = do
+  -- [The old code for creating a closure]
+  -- -- Assume tyvars0 == tyvars1
+  -- t_ty <- compType s_ty
+  -- let target_ty = TT.TypeAbsType tyvars0 t_ty
+  -- let env1 = env {SE._typeVarEnv = noDupAppend tyvars1 (SE._typeVarEnv env)}
+  -- (funStore1, target_expr) <- compExpr s_gti env1 loc s_ty funStore expr
+  -- let opencode = TE.CodeTypeAbs tyvars1 target_expr
+
+  -- (funStore2, closure) <- mkClosure env loc funStore1 target_ty opencode
+  -- return (funStore2, TE.ValExpr $ TE.UnitM closure)
+  
   -- Assume tyvars0 == tyvars1
   t_ty <- compType s_ty
   let target_ty = TT.TypeAbsType tyvars0 t_ty
   let env1 = env {SE._typeVarEnv = noDupAppend tyvars1 (SE._typeVarEnv env)}
   (funStore1, target_expr) <- compExpr s_gti env1 loc s_ty funStore expr
-  let opencode = TE.CodeTypeAbs tyvars1 target_expr
-
-  (funStore2, closure) <- mkClosure env loc funStore1 target_ty opencode
-  return (funStore2, TE.ValExpr $ TE.UnitM closure)
+  let typeAbsVal = TE.TypeAbs tyvars1 target_expr []
+  return (funStore1, TE.ValExpr $ TE.UnitM typeAbsVal)
 
 compExpr s_gti env loc s_ty funStore (SE.TypeAbs tyvars expr) = do
   error $ "[compVal] Not type-abstraction type: " ++ show s_ty ++ " in " ++ show (SE.TypeAbs tyvars expr)
@@ -353,6 +366,9 @@ compExpr s_gti env loc s_ty funStore (SE.TypeApp expr (Just left_s_ty) tys) = do
    return (funStore2,
            TE.ValExpr $ TE.BindM [TE.Binding False f target_left_s_ty target_expr]
                          (TE.TypeApp (TE.Var f) target_left_s_ty target_tys))
+   -- return (funStore2,
+   --         TE.Let [TE.Binding False f target_left_s_ty target_expr]
+   --          (TE.TypeApp (TE.Var f) target_left_s_ty target_tys))
 
 compExpr s_gti env loc s_ty funStore (SE.TypeApp expr Nothing tys) =
    error $ "[compExpr] TypeApp"

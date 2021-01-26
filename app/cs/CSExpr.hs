@@ -27,6 +27,7 @@ data Value =
   | Tuple [Value]
   | Constr String [Location] [Type] [Value] [Type]
   | Closure [Value] [Type] CodeName  [String] -- [] or [rec_f] for now, [rec_f1, ...,, rec_fk] in future
+  | TypeAbs [String] Expr [String] -- instead of CodeTypeAbs [String] Expr with the recursion names as Closure
   | UnitM Value
   | BindM [BindingDecl] Expr
   | Req Value Type Value
@@ -73,7 +74,7 @@ data Code =
 
 data OpenCode =
     CodeAbs     [(String, Type)] Expr
-  | CodeTypeAbs [String] Expr
+--  | CodeTypeAbs [String] Expr
   | CodeLocAbs  [String] Expr
   deriving (Show, Typeable, Data)
 
@@ -226,7 +227,7 @@ lookupConstr gti x = [z | (con, z) <- _conTypeInfo gti, x==con]
 fvOpenCode :: OpenCode -> Set.Set String
 
 fvOpenCode (CodeAbs xTys expr) = fvExpr expr `Set.difference` Set.fromList (map fst xTys)
-fvOpenCode (CodeTypeAbs tyvars expr) = fvExpr expr
+-- fvOpenCode (CodeTypeAbs tyvars expr) = fvExpr expr
 fvOpenCode (CodeLocAbs locvars expr) = fvExpr expr
 
 
@@ -254,6 +255,7 @@ fvValue (Lit lit) = Set.empty
 fvValue (Tuple vs) = Set.unions (map fvValue vs)
 fvValue (Constr cname _ _ vs _) = Set.unions (map fvValue vs)
 fvValue (Closure vs _ codename _) = Set.unions (map fvValue vs)
+fvValue (TypeAbs tyvars expr _) = fvExpr expr
 fvValue (UnitM v) = fvValue v
 fvValue (BindM bindingDecls expr) =
   (Set.unions (map (\(Binding _ _ _ expr) -> fvExpr expr) bindingDecls) `Set.union` fvExpr expr)

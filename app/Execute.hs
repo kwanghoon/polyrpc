@@ -153,17 +153,26 @@ clientExpr fun_store evctx (App clo@(Closure vs vstys codename recf) funty arg) 
     [] -> error $ "[clientExpr] Client abs code not found: " ++ fname
 
 -- (E-TApp)
-clientExpr fun_store evctx (TypeApp clo@(Closure vs vstys codename recf) funty [argty]) client_stack mem_c server_stack mem_s = do
-  let CodeName fname locs tys = codename
-  case [code | (gname, (codetype,code))<-_clientstore fun_store, fname==gname] of
-    ((Code locvars tyvars fvvars (CodeTypeAbs [a] expr)):_) -> do
-      let subst    = zip fvvars vs
-      let substLoc = zip locvars locs
-      let substTy  = [(a,argty)] ++ zip tyvars tys
-      let substed_expr = doRec clo recf $ doSubstExpr subst (doSubstTyExpr substTy (doSubstLocExpr substLoc expr))
+-- clientExpr fun_store evctx (TypeApp clo@(Closure vs vstys codename recf) funty [argty]) client_stack mem_c server_stack mem_s = do
+--   let CodeName fname locs tys = codename
+--   case [code | (gname, (codetype,code))<-_clientstore fun_store, fname==gname] of
+--     ((Code locvars tyvars fvvars (CodeTypeAbs [a] expr)):_) -> do
+--       let subst    = zip fvvars vs
+--       let substLoc = zip locvars locs
+--       let substTy  = [(a,argty)] ++ zip tyvars tys
+--       let substed_expr = doRec clo recf $ doSubstExpr subst (doSubstTyExpr substTy (doSubstLocExpr substLoc expr))
+--       return $ ClientConfig evctx substed_expr client_stack mem_c server_stack mem_s
+
+--     [] -> error $ "[clientExpr] Client tyabs code not found: " ++ fname
+
+clientExpr fun_store evctx (TypeApp clo@(TypeAbs tyvars expr recf) funty argtys) client_stack mem_c server_stack mem_s = do
+  case length tyvars == length argtys of
+    True -> do
+      let substTy  = zip tyvars argtys 
+      let substed_expr = doRec clo recf $ doSubstTyExpr substTy expr
       return $ ClientConfig evctx substed_expr client_stack mem_c server_stack mem_s
 
-    [] -> error $ "[clientExpr] Client tyabs code not found: " ++ fname
+    False -> error $ "[clientExpr] Client tyabs: |tyvars| != |argtys|: " ++ show (length tyvars) ++ "!=" ++ show (length argtys)
 
 -- (E-LApp)
 clientExpr fun_store evctx (LocApp clo@(Closure vs vstys codename recf) funty [argloc]) client_stack mem_c server_stack mem_s = do
@@ -272,19 +281,28 @@ serverExpr fun_store client_stack mem_c evctx (App clo@(Closure vs vstys codenam
     [] -> error $ "[serverExpr] Server abs code not found: " ++ fname
 
 -- (E-TApp)
-serverExpr fun_store client_stack mem_c evctx (TypeApp clo@(Closure vs vstys codename recf) funty [argty]) server_stack mem_s = do
-  let CodeName fname locs tys = codename
-  case [code | (gname, (codetype,code))<-_serverstore fun_store, fname==gname] of
-    ((Code locvars tyvars fvvars (CodeTypeAbs [a] expr)):_) -> do
-      let subst    = zip fvvars vs
-      let substLoc = zip locvars locs
-      let substTy  = [(a,argty)] ++ zip tyvars tys
-      let substed_expr = doRec clo recf $ doSubstExpr subst (doSubstTyExpr substTy (doSubstLocExpr substLoc expr))
+-- serverExpr fun_store client_stack mem_c evctx (TypeApp clo@(Closure vs vstys codename recf) funty [argty]) server_stack mem_s = do
+--   let CodeName fname locs tys = codename
+--   case [code | (gname, (codetype,code))<-_serverstore fun_store, fname==gname] of
+--     ((Code locvars tyvars fvvars (CodeTypeAbs [a] expr)):_) -> do
+--       let subst    = zip fvvars vs
+--       let substLoc = zip locvars locs
+--       let substTy  = [(a,argty)] ++ zip tyvars tys
+--       let substed_expr = doRec clo recf $ doSubstExpr subst (doSubstTyExpr substTy (doSubstLocExpr substLoc expr))
+--       return $ ServerConfig client_stack mem_c evctx substed_expr server_stack mem_s
+
+--     [] -> error $ "[serverExpr] Server tyabs code not found: " ++ fname ++ "\n"
+--                       ++ ", " ++ show [gname | (gname,_)<-_serverstore fun_store] ++ "\n"
+--                       ++ ", " ++ show [gname | (gname,_)<-_clientstore fun_store] ++ "\n"
+
+serverExpr fun_store client_stack mem_c evctx (TypeApp clo@(TypeAbs tyvars expr recf) funty argtys) server_stack mem_s = do
+  case length tyvars == length argtys of
+    True -> do
+      let substTy  = zip tyvars argtys 
+      let substed_expr = doRec clo recf $ doSubstTyExpr substTy expr
       return $ ServerConfig client_stack mem_c evctx substed_expr server_stack mem_s
 
-    [] -> error $ "[serverExpr] Server tyabs code not found: " ++ fname ++ "\n"
-                      ++ ", " ++ show [gname | (gname,_)<-_serverstore fun_store] ++ "\n"
-                      ++ ", " ++ show [gname | (gname,_)<-_clientstore fun_store] ++ "\n"
+    False -> error $ "[serverExpr] Server tyabs |tyvars| != |argtys|: " ++ show (length tyvars) ++ " != " ++ show (length argtys)
 
 -- (E-LApp)
 serverExpr fun_store client_stack mem_c evctx (LocApp clo@(Closure vs vstys codename recf) funty [argloc]) server_stack mem_s = do
@@ -445,5 +463,6 @@ calc' operator locs tys operands =
 --
 doRec clo [] expr = expr
 doRec (Closure vs tys codename recf) [f] expr = doSubstExpr [(f, Closure vs tys codename [f])] expr
+doRec (TypeAbs tyvars body_expr recf) [f] expr = doSubstExpr [(f, TypeAbs tyvars body_expr [f])] expr
 doRec clo recf expr = error $ "[doRec] Unexpected" ++ show clo ++ ", " ++ show recf ++ ", " ++ show expr
 

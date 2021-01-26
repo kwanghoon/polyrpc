@@ -245,6 +245,10 @@ doValue useInfo (Closure vs vstys cname optrecs) vty = do
       (useInfo', v', changed') <- doValue useInfo v vty
       return (useInfo', vs ++ [v'], changed || changed')
 
+doValue useInfo (TypeAbs tyvars expr optrecs) (TypeAbsType _ bodyty) = do
+  (useInfo1, expr1, changed1) <- doExpr useInfo expr bodyty
+  return (useInfo1, TypeAbs tyvars expr1 optrecs, changed1)
+
 doValue useInfo (UnitM v) (MonType vty) = do
   (useInfo1, v1, changed1) <- doValue useInfo v vty
   return (useInfo1, UnitM v1, changed1)
@@ -372,9 +376,9 @@ doOpenCode :: Monad m => UseInfo -> OpenCode -> Type -> m (UseInfo, OpenCode, Bo
 doOpenCode useInfo (CodeAbs xTys expr) (FunType _ _ resty) = do
   (useInfo1, expr1, changed1) <- doExpr useInfo expr resty
   return (useInfo1, CodeAbs xTys expr1, changed1)
-doOpenCode useInfo (CodeTypeAbs tyvars expr) (TypeAbsType _ bodyty) = do
-  (useInfo1, expr1, changed1) <- doExpr useInfo expr bodyty
-  return (useInfo1, CodeTypeAbs tyvars expr1, changed1)
+-- doOpenCode useInfo (CodeTypeAbs tyvars expr) (TypeAbsType _ bodyty) = do
+--   (useInfo1, expr1, changed1) <- doExpr useInfo expr bodyty
+--   return (useInfo1, CodeTypeAbs tyvars expr1, changed1)
 doOpenCode useInfo (CodeLocAbs locvars expr) (LocAbsType _ bodyty) = do
   (useInfo1, expr1, changed1) <- doExpr useInfo expr bodyty
   return (useInfo1, CodeLocAbs locvars expr1, changed1)

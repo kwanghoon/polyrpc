@@ -81,19 +81,19 @@ verifyOpenCode gtigci loc env (FunType argty locfun resty) (CodeAbs ((x,ty):xTys
 
   verifyExpr gtigci locfun env1 resty expr
 
-verifyOpenCode gtigci loc env (TypeAbsType (tyvar1:tyvars1) ty) (CodeTypeAbs (tyvar2:tyvars2)  expr) = do
-  --   (1) tyvar1 == tyvar2
-  let _ty = if tyvar1 == tyvar2 then ty
-            else doSubst [(tyvar1, TypeVarType tyvar2)] ty
+-- verifyOpenCode gtigci loc env (TypeAbsType (tyvar1:tyvars1) ty) (CodeTypeAbs (tyvar2:tyvars2)  expr) = do
+--   --   (1) tyvar1 == tyvar2
+--   let _ty = if tyvar1 == tyvar2 then ty
+--             else doSubst [(tyvar1, TypeVarType tyvar2)] ty
 
-  assert (tyvars1 == [])  --   (2) tyvars1 == []
-    ("[verifyOpenCode] CodeTypeAbs has more than two ty args? " ++ show tyvars1)
-  assert (tyvars2 == [])  --   (3) tyvars2 == []
-    ("[verifyOpenCode] CodeTypeAbs has more than two ty args? " ++ show tyvars2)
+--   assert (tyvars1 == [])  --   (2) tyvars1 == []
+--     ("[verifyOpenCode] CodeTypeAbs has more than two ty args? " ++ show tyvars1)
+--   assert (tyvars2 == [])  --   (3) tyvars2 == []
+--     ("[verifyOpenCode] CodeTypeAbs has more than two ty args? " ++ show tyvars2)
 
-  let env1 = env {_typeVarEnv = tyvar2 : _typeVarEnv env}
+--   let env1 = env {_typeVarEnv = tyvar2 : _typeVarEnv env}
 
-  verifyExpr gtigci loc env1 _ty expr
+--   verifyExpr gtigci loc env1 _ty expr
 
 
 verifyOpenCode gtigci loc env (LocAbsType (locvar1:locvars1) ty) (CodeLocAbs (locvar2:locvars2) expr) = do
@@ -192,11 +192,22 @@ verifyExpr gtigci loc env ty (App left (CloType (FunType argty funloc resty)) ri
   verifyValue gtigci loc env (CloType (FunType argty funloc resty)) left
   verifyValue gtigci loc env argty right
 
-verifyExpr gtigci loc env ty (TypeApp left (CloType (TypeAbsType tyvars bodyty)) tys) = do
+-- verifyExpr gtigci loc env ty (TypeApp left (CloType (TypeAbsType tyvars bodyty)) tys) = do
+--   assert (length tyvars == length tys)  --   (1) length tyvars == length tys
+--     ("[verifyExpr] Not equal arities: " ++ show tyvars ++ " != " ++ show tys)
+
+--   verifyValue gtigci loc env (CloType (TypeAbsType tyvars bodyty)) left
+--   let subst = zip tyvars tys
+--   let substed_bodyty = doSubst subst bodyty
+
+--   assert (equalType substed_bodyty ty)
+--     ("[verifyExpr] TypeApp: Not equal type: " ++ show substed_bodyty ++ " != " ++ show ty)
+
+verifyExpr gtigci loc env ty (TypeApp left (TypeAbsType tyvars bodyty) tys) = do
   assert (length tyvars == length tys)  --   (1) length tyvars == length tys
     ("[verifyExpr] Not equal arities: " ++ show tyvars ++ " != " ++ show tys)
 
-  verifyValue gtigci loc env (CloType (TypeAbsType tyvars bodyty)) left
+  verifyValue gtigci loc env  (TypeAbsType tyvars bodyty) left
   let subst = zip tyvars tys
   let substed_bodyty = doSubst subst bodyty
 
@@ -309,6 +320,20 @@ verifyValue gtigci loc env (CloType ty) (Closure vs tys codeName recf) = do
   -- let env0 = env {_varEnv = [] }
   mapM_ ( \ (ty,v) -> verifyValue gtigci loc env ty v) (zip tys vs)
   verifyCodeName gtigci loc ty tys codeName
+
+verifyValue gtigci loc env (TypeAbsType (tyvar1:tyvars1) ty) (TypeAbs (tyvar2:tyvars2) expr recf) = do
+  --  (1) tyvar1 == tyvar2
+  let _ty = if tyvar1 == tyvar2 then ty
+            else doSubst [(tyvar1, TypeVarType tyvar2)] ty
+
+  assert (tyvars1 == [])  -- (2) tyvars1 == []
+    ("[verifyOpenCode] CodeTypeAbs has more than two ty args? " ++ show tyvars1)
+  assert (tyvars2 == [])  -- (3) tyvars2 == []
+    ("[verifyOpenCode] CodeTypeAbs has more than two ty args? " ++ show tyvars2)
+
+  let env1 = env {_typeVarEnv = tyvar2 : _typeVarEnv env}
+
+  verifyExpr gtigci loc env1 _ty expr
 
 verifyValue gtigci loc env (MonType ty) (UnitM v) = verifyValue gtigci loc env ty v
 
