@@ -53,7 +53,7 @@ doProcess cmd file = do
 
   -- putStrLn "[Parsing]"
   -- exprSeqAst <- parsing parserSpec terminalList
-  
+
   putStrLn "[Parsing-Surface syntax]"
   exprSeqAst <- parsing PB.parserSpec terminalList
 
@@ -67,7 +67,7 @@ doProcess cmd file = do
     <- typeInf (_flag_debug_typecheck cmd) toplevelDecls basicLib
 
   let elab_toplevelDecls = lib_toplevelDecls ++ elab_builtinDatatypes ++ elab_toplevelDecls1
-  
+
   verbose (_flag_dump_typecheck cmd) $ putStrLn "Dumping..."
   verbose (_flag_dump_typecheck cmd) $ putStrLn $ show $ elab_toplevelDecls1
 
@@ -98,9 +98,9 @@ doProcess cmd file = do
 
       -- putStrLn "mono_gti"
       -- putStrLn (show mono_gti)
-      
+
       return (mono_gti, mono_toplevelDecls, mono_basicLib)
-      
+
     else return (gti, elab_toplevelDecls, basicLib)
 
   putStrLn "[Compiling]"
@@ -129,10 +129,23 @@ doProcess cmd file = do
   verify t_gti funStore t_expr
   verbose (_flag_debug_verify cmd) $ putStrLn "[Well-typed]"
 
-  putStrLn "[Executing codes]"
-  v <- execute (_flag_debug_run cmd) t_gti funStore t_expr
-  verbose (_flag_debug_run cmd) $ putStrLn $ "[Result]\n" ++ show v
+  -- Code generation for Web
+  if _flag_gen_web_code cmd == True
+  then do
+    putStrLn "[Generating web-based code]"
+  else
+    return ()
 
+  -- Execution
+  if _flag_gen_web_code cmd == False
+  then do
+    putStrLn "[Executing codes]"
+    v <- execute (_flag_debug_run cmd) t_gti funStore t_expr
+    verbose (_flag_debug_run cmd) $ putStrLn $ "[Result]\n" ++ show v
+  else
+    return ()
+
+  -- Done!!
   putStrLn "[Success]"
 
 
@@ -200,6 +213,7 @@ data Cmd =
       , _flag_debug_simpl :: Bool
       , _flag_debug_verify :: Bool
       , _flag_debug_run :: Bool
+      , _flag_gen_web_code :: Bool
       , _files :: [String]
       }
 
@@ -217,6 +231,7 @@ initCmd =
       , _flag_debug_simpl = False
       , _flag_debug_verify = False
       , _flag_debug_run = False
+      , _flag_gen_web_code = False
       , _files = []
       }
 
@@ -279,6 +294,10 @@ collect cmd ("--debug-verify":args) = do
 
 collect cmd ("--debug-run":args) = do
   let new_cmd = cmd { _flag_debug_run = True }
+  collect new_cmd args
+
+collect cmd ("--gen-web-code":args) = do
+  let new_cmd = cmd { _flag_gen_web_code = True }
   collect new_cmd args
 
 collect cmd (arg:args) = do
