@@ -21,6 +21,7 @@ import Compile
 import Simpl
 import Verify
 import Execute
+import CodeGen
 
 import Text.JSON.Generic
 import Text.JSON.Pretty
@@ -134,7 +135,7 @@ doProcess cmd file = do
   then do
     putStrLn "[Generating web-based code]"
   else
-    return ()
+    codeGen t_gti funStore t_expr
 
   -- Execution
   if _flag_gen_web_code cmd == False
