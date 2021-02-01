@@ -24,7 +24,7 @@ data Code =
 type Env = [(String, Value)]
 
 data OpenCode =
-    CodeAbs [String] (Env -> String -> Value -> IO Value) -- normal or location value argument
+    CodeAbs [String] (Env -> Value -> IO Value) -- normal or location value argument
 
 type FunctionMap = [(String, Code)]
 
@@ -46,12 +46,12 @@ receive = return $ Tuple [] -- ToFix
 apply :: FunctionMap -> Value -> Value -> IO Value
 apply funMap clo@(Closure freeVals (CodeName f) optrecf) w =  -- Tofix: optrecf !!
   case [ code | (g, code) <- funMap, f == g ] of
-    (Code fvars (CodeAbs [x] action) :_) ->
+    (Code fvars (CodeAbs [_] action) :_) ->
        let env = zip fvars freeVals ++
                  case optrecf of
                    [recf] -> [(recf,clo)]
                    _ -> []
-       in  action env x w
+       in  action env w
     (Code fvars (CodeAbs xs action) :_) ->
       error $ "apply: not a single argument in CodeAbs: " ++ show xs
     [] -> error $ "apply: not found in funMap: " ++ f

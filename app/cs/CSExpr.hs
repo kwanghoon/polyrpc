@@ -114,9 +114,11 @@ data Env = Env
 initEnv = Env { _locVarEnv=[], _typeVarEnv=[], _varEnv=[] }
 
 --
+type FunctionMap = [(String, (CodeType, Code))]
+
 data FunctionStore = FunctionStore
-   { _clientstore :: [(String, (CodeType, Code))]
-   , _serverstore :: [(String, (CodeType, Code))]
+   { _clientstore :: FunctionMap
+   , _serverstore :: FunctionMap
    , _new   :: Int
    }
    deriving (Show, Typeable, Data)

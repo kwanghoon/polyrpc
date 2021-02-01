@@ -11,6 +11,31 @@ import qualified Runtime as R
 codeGen :: Monad m => CS.GlobalTypeInfo -> CS.FunctionStore -> CS.Expr -> m ()
 codeGen t_gti funStore t_expr = return ()
 
+-- | function map compilation
+
+compFunMap :: String -> CS.FunctionMap -> R.FunctionMap
+compFunMap myloc csFunMap = funMap
+  where
+    funMap = compFunMap' myloc csFunMap funMap
+
+    compFunMap' myloc csFunMap funMap =
+      [ (f, R.Code fvvars (R.CodeAbs ys action))
+      | (f, (_, CS.Code locvars tyvars xs opencode)) <- csFunMap,
+        let fvvars = locvars ++ xs,
+        let (ys, action) = codeAbsToPair myloc opencode
+      ]
+
+    codeAbsToPair myloc (CS.CodeAbs xTys@[(x,_)] expr) =
+      (map fst xTys, \env v -> interp myloc funMap (env ++ [(x,v)]) expr)
+    codeAbsToPair myloc (CS.CodeAbs xTys expr) =
+      error $ "compFuNMap: not a single arg var: " ++ show (length xTys)
+       
+    codeAbsToPair myloc (CS.CodeLocAbs locvars@[locvar] expr) =
+      (locvars, \env v -> interp myloc funMap (env ++ [(locvar,v)]) expr)
+    codeAbsToPair myloc (CS.CodeLocAbs locvars expr) =
+      error $ "compFuNMap: not a single loc var: " ++ show (length locvars)
+
+
 
 -- | interp
 
