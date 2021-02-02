@@ -285,13 +285,12 @@ update : Msg -client-> Model -client-> Model
                 ) ()), model) { (u, m) => Content line (! {server} ref) ref }
           }};
 
-// serverModel : Ref {server} [List [TodoItem]]
-//             = thunk (\u @ server. ref {server} Nil);
+serverModel : Ref {server} [List [TodoItem]]
+            = thunk (\u @ server. ref {server} Nil);
 
-// init : Model
-//      = Content "" (! {server} serverModel) serverModel;
+init : Model
+     = Content "" (! {server} serverModel) serverModel;
 
-// main : Page [Model Msg]
-//      = Page init view update "#body"
+main : Page [Model Msg]
+     = Page init view update "#body"
 
-main : Int = 0

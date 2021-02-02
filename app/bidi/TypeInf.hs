@@ -40,6 +40,11 @@ import Debug.Trace
 --      How do we know the name of this type variable a when it comes from
 --      the inferred type polymorphism as [a]. \x@l. ...?
 
+--   8. To implement a transformation is left.
+--       : subtype (ConType ..., ConType ...)
+--       : instantiateL (alpha, ConType ...)
+--       : instantiateL (alpha, TupleType ...)
+
 type TIMonad = ExceptT String (State NameState) -- 'ExceptT String NameGen'
 
 typeInf :: Monad m => Bool -> [TopLevelDecl] -> [BasicLibType] -> m (GlobalTypeInfo, [TopLevelDecl], [TopLevelDecl], [TopLevelDecl])
@@ -622,20 +627,20 @@ subtype gamma loc0 typ1 typ2 =
     -- <:Var
     (TypeVarType alpha, TypeVarType alpha')
       | not (cExists alpha) && not (cExists alpha')
-          && alpha == alpha' -> return (gamma, \x->x)
+          && alpha == alpha' -> return (gamma, idTr)
       | cExists alpha && cExists alpha'
           && alpha == alpha' && alpha `elem` existentials gamma -> do
-          return (gamma, \x->x)
+          return (gamma, idTr)
       | cExists alpha
           && alpha `elem` existentials gamma
           && alpha `S.notMember` freeTVars (TypeVarType alpha') -> do
-          (delta, _) <- instantiateL gamma loc0 alpha (TypeVarType alpha')
-          return (delta, \x->x)
+          (delta, transform) <- instantiateL gamma loc0 alpha (TypeVarType alpha')
+          return (delta, transform)
       | cExists alpha'
           && alpha' `elem` existentials gamma
           && alpha' `S.notMember` freeTVars (TypeVarType alpha) -> do
-          (delta, _) <- instantiateR gamma loc0 (TypeVarType alpha) alpha'
-          return (delta, \x->x)
+          (delta, transform) <- instantiateR gamma loc0 (TypeVarType alpha) alpha'
+          return (delta, transform)
       | otherwise ->
           throwError $ "subtype(TypeVarType,TypeVarType), don't know what to do with: "
                          ++ pretty (gamma, typ1, typ2)
@@ -644,15 +649,15 @@ subtype gamma loc0 typ1 typ2 =
       | cExists alpha
           && alpha `elem` existentials gamma
           && alpha `S.notMember` freeTVars a -> do
-          (delta, _) <- instantiateL gamma loc0 alpha a
-          return (delta, \x->x)
+          (delta, transform) <- instantiateL gamma loc0 alpha a
+          return (delta, transform)
 
     (a, TypeVarType alpha)
       | cExists alpha
           && alpha `elem` existentials gamma
           && alpha `S.notMember` freeTVars a -> do
-          (delta, _) <- instantiateR gamma loc0 a alpha
-          return (delta, \x->x)
+          (delta, transform) <- instantiateR gamma loc0 a alpha
+          return (delta, transform)
 
     -- <:TupleType
     (TupleType tys1, TupleType tys2)
@@ -723,20 +728,21 @@ subtype gamma loc0 typ1 typ2 =
                   ++ pretty (gamma, typ1, typ2)
       | otherwise -> do
           delta <- foldM (\ g (loc1, loc2) -> subloc g loc1 loc2) gamma (zip locs1 locs2)
-          delta' <- foldM (\ g (maybety1, maybety2) ->
+          (delta', fs) <-
+                 foldM (\ (g, fs) (maybety1, maybety2) ->
                       case (maybety1, maybety2) of
                         (Just ty1, Just ty2) -> do
-                             (g', _) <- subtype g loc0 ty1 ty2  -- TODO: transform functions for sum types !!
-                             return g'
+                             (g', f) <- subtype g loc0 ty1 ty2  -- TODO: transform functions for sum types !!
+                             return (g', fs++[f])
                         _ -> throwError $ "subtype: ConType: not monotype: "
                                      ++ pretty (gamma, typ1, typ2))
-                    delta (zip (map monotype tys1) (map monotype tys2))
-          return (delta', \x->x) -- TODO: transform functions for sum types !!
+                    (delta, []) (zip (map monotype tys1) (map monotype tys2))
+          return (delta', idTr) -- TODO: transform functions for sum types using fs!!
 
     _ -> throwError $ "subtype, don't know what to do with: "
                            ++ pretty (gamma, typ1, typ2)
 
-tempFun = \x -> x
+idTr = \x->x
 
 -- | Algorithmic instantiation (left):
 --   instantiateL Γ α A = Δ <=> Γ |- α^ :=< A -| Δ
@@ -753,16 +759,16 @@ instantiateL_ gamma currLoc alpha a =
   checkwftype gamma a $ checkwftype gamma (TypeVarType alpha) $
   case solve gamma alpha =<< monotype a of
     -- InstLSolve :
-    Just gamma' -> return (gamma', tempFun)
+    Just gamma' -> return (gamma', idTr)
     Nothing -> case a of
       -- InstLReach
       TypeVarType beta
         | not (cExists beta) ->
             throwError $ "instantiateL: InstLReach: not ended with ^: " ++ beta
         | ordered gamma alpha beta ->
-            return $ (fromJust $ solve gamma beta (TypeVarType alpha), tempFun)
+            return $ (fromJust $ solve gamma beta (TypeVarType alpha), idTr)
         | otherwise ->
-            return $ (fromJust $ solve gamma alpha (TypeVarType beta), tempFun)
+            return $ (fromJust $ solve gamma alpha (TypeVarType beta), idTr)
 
       -- InstLArr
       FunType a1 loc a2   -> do
@@ -780,7 +786,11 @@ instantiateL_ gamma currLoc alpha a =
                               currLoc a1 alpha1
         (delta1, g) <- instantiateL theta currLoc alpha2 (apply theta a2)
         delta2 <- instantiateLocL delta1 l (lapply delta1 loc)
-        return (delta2, tempFun)
+        x <- lift $ freshVar
+        return (delta2,
+          \h -> Abs [(x, Just (apply delta2 a1), lapply delta2 loc)]
+                  (g (App h (Just $ apply delta2 (FunType a1 loc a2))
+                        (f (Var x)) (Just currLoc))) )
 
       -- InstLAIIR
       TypeAbsType betas b -> do
@@ -791,7 +801,8 @@ instantiateL_ gamma currLoc alpha a =
                        alpha
                        (typeSubsts (map TypeVarType betas') betas b)
         let delta2 = dropMarker (CForall (head betas')) delta1 -- Todo: Ensure that betas is not null!
-        return (delta2, tempFun)
+        x <- lift $ freshVar
+        return (delta2, \h -> TypeAbs betas (f h))
 
       -- Note: No polymorphic (location) abstraction is allowed.
 
@@ -814,12 +825,12 @@ instantiateL_ gamma currLoc alpha a =
         gamma1 <- foldM (\gamma (l, loc) -> instantiateLocL gamma l loc)
                     gamma0 (zip ls locs)
                
-        (gamma3, h) <- foldM (\(gamma,g) (beta, argty) -> do
+        (gamma3, hs) <- foldM (\ (gamma,fs) (beta, argty) -> do
                         (gamma2, f) <- instantiateL gamma currLoc beta argty
-                        return (gamma2, tempFun) )
-                        (gamma1, tempFun) (zip betas tys)
+                        return (gamma2, fs++[f]) )
+                        (gamma1, []) (zip betas tys)
 
-        return (gamma3, tempFun)
+        return (gamma3, idTr) -- TODO: transform functions for sum types using fs!!
 
       -- InstLTupleType
       TupleType argTys -> do
@@ -829,13 +840,13 @@ instantiateL_ gamma currLoc alpha a =
                  [CExistsSolved alpha (TupleType (map TypeVarType betas))]
         let gamma0 = insertAt gamma (CExists alpha) gammaReplace
         
-        (gamma2, f) <-
-            foldM (\ (gamma,g) (beta, argty) -> do
-                  (gamma1, h) <- instantiateL gamma currLoc beta argty
-                  return (gamma1, h) )
-                  (gamma0, tempFun) (zip betas argTys)
+        (gamma2, hs) <-
+            foldM (\ (gamma,fs) (beta, argty) -> do
+                  (gamma1, f) <- instantiateL gamma currLoc beta argty
+                  return (gamma1, fs++[f]) )
+                  (gamma0, []) (zip betas argTys)
 
-        return (gamma2, f)
+        return (gamma2, idTr) -- TODO: transform functions for sum types using fs!!
         
       _ -> throwError $ "The impossible happened! instantiateL: "
                 ++ pretty (gamma, TypeVarType alpha, a)
@@ -855,16 +866,16 @@ instantiateR' gamma currLoc a alpha
 instantiateR_ gamma currLoc a alpha =
   checkwftype gamma a $ checkwftype gamma (TypeVarType alpha) $
   case solve gamma alpha =<< monotype a of
-    Just gamma' -> return (gamma', tempFun)
+    Just gamma' -> return (gamma', idTr)
     Nothing -> case a of
       -- InstRReach
       TypeVarType beta
         | not (cExists beta) ->
             throwError $ "instantiateR: InstRReach: not ended with ^: " ++ beta
         | ordered gamma alpha beta ->
-            return $ (fromJust $ solve gamma beta (TypeVarType alpha), tempFun)
+            return $ (fromJust $ solve gamma beta (TypeVarType alpha), idTr)
         | otherwise ->
-            return $ (fromJust $ solve gamma alpha (TypeVarType beta), tempFun)
+            return $ (fromJust $ solve gamma alpha (TypeVarType beta), idTr)
 
       -- InstRArr
       FunType a1 loc a2   -> do
@@ -882,7 +893,11 @@ instantiateR_ gamma currLoc a alpha =
                               currLoc alpha1 a1
         (delta, g) <- instantiateR theta currLoc (apply theta a2) alpha2
         delta1 <- instantiateLocR delta (lapply delta loc) l
-        return (delta1, tempFun)
+        x <- lift $ freshVar
+        return (delta1,
+          \h -> Abs [(x, Just (apply delta1 a1), lapply delta1 loc)]
+                  (g (App h (Just $ apply delta1 (FunType a1 loc a2))
+                        (f (Var x)) (Just currLoc))) )
 
       -- InstRAIIL
       TypeAbsType betas b -> do
@@ -893,7 +908,8 @@ instantiateR_ gamma currLoc a alpha =
                        (typeSubsts (map TypeVarType betas') betas b)
                        alpha
         let delta2 = dropMarker (CMarker (head betas')) delta1
-        return (delta2, tempFun)
+        let tys = map (apply delta1) (map TypeVarType betas')  -- delta1, not delta2 !!
+        return (delta2, \h -> f (TypeApp h (Just $ apply delta1 (TypeAbsType betas b)) tys))
 
       -- Note: No polymorphic (location) abstraction is allowed.
 
@@ -916,11 +932,11 @@ instantiateR_ gamma currLoc a alpha =
         gamma1 <- foldM (\gamma (l, loc) -> instantiateLocR gamma loc l)
                     gamma0 (zip ls locs)
                
-        (delta, h) <- foldM (\ (gamma,f) (beta, argty) -> do
-                       (gamma2, g) <- instantiateR gamma currLoc argty beta
-                       return (gamma2, g) )
-                       (gamma1,tempFun) (zip betas tys)
-        return (delta, tempFun)
+        (delta, hs) <- foldM (\ (gamma,fs) (beta, argty) -> do
+                         (gamma2, f) <- instantiateR gamma currLoc argty beta
+                         return (gamma2, fs++[f]) )
+                       (gamma1,[]) (zip betas tys)
+        return (delta, idTr) -- TODO: transform functions for sum types using fs!!
 
       -- InstRTuple
       TupleType argTys -> do
@@ -930,11 +946,11 @@ instantiateR_ gamma currLoc a alpha =
                  [CExistsSolved alpha (TupleType (map TypeVarType betas))]
         let gamma0 = insertAt gamma (CExists alpha) gammaReplace
 
-        (delta, h) <- foldM (\ (gamma,f) (argty, beta) -> do
-                 (gamma1, g) <- instantiateR gamma currLoc argty beta
-                 return (gamma1, g) )
-                 (gamma0,tempFun) (zip argTys betas)
-        return (delta, tempFun)
+        (delta, hs) <- foldM (\ (gamma,fs) (argty, beta) -> do
+                       (gamma1, f) <- instantiateR gamma currLoc argty beta
+                       return (gamma1, fs++[f]) )
+                     (gamma0, []) (zip argTys betas)
+        return (delta, idTr) -- TODO: transform functions for sum types using fs!!
 
       _ -> throwError $ "The impossible happened! instantiateR: "
                 ++ pretty (gamma, a, TypeVarType alpha)
@@ -1010,7 +1026,7 @@ typecheckExpr_ gti gamma loc (Case expr _ alts) caseExprTy = do
 typecheckExpr_ gti gamma loc e b = do
   (a, theta, e') <- typesynthExpr gti gamma loc e
   (delta, transform) <- subtype theta loc (apply theta a) (apply theta b)
-  return (delta, transform e')
+  return (delta, eapply delta $ transform e')
 
 -- typecheckExpr_ gti gamma loc e typ = do
 --   throwError $ "typecheckExpr: not implemented yet"
