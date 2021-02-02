@@ -873,7 +873,7 @@ instantiateR_ gamma a alpha =
       -- InstRAIIL
       TypeAbsType betas b -> do
         -- Do alpha conversion to avoid clashes
-        betas' <- lift $ replicateM (length betas) freshTypeVar
+        betas' <- lift $ replicateM (length betas) freshExistsTypeVar
         dropMarker (CMarker (head betas')) <$>
           instantiateR (gamma >++ map CMarker betas' >++ map CExists betas')
                        (typeSubsts (map TypeVarType betas') betas b)
