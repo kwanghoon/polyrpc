@@ -367,12 +367,12 @@ serverValue fun_store client_stack mem_c evctx v server_stack mem_s = do
 
 calc :: PrimOp -> [Location] -> [Type] -> [Value] -> Mem -> IO (Value, Mem)
 
-calc MkRecOp locs tys [Closure vs fvtys codename [], Lit (StrLit f)] mem =
-  return (Closure vs fvtys codename [f], mem)
+-- calc MkRecOp locs tys [Closure vs fvtys codename [], Lit (StrLit f)] mem =
+--   return (Closure vs fvtys codename [f], mem)
 
-calc MkRecOp locs tys vs mem =
-  error $ "[MkRecOp]: Unexpected: "
-              ++ show locs ++ " " ++ show tys ++ " " ++ show vs
+-- calc MkRecOp locs tys vs mem =
+--   error $ "[MkRecOp]: Unexpected: "
+--               ++ show locs ++ " " ++ show tys ++ " " ++ show vs
 
 calc PrimRefCreateOp [loc1] [ty] [v] mem =
   let (addr, mem1) = allocMem v mem in return (Addr addr, mem1)

@@ -36,7 +36,7 @@ data PrimOp =
   | PrimRefWriteOp
 
   -- For creating recursive closures
-  | MkRecOp  -- MkRecOp closure f 
+  -- | MkRecOp  -- MkRecOp closure f 
 -- For aeson  
 --  deriving (Show, Eq, Generic)
   deriving (Show, Eq, Typeable, Data)

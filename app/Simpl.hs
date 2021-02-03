@@ -189,9 +189,9 @@ doExpr useInfo (LocApp v ty locs) exprty = do
   (useInfo1, v1, changed1) <- doValue useInfo v ty
   return (useInfo1, LocApp v1 ty locs, changed1)
 
-doExpr useInfo (Prim MkRecOp locs tys vs@[Var recvar, _]) exprty = do
-  let useInfo1 = incVar recvar (incVar recvar useInfo) -- #(recvr)=2
-  return (useInfo1, Prim MkRecOp locs tys vs, False)
+-- doExpr useInfo (Prim MkRecOp locs tys vs@[Var recvar, _]) exprty = do
+--   let useInfo1 = incVar recvar (incVar recvar useInfo) -- #(recvr)=2
+--   return (useInfo1, Prim MkRecOp locs tys vs, False)
 
 doExpr useInfo (Prim prim op_locs op_tys vs) exprty =
   case lookupPrimOpType prim of

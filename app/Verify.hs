@@ -225,8 +225,8 @@ verifyExpr gtigci loc env ty (LocApp left (CloType (LocAbsType locvars bodyty)) 
   assert (equalType substed_bodyty ty)
     ("[verifyExpr] LocApp: Not equal type: " ++ show substed_bodyty ++ " != " ++ show ty)
 
-verifyExpr gtigci loc env ty (Prim MkRecOp locs tys vs) = do -- locs=[], tys=[]
-  return ()
+-- verifyExpr gtigci loc env ty (Prim MkRecOp locs tys vs) = do -- locs=[], tys=[]
+--   return ()
 
 verifyExpr gtigci loc env ty expr@(Prim prim op_locs op_tys vs) = do
   case lookupPrimOpType prim of
