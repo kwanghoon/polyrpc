@@ -40,7 +40,8 @@ cgFunMap myloc csFunMap = funMap
 
 -- | cgExpr
 
-cgExpr :: String -> CS.Expr -> R.FunctionMap -> R.Env -> IO R.Value  -- String ==> Location name
+cgExpr :: String -> CS.Expr -> R.FunctionMap -> R.Env -> R.RuntimeM R.Value
+       -- String ==> Location name
 
 cgExpr myloc (CS.ValExpr (CS.UnitM v)) =
   let f = cgVal v
