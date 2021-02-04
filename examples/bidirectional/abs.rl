@@ -6,6 +6,6 @@ f : Int -client-> Int
 
 
 // Infinite loop in the simplifcation
-_main : Unit = print {client} (intToString {client} (f 42))
+main : Unit = print {client} (intToString {client} (f 42))
 
 // main : Unit = let { z : Int = f 42 } () end

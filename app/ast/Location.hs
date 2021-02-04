@@ -13,7 +13,7 @@ import Pretty
 data Location =
     Location String
   | LocVar LocationVar
-  deriving (Eq, Show, Typeable, Data)
+  deriving (Eq, Read, Show, Typeable, Data)
 
 equalLoc (Location x) (Location y) = x==y
 equalLoc (LocVar x) (LocVar y) = x==y

@@ -16,11 +16,11 @@ data Type =
   | ConType String [Location] [Type]
   | CloType Type   -- Clo A
   | MonType Type   -- T A
-  deriving (Show, Typeable, Data)
+  deriving (Read, Show, Typeable, Data)
 
 data CodeType =
     CodeType [String] [String] [Type] Type  -- [alpha] [loc]. [type]. Type
-    deriving (Show, Typeable, Data)
+    deriving (Read, Show, Typeable, Data)
 
 --
 doSubstOne :: String -> Type -> Type -> Type

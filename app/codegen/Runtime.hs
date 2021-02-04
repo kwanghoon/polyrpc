@@ -5,10 +5,13 @@ module Runtime where
 import Literal
 import Prim
 
+import qualified CSExpr as TE
+
 import Control.Monad.Trans.State.Lazy
 import Control.Monad.IO.Class
 import qualified Data.Map as Map
 import Text.JSON.Generic
+import Text.JSON.Pretty
 
 data Value =
     Lit Literal
@@ -49,6 +52,11 @@ send v = return () -- ToFix
 receive :: RuntimeM Value
 receive = return $ Tuple [] -- ToFix
 
+-- JSON
+toJsonString :: Value -> String
+toJsonString v = render $ pp_value $ toJSON v
+
+-- Apply
 apply :: FunctionMap -> Value -> Value -> RuntimeM Value
 apply funMap clo@(Closure freeVals (CodeName f) optrecf) w =  -- Tofix: optrecf !!
   case [ code | (g, code) <- funMap, f == g ] of
@@ -235,4 +243,15 @@ prim op locvals argvals = do
     calc' operator locs operands =
       error $ "[PrimOp] Unexpected: "
          ++ show operator ++ " " ++ show locs ++ " " ++ " " ++ show operands
+
+-- Reading CS programs
+load_expr :: String -> IO TE.Expr
+load_expr fileName = do
+  text <- readFile fileName
+  return $ read text
+
+load_funstore :: String -> IO TE.FunctionMap
+load_funstore fileName = do
+  text <- readFile fileName
+  return $ read text
 

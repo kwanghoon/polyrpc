@@ -39,7 +39,7 @@ data PrimOp =
   -- | MkRecOp  -- MkRecOp closure f 
 -- For aeson  
 --  deriving (Show, Eq, Generic)
-  deriving (Show, Eq, Typeable, Data)
+  deriving (Eq, Read, Show, Typeable, Data)
 
 -- Predefined type names
 unitType   = "Unit"

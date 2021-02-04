@@ -19,7 +19,7 @@ data Expr =
   | TypeApp Value Type [Type]
   | LocApp Value Type [Location]
   | Prim PrimOp [Location] [Type] [Value]
-  deriving (Show, Typeable, Data)
+  deriving (Read, Show, Typeable, Data)
 
 data Value =
     Var String
@@ -36,18 +36,18 @@ data Value =
 
   -- Runtime values
   | Addr Integer
-  deriving (Show, Typeable, Data)
+  deriving (Read, Show, Typeable, Data)
 
 data BindingDecl =
     Binding Bool String Type Expr    -- isTop?
-    deriving (Show, Typeable, Data)
+    deriving (Read, Show, Typeable, Data)
 
 
 data DataTypeDecl =
     DataType String [String] [TypeConDecl]
 -- For aeson
 --  deriving (Show, Generic)
-    deriving (Show, Typeable, Data)
+    deriving (Read, Show, Typeable, Data)
 
 data TopLevelDecl =
     BindingTopLevel BindingDecl
@@ -55,33 +55,33 @@ data TopLevelDecl =
   | LibDeclTopLevel String Type
 -- For aeson
 --  deriving (Show, Generic)
-    deriving (Show, Typeable, Data)
+    deriving (Read, Show, Typeable, Data)
 
 data TypeConDecl =
    TypeCon String [Type]
 -- For aeson
 --  deriving (Show, Generic)
-    deriving (Show, Typeable, Data)
+    deriving (Read, Show, Typeable, Data)
 
 data Alternative =
     Alternative String [String] Expr
   | TupleAlternative [String] Expr
-  deriving (Show, Typeable, Data)
+  deriving (Read, Show, Typeable, Data)
 
 data Code =
     Code [String] [String] [String] OpenCode  -- [loc]. [alpha]. [x]. OpenCode
-    deriving (Show, Typeable, Data)
+    deriving (Read, Show, Typeable, Data)
 
 data OpenCode =
     CodeAbs     [(String, Type)] Expr
 --  | CodeTypeAbs [String] Expr
   | CodeLocAbs  [String] Expr
-  deriving (Show, Typeable, Data)
+  deriving (Read, Show, Typeable, Data)
 
 
 data CodeName =
     CodeName String [Location] [Type]
-    deriving (Show, Typeable, Data)
+    deriving (Read, Show, Typeable, Data)
 
 getCodeName (CodeName name _ _) = name
 

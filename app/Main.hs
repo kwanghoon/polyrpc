@@ -131,14 +131,20 @@ doProcess cmd file = do
   verbose (_flag_debug_verify cmd) $ putStrLn "[Well-typed]"
 
   -- Code generation for Web
-  if _flag_gen_web_code cmd == True
+  if _flag_code_gen cmd == True
   then do
-    putStrLn "[Generating web-based code]"
+    putStrLn "[Code generation]"
+    let csClientFile = prefixOf file ++ "_client.cs"
+    let csClientMainFile = prefixOf file ++ "_main.cs"
+    let csServerFile = prefixOf file ++ "_server.cs"
+    print_expr t_expr csClientMainFile
+    print_funstore (TE._clientstore funStore) csClientMainFile
+    print_funstore (TE._serverstore funStore) csServerFile
   else
     codeGen t_gti funStore t_expr
 
   -- Execution
-  if _flag_gen_web_code cmd == False
+  if _flag_code_gen cmd == False
   then do
     putStrLn "[Executing codes]"
     v <- execute (_flag_debug_run cmd) t_gti funStore t_expr
@@ -181,6 +187,14 @@ print_cs_json fileName funStore t_expr = do
   writeFile jsonfile $ render
       $ pp_value $ toJSON (funStore :: TE.FunctionStore, t_expr :: TE.Expr)
 
+print_expr :: TE.Expr -> String -> IO ()
+print_expr expr fileName = do
+  writeFile fileName $ show expr
+  
+print_funstore :: TE.FunctionMap -> String -> IO ()
+print_funstore functionMap fileName = do
+  writeFile fileName $ show functionMap
+
 prefixOf str = reverse (removeDot (dropWhile (/='.') (reverse str)))
   where removeDot []     = []
         removeDot (x:xs) = xs  -- x must be '.'
@@ -214,7 +228,7 @@ data Cmd =
       , _flag_debug_simpl :: Bool
       , _flag_debug_verify :: Bool
       , _flag_debug_run :: Bool
-      , _flag_gen_web_code :: Bool
+      , _flag_code_gen :: Bool
       , _files :: [String]
       }
 
@@ -232,7 +246,7 @@ initCmd =
       , _flag_debug_simpl = False
       , _flag_debug_verify = False
       , _flag_debug_run = False
-      , _flag_gen_web_code = False
+      , _flag_code_gen = False
       , _files = []
       }
 
@@ -297,8 +311,8 @@ collect cmd ("--debug-run":args) = do
   let new_cmd = cmd { _flag_debug_run = True }
   collect new_cmd args
 
-collect cmd ("--gen-web-code":args) = do
-  let new_cmd = cmd { _flag_gen_web_code = True }
+collect cmd ("--code-gen":args) = do
+  let new_cmd = cmd { _flag_code_gen = True }
   collect new_cmd args
 
 collect cmd (arg:args) = do
