@@ -56,10 +56,16 @@ unitName = "UNIT"
 
 -- send and receive
 send :: Value -> RuntimeM ()
-send v = return () -- ToFix
+send v = do
+  (mem,_send,_receive) <- get
+  liftIO $ _send v
+  return ()
 
 receive :: RuntimeM Value
-receive = return $ Tuple [] -- ToFix
+receive = do
+  (mem,_send,_receive) <- get
+  v <- liftIO _receive
+  return v
 
 -- JSON
 toJsonString :: Value -> String
@@ -113,14 +119,14 @@ loop_call funMap = do
       send (Constr "UNIT" [w])
       loop_call funMap
 
-loop_server :: FunctionMap -> RuntimeM Value
+loop_server :: FunctionMap -> RuntimeM ()
 loop_server funMap = do
   x <- receive
   case x of
     Constr "REQ" [f, arg] -> do
       w <- apply funMap f arg
       send (Constr "UNIT" [w])
-      loop_req funMap
+      loop_server funMap
 
 -- | Memory
 
@@ -145,14 +151,16 @@ readMem addr mem =
 writeMem :: Addr -> Value -> Mem -> Mem
 writeMem addr v mem = mem { _map= Map.insert addr v (_map mem) }
 
-type RuntimeM = StateT Mem IO
+type RuntimeState = (Mem, Value -> IO (), IO Value)
+
+type RuntimeM = StateT RuntimeState IO
 
 --
-prim :: PrimOp -> [Value] -> [Value] -> StateT Mem IO Value
+prim :: PrimOp -> [Value] -> [Value] -> RuntimeM Value
 prim op locvals argvals = do
-  mem <- get
+  (mem,_send,_receive) <- get
   (v, mem') <- liftIO $ calc op locvals argvals mem
-  put mem'
+  put (mem',_send,_receive)
   return v
   
   where
