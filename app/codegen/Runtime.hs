@@ -7,11 +7,14 @@ import Prim
 
 import qualified CSExpr as TE
 
+import qualified Data.Aeson as DA
 import Control.Monad.Trans.State.Lazy
 import Control.Monad.IO.Class
 import qualified Data.Map as Map
 import Text.JSON.Generic
 import Text.JSON.Pretty
+
+import GHC.Generics
 
 data Value =
     Lit Literal
@@ -21,11 +24,17 @@ data Value =
 
   -- Runtime value
   | Addr Integer
-  deriving (Show, Typeable, Data)
+  deriving (Show, Typeable, Data, Generic)
+
+instance DA.FromJSON Value
+instance DA.ToJSON Value
 
 data CodeName =
     CodeName String    -- fname (no location values and no types)
-  deriving (Show, Typeable, Data)
+  deriving (Show, Typeable, Data, Generic)
+
+instance DA.FromJSON CodeName
+instance DA.ToJSON CodeName
 
 data Code =
     Code [String] OpenCode --  [free var or possibley free loc var]. OpenCode  (and no alphas)
