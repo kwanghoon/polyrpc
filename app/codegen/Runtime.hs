@@ -185,7 +185,7 @@ loop_req funMap = do
   x <- receive
   case x of
     Constr "UNIT" [v] ->
-      return v
+      return $ UnitM v
       
     Constr "CALL" [f, arg] -> do
       w <- apply funMap f arg
@@ -197,7 +197,7 @@ loop_call funMap = do
   x <- receive
   case x of
     Constr "UNIT" [v] ->
-      return v
+      return $ UnitM v
       
     Constr "REQ" [f, arg] -> do
       w <- apply funMap f arg
