@@ -138,7 +138,7 @@ doProcess cmd file = do
     let csClientMainFile = prefixOf file ++ "_main.cs"
     let csServerFile = prefixOf file ++ "_server.cs"
     print_expr t_expr csClientMainFile
-    print_funstore (TE._clientstore funStore) csClientMainFile
+    print_funstore (TE._clientstore funStore) csClientFile
     print_funstore (TE._serverstore funStore) csServerFile
   else
     codeGen t_gti funStore t_expr
