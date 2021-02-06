@@ -119,7 +119,23 @@ initUseInfoFrom funStore = UseInfo
 --   , varUseInfo = empty }
 
 --
+
+-- | doExpr
+
+ -- [Rule1]
+ --   valExpr (BindM x <- expr
+ --                  (ValExpr (unitM x)))
+ --   =====>
+ --   expr
+ --
 doExpr :: Monad m => UseInfo -> Expr -> Type -> m (UseInfo, Expr, Bool)
+doExpr useInfo (ValExpr v@(BindM [Binding False x ty expr] (ValExpr (UnitM (Var y))))) exprty = do
+  if x == y then
+    doExpr useInfo expr (MonType ty)
+  else  -- Eles do the same as the next case! Todo: Fix the duplicate code!
+    do (useInfo', v', changed) <- doValue useInfo v exprty
+       return (useInfo', ValExpr v', changed)
+
 doExpr useInfo (ValExpr v) exprty = do
   (useInfo', v', changed) <- doValue useInfo v exprty
   return (useInfo', ValExpr v', changed)
