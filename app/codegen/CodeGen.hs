@@ -8,214 +8,83 @@ import qualified CSExpr as CS
 
 import qualified Runtime as R
 
-codeGen :: Monad m => CS.GlobalTypeInfo -> CS.FunctionStore -> CS.Expr -> m ()
-codeGen t_gti funStore t_expr = return ()
+codeGen :: Monad m => CS.GlobalTypeInfo -> CS.FunctionStore -> CS.Expr -> m (R.FunctionStore, R.Expr)
+codeGen t_gti funStore t_expr = do
+   let clientFunMap = compFunMap clientLocName (CS._clientstore funStore)
+   let serverFunMap = compFunMap serverLocName (CS._serverstore funStore)
+   let r_funStore = R.FunctionStore { R._clientstore=clientFunMap, R._serverstore=serverFunMap }
+   let r_expr = compExpr t_expr
+   return (r_funStore, r_expr)
 
--- | function map compilation
+--------------------------------------------------
+-- | function map compilation to untyped code map
+--------------------------------------------------
 
-cgFunMap :: String -> CS.FunctionMap -> R.FunctionMap
-cgFunMap myloc csFunMap = funMap
+compFunMap :: String -> CS.FunctionMap -> R.FunctionMap
+compFunMap myloc csFunMap = funMap
   where
-    funMap = cgFunMap' myloc csFunMap funMap
+    funMap = compFunMap' myloc csFunMap
 
-    cgFunMap' myloc csFunMap funMap =
-      [ (f, R.Code fvvars (R.CodeAbs ys action))
+    compFunMap' myloc csFunMap =
+      [ (f, R.Code fvvars (R.CodeAbs ys expr))
       | (f, (_, CS.Code locvars tyvars xs opencode)) <- csFunMap,
         let fvvars = locvars ++ xs,
-        let (ys, action) = codeAbsToPair myloc opencode
+        let (ys, expr) = codeAbsToPair myloc opencode
       ]
 
-    codeAbsToPair myloc (CS.CodeAbs xTys@[(x,_)] expr) =
-      let actionExpr = cgExpr myloc expr in
-      (map fst xTys, \env v -> actionExpr funMap (env ++ [(x,v)]))
+    codeAbsToPair myloc (CS.CodeAbs xTys@[(x,_)] expr) = (map fst xTys, compExpr expr)
     codeAbsToPair myloc (CS.CodeAbs xTys expr) =
-      error $ "cgFunMap: not a single arg var: " ++ show (length xTys)
+      error $ "compFunMap: not a single arg var: " ++ show (length xTys)
        
-    codeAbsToPair myloc (CS.CodeLocAbs locvars@[locvar] expr) =
-      let actionExpr = cgExpr myloc expr in
-      (locvars, \env v -> actionExpr funMap (env ++ [(locvar,v)]))
+    codeAbsToPair myloc (CS.CodeLocAbs locvars@[locvar] expr) = (locvars, compExpr expr)
     codeAbsToPair myloc (CS.CodeLocAbs locvars expr) =
-      error $ "cgFunMap: not a single loc var: " ++ show (length locvars)
+      error $ "compFunMap: not a single loc var: " ++ show (length locvars)
 
+compExpr :: CS.Expr -> R.Expr  -- Todo: Compiling Req/Call/GenApp, you will need the current loc.
 
--- | cgExpr
-
-cgExpr :: String -> CS.Expr -> R.FunctionMap -> R.Env -> R.RuntimeM R.Value
-       -- String ==> Location name
-
-cgExpr myloc (CS.ValExpr (CS.UnitM v)) =
-  let f = cgVal v
-  in  (\ funMap env -> return $ f funMap env)
-
-cgExpr myloc (CS.ValExpr (CS.BindM [CS.Binding _ x _ bexpr] expr)) =
-  let actionBexpr = cgExpr myloc bexpr
-      actionExpr = cgExpr myloc expr
-  in  (\ funMap env -> do
-           bvalue <- actionBexpr funMap env
-           actionExpr funMap (env ++ [(x,bvalue)]) )
-
-cgExpr myloc (CS.ValExpr (CS.BindM bindDecls expr)) =
-  error $ "cgExpr: not a single binding in BindM: " ++ show (length bindDecls)
+compExpr (CS.ValExpr (CS.UnitM v)) = R.UnitM (compVal v)
+compExpr (CS.ValExpr (CS.BindM bindDecls expr)) =
+  R.BindM (map compBindDecl bindDecls) (compExpr expr)
   
-cgExpr myloc (CS.ValExpr (CS.Req f _ arg)) =
-  let actionF = cgVal f
-      actionArg = cgVal arg
-  in  (\ funMap env -> do
-          let _f   = actionF funMap env
-          let _arg = actionArg funMap env
-          R.req funMap _f _arg )
+compExpr (CS.ValExpr (CS.Req f _ arg)) = R.Req (compVal f) (compVal arg)
+compExpr (CS.ValExpr (CS.Call f _ arg)) = R.Call (compVal f) (compVal arg)
+compExpr (CS.ValExpr (CS.GenApp loc f _ arg)) = R.GenApp (compLoc loc) (compVal f) (compVal arg)
+compExpr (CS.ValExpr v) = error $ "[codegen:compVal] ValExpr: Unexpected value: " ++ show v
+
+compExpr (CS.Let bindDecls expr) = R.Let (map compBindDecl bindDecls) (compExpr expr)
+compExpr (CS.Case v _ alts) = R.Case (compVal v) (map compAlt alts)
+compExpr (CS.App f _ arg) = R.App (compVal f) (compVal arg)
+compExpr (CS.TypeApp f _ _) = compVal f
+compExpr (CS.LocApp f _ locs) = foldl (\ f v -> R.App f v) (compVal f) (map compLoc locs)
+compExpr (CS.Prim op locs _ args) = R.Prim op (map compLoc locs) (map compVal args)
+
+compVal :: CS.Value -> R.Expr
+compVal (CS.Var x) = R.Var x
+compVal (CS.Lit lit) = R.Lit lit
+compVal (CS.Tuple vs) = R.Tuple (map compVal vs)
+compVal (CS.Constr c locs _ vs _) = R.Constr c (map compLoc locs ++ map compVal vs)
+compVal (CS.Closure vs _ (CS.CodeName f locs _) recfs) =
+  R.Closure (map compLoc locs ++ map compVal vs) (R.CodeName f) recfs
   
-cgExpr myloc (CS.ValExpr (CS.Call f _ arg)) =
-  let actionF = cgVal f
-      actionArg = cgVal arg
-  in  (\ funMap env -> do
-          let _f = actionF funMap env
-          let _arg = actionArg funMap env
-          R.call funMap _f _arg )
-  
-cgExpr myloc (CS.ValExpr (CS.GenApp loc f _ arg)) =
-  let actionF = cgVal f
-      actionArg = cgVal arg
-      actionLoc = cgLoc loc 
-  in  (\ funMap env -> do
-          let _f = actionF funMap env
-          let _arg = actionArg funMap env
-          let _loc = actionLoc env
-  
-          if myloc == clientLocName then
-           case _loc of
-               R.Constr fLoc [] ->
-                 if myloc == fLoc then  R.apply funMap _f _arg
-                 else R.req funMap _f _arg
-               _ -> error $ "cgExpr: invalid location: " ++ show _loc
-  
-          else if myloc == serverLocName then
-           case _loc of
-               R.Constr fLoc [] ->
-                 if myloc == fLoc then  R.apply funMap _f _arg
-                 else R.call funMap _f _arg
-               _ -> error $ "cgExpr: invalid location: " ++ show _loc
-  
-          else error $ "cgExpr: invalid location: " ++ myloc )
+compVal (CS.TypeAbs _ expr recfs) = compExpr expr
 
-cgExpr myloc (CS.Let [CS.Binding _ x _ bexpr] expr) =
-  let actionBexpr = cgExpr myloc bexpr
-      actionExpr = cgExpr myloc expr
-  in (\ funMap env -> do
-          v <- actionBexpr funMap env
-          actionExpr funMap (env ++ [(x, v)]) )
+compVal v = error $ "[CodeGen:compVal] Unexpected value: " ++ show v
 
-cgExpr myloc (CS.Let bindDecls expr) = 
-  error $ "cgExpr: not a single binding in Let: " ++ show (length bindDecls)
+compBindDecl :: CS.BindingDecl -> R.BindingDecl
+compBindDecl (CS.Binding b x _ expr) =
+  R.Binding b x (compExpr expr)
 
-cgExpr myloc (CS.Case v _ alts) =
-  let actionV = cgVal v
-      actionAlts = cgAlts myloc alts
-  in  (\ funMap env -> do
-           let _v = actionV funMap env
-           actionCase _v actionAlts funMap env )
-  where
-    cgAlts myloc alts =
-       [ case alt of
-           CS.Alternative dname xs expr -> (Just dname, xs, cgExpr myloc expr)
-           CS.TupleAlternative xs expr -> (Nothing, xs, cgExpr myloc expr)
-       | alt <- alts ]
+compAlt :: CS.Alternative -> R.Alternative
+compAlt (CS.Alternative c xs expr) = R.Alternative c xs (compExpr expr)
+compAlt (CS.TupleAlternative xs expr) = R.TupleAlternative xs (compExpr expr)
 
-    actionCase v@(R.Constr cname args) actionAlts funMap env =
-      case [(xs, actionExpr)
-           | (Just dname, xs, actionExpr) <- actionAlts, cname==dname] of
-        ((xs, actionExpr):_)
-          | length args == length xs -> actionExpr funMap (env ++ zip xs args)
-          | otherwise -> error $ "cgExpr: arity mismatch in an alternative: "
-                           ++ show (length args) ++ " != " ++ show (length xs)
-        [] -> error $ "cgExpr: No matching alternative for: " ++ show v
-
-    actionCase (R.Tuple args) [(Nothing, xs, actionExpr)] funMap env
-      | length args == length xs = actionExpr funMap (env ++ zip xs args)
-      | otherwise = error $ "cgExpr: arity mismatch in a tuple alternative: "
-                               ++ show (length args) ++ " != " ++ show (length xs)
-       
-    actionCase (R.Tuple args) _ funMap env =
-      error $ "cgExpr: Not a single tuple alternative"
-      
-    actionCase v actionAlts funMap env =
-      error $ "cgExpr: No matching alternative for: " ++ show v
-
-cgExpr myloc (CS.App f _ arg) =
-  let actionF = cgVal f
-      actionArg = cgVal arg
-  in  (\ funMap env -> do
-          let _f = actionF funMap env
-          let _arg = actionArg funMap env
-          R.apply funMap _f _arg )
-  
-cgExpr myloc (CS.TypeApp f _ tyargs) =
-  let actionF = cgVal f
-  in  (\ funMap env -> do
-          let _f = actionF funMap env
-          return _f )
-
-cgExpr myloc (CS.LocApp f _ locargs) =
-  let actionF = cgVal f
-      actionLocargs = map cgLoc locargs
-  in  (\ funMap env -> do
-           let _f = actionF funMap env
-           let _locargs = map (\f -> f env) actionLocargs
-           foldl (\ action locval -> do
-                fval <- action
-                R.apply funMap fval locval) (return _f) _locargs )
-
-cgExpr myloc (CS.Prim op locargs _ args) =
-  let actionLocargs = map cgLoc locargs
-      actionArgs = map cgVal args
-  in  (\ funMap env -> do
-           let _locargs = map (\f -> f env) actionLocargs
-           let _args = map (\f -> f funMap env) actionArgs
-           R.prim op _locargs _args )
-
--- | cgVal
-
-cgVal :: CS.Value -> R.FunctionMap -> R.Env -> R.Value
-cgVal (CS.Var x) = \funMap env ->
-  case [ v | (y,v) <- env, x==y ] of
-    (v:_) -> v
-    [] -> error $ "cgVal: not found: " ++ x
-
-cgVal (CS.Lit lit) = \funMap env -> R.Lit lit
-
-cgVal (CS.Tuple vs) =
-  let fs = map cgVal vs in
-  (\ funMap env -> let runtime_vs = map (\f -> f funMap env) fs in R.Tuple runtime_vs )
-    
-
-cgVal (CS.Constr c locargs _ args _) =
-  let fs = map cgLoc locargs 
-      gs = map cgVal args
-  in (\ funMap env ->
-          let runtime_vs = map (\f -> f env) fs
-              runtime_ws = map (\g -> g funMap env) gs
-          in  R.Constr c $ runtime_vs ++ runtime_ws )
-
-cgVal (CS.Closure freevals _ (CS.CodeName f locs _) optrecf) =
-  let fs = map cgVal freevals
-      gs = map cgLoc locs
-  in  (\ funMap env ->
-           let runtime_vs = map (\f -> f funMap env) fs
-               runtime_ws = map (\g -> g env) gs
-           in  R.Closure (runtime_ws ++ runtime_vs) (R.CodeName f) optrecf ) -- Note: locvals first!!
-
--- | cgLoc
-
-cgLoc :: Location -> R.Env -> R.Value
-
-cgLoc (Location constloc) 
-  | constloc == clientLocName = \env -> R.Constr clientLocName []
-  | constloc == serverLocName = \env -> R.Constr serverLocName []
+compLoc :: Location -> R.Value
+compLoc (Location constloc) 
+  | constloc == clientLocName = R.Constr clientLocName []
+  | constloc == serverLocName = R.Constr serverLocName []
   | otherwise = error $ "cgLoc: not found: " ++ constloc
 
-cgLoc (LocVar x) = \env ->
-  case [ z | (y,z) <- env, x==y ] of
-    (w:_) -> w
-    [] -> error $ "cgLoc: not found: " ++ x
+compLoc (LocVar x) = R.Var x
+
 
 

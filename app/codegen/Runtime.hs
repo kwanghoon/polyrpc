@@ -4,8 +4,7 @@ module Runtime where
 
 import Literal
 import Prim
-
-import qualified CSExpr as TE
+import Location
 
 import qualified Data.Aeson as DA
 import Control.Monad.Trans.State.Lazy
@@ -16,35 +15,121 @@ import Text.JSON.Pretty
 
 import GHC.Generics
 
-data Value =
-    Lit Literal
+-- | Expressions
+
+data Expr =
+--    ValExpr Value
+  -- Compile-time value
+    Var String
+    
+  -- Runtime value
+  | Lit Literal
   | Tuple [Value]
   | Constr String [Value]
   | Closure [Value] CodeName [String] -- values mixed with location values
 
   -- Runtime value
   | Addr Integer
-  deriving (Show, Typeable, Data, Generic)
+  
+  -- Monadic value
+  | UnitM Value
+  | BindM [BindingDecl] Expr
+  | Req Value Value           -- Todo: Replace Req,Call,GenApp with proper exprs
+  | Call Value Value
+  | GenApp Value Value Value  -- ARGS: Location fun arg
 
-instance DA.FromJSON Value
-instance DA.ToJSON Value
+  -- Expression
+  | Let [BindingDecl] Expr
+  | Case Value [Alternative]  -- including pi_i (V)
+  | App Value Value
+--  | TypeApp Value Type [Type]
+--  | LocApp Value [Location]
+  | Prim PrimOp [Value] [Value]
+  deriving (Read, Show, Typeable, Data, Generic)
+
+instance DA.FromJSON PrimOp
+instance DA.ToJSON PrimOp
+
+instance DA.FromJSON Expr
+instance DA.ToJSON Expr
+
+data Alternative =
+    Alternative String [String] Expr
+  | TupleAlternative [String] Expr
+  deriving (Read, Show, Typeable, Data, Generic)
+
+instance DA.FromJSON Alternative
+instance DA.ToJSON Alternative
+
+data BindingDecl =
+    Binding Bool String Expr    -- isTop?
+    deriving (Read, Show, Typeable, Data, Generic)
+
+instance DA.FromJSON BindingDecl
+instance DA.ToJSON BindingDecl
+
+
+-- | Values
+
+type Value = Expr
+
+-- data Value =
+--   -- Compile-time value
+--     Var String
+    
+--   -- Runtime value
+--   | Lit Literal
+--   | Tuple [Value]
+--   | Constr String [Value]
+--   | Closure [Value] CodeName [String] -- values mixed with location values
+
+--   -- Runtime value
+--   | Addr Integer
+--   deriving (Read, Show, Typeable, Data, Generic)
+
+-- instance DA.FromJSON Value
+-- instance DA.ToJSON Value
 
 data CodeName =
     CodeName String    -- fname (no location values and no types)
-  deriving (Show, Typeable, Data, Generic)
+  deriving (Read, Show, Typeable, Data, Generic)
 
 instance DA.FromJSON CodeName
 instance DA.ToJSON CodeName
 
+
+-----------------------------
+-- | For static function map
+-----------------------------
+
 data Code =
     Code [String] OpenCode --  [free var or possibley free loc var]. OpenCode  (and no alphas)
+    deriving (Read, Show, Typeable, Data, Generic)
+
+data OpenCode =
+    CodeAbs [String] Expr -- normal or location value argument
+    deriving (Read, Show, Typeable, Data, Generic)
+    
+type FunctionMap = [(String, Code)]
+
+data FunctionStore = FunctionStore
+   { _clientstore :: FunctionMap
+   , _serverstore :: FunctionMap
+   }
+
+-----------------------------
+-- | For runtime function map
+-----------------------------
 
 type Env = [(String, Value)]
 
-data OpenCode =
-    CodeAbs [String] (Env -> Value -> RuntimeM Value) -- normal or location value argument
+data RuntimeCode =
+    RuntimeCode [String] RuntimeOpenCode --  [free var or possibley free loc var]. OpenCode  (and no alphas)
+    
+data RuntimeOpenCode =
+    RuntimeCodeAbs [String] (Env -> Value -> RuntimeM Value) -- normal or location value argument
 
-type FunctionMap = [(String, Code)]
+type RuntimeFunctionMap = [(String, RuntimeCode)]
 
 
 -- Constructor names
@@ -72,30 +157,30 @@ toJsonString :: Value -> String
 toJsonString v = render $ pp_value $ toJSON v
 
 -- Apply
-apply :: FunctionMap -> Value -> Value -> RuntimeM Value
+apply :: RuntimeFunctionMap -> Value -> Value -> RuntimeM Value
 apply funMap clo@(Closure freeVals (CodeName f) optrecf) w =  -- Tofix: optrecf !!
   case [ code | (g, code) <- funMap, f == g ] of
-    (Code fvars (CodeAbs [_] action) :_) ->
+    (RuntimeCode fvars (RuntimeCodeAbs [_] action) :_) ->
        let env = zip fvars freeVals ++
                  case optrecf of
                    [recf] -> [(recf,clo)]
                    _ -> []
        in  action env w
-    (Code fvars (CodeAbs xs action) :_) ->
+    (RuntimeCode fvars (RuntimeCodeAbs xs action) :_) ->
       error $ "apply: not a single argument in CodeAbs: " ++ show xs
     [] -> error $ "apply: not found in funMap: " ++ f
 
-req :: FunctionMap -> Value -> Value -> RuntimeM Value
+req :: RuntimeFunctionMap -> Value -> Value -> RuntimeM Value
 req funMap f arg = do
   send $ Constr reqName [f, arg]
   loop_req funMap
 
-call :: FunctionMap -> Value -> Value -> RuntimeM Value
+call :: RuntimeFunctionMap -> Value -> Value -> RuntimeM Value
 call funMap f arg = do
   send $ Constr callName [f, arg]
   loop_call funMap
 
-loop_req :: FunctionMap -> RuntimeM Value   -- A hack: Used FunctionMap instead of ()
+loop_req :: RuntimeFunctionMap -> RuntimeM Value   -- A hack: Used RuntimeFunctionMap instead of ()
 loop_req funMap = do
   x <- receive
   case x of
@@ -107,7 +192,7 @@ loop_req funMap = do
       send (Constr "UNIT" [w])
       loop_req funMap
 
-loop_call :: FunctionMap -> RuntimeM Value
+loop_call :: RuntimeFunctionMap -> RuntimeM Value
 loop_call funMap = do
   x <- receive
   case x of
@@ -119,7 +204,7 @@ loop_call funMap = do
       send (Constr "UNIT" [w])
       loop_call funMap
 
-loop_server :: FunctionMap -> RuntimeM ()
+loop_server :: RuntimeFunctionMap -> RuntimeM ()
 loop_server funMap = do
   x <- receive
   case x of
@@ -261,14 +346,122 @@ prim op locvals argvals = do
       error $ "[PrimOp] Unexpected: "
          ++ show operator ++ " " ++ show locs ++ " " ++ " " ++ show operands
 
--- Reading CS programs
-load_expr :: String -> IO TE.Expr
+-- Reading R programs
+load_expr :: String -> IO Expr
 load_expr fileName = do
   text <- readFile fileName
   return $ read text
 
-load_funstore :: String -> IO TE.FunctionMap
+load_funstore :: String -> IO FunctionMap
 load_funstore fileName = do
   text <- readFile fileName
   return $ read text
+
+-------------------------------------------------------------------------------
+-- | Interpreter for the untyped expressions
+-------------------------------------------------------------------------------
+
+interpFunMap :: String -> FunctionMap -> RuntimeFunctionMap
+interpFunMap myloc rFunMap = funMap
+  where
+    funMap = interpFunMap' myloc rFunMap funMap
+
+    interpFunMap' myloc rFunMap funMap =
+      [ (f, RuntimeCode fvvars (RuntimeCodeAbs ys action))
+      | (f, (Code fvvars (CodeAbs ys expr))) <- rFunMap,
+        let  action = codeAbsToPair myloc (CodeAbs ys expr)
+      ]
+
+    codeAbsToPair myloc (CodeAbs [x] expr) =
+      let actionExpr = interpExpr myloc expr in
+      (\env v -> actionExpr funMap (env ++ [(x,v)]))
+      
+    codeAbsToPair myloc (CodeAbs xs expr) =
+      error $ "interpFunMap: not a single arg var: " ++ show (length xs)
+
+interpExpr :: String -> Expr -> RuntimeFunctionMap -> Env -> RuntimeM Value
+interpExpr myloc (UnitM v) = \ runtimeFunMap env -> return (UnitM v)
+
+interpExpr myloc (BindM [Binding b x bexpr] expr) =
+  let actionBexpr = interpExpr myloc bexpr
+      actionExpr = interpExpr myloc expr
+  in  (\ runtimeFunMap env -> do
+          mValue <- actionBexpr runtimeFunMap env
+          case mValue of
+            UnitM bValue -> actionExpr runtimeFunMap (env ++ [(x, bValue)])
+            _ -> error $ "[Runtime:interpExpr] BindM: Not UnitM: " ++ show mValue )
+
+interpExpr myloc (BindM bindDecls expr) =
+ error $ "[Runtime:interpExpr] BindM: not a single binding: " ++ show (length bindDecls)
+
+interpExpr myloc (Req f arg) = \ runtimeFunMap env -> req runtimeFunMap f arg
+
+interpExpr myloc (Call f arg) = \ runtimeFunMap env -> call runtimeFunMap f arg
+
+interpExpr myloc (GenApp locval f arg) = \ runtimeFunMap env -> do
+  if myloc == clientLocName then
+    case locval of
+      Constr fLoc [] ->
+        if myloc == fLoc then apply runtimeFunMap f arg
+        else req runtimeFunMap f arg
+      _ -> error $ "[Runtime:interpExpr] GenApp@client: invalid location: " ++ show locval
+      
+  else if myloc == serverLocName then
+    case locval of
+      Constr fLoc [] ->
+        if myloc == fLoc then apply runtimeFunMap f arg
+        else call runtimeFunMap f arg
+      _ -> error $ "[Runtime:interpExpr] GenApp@server: invalid location: " ++ show locval
+
+  else error $ "[Runtime:interpExpr] GenApp: unknown location: " ++ myloc
+
+interpExpr myloc (Let [Binding b x bexpr] expr) =
+  let actionBexpr = interpExpr myloc bexpr
+      actionExpr = interpExpr myloc expr
+  in (\ runtimeFunMap env -> do
+         bValue <- actionBexpr runtimeFunMap env
+         actionExpr runtimeFunMap (env ++ [(x, bValue)]) )
+
+interpExpr myloc (Let bindDecls expr) =
+ error $ "[Runtime:interpExpr] BindM : not a single binding: " ++ show (length bindDecls)
+
+interpExpr myloc (Case value alts) =
+  let actionCaseVal = interpExpr myloc value
+      actionAlts = interpAlts myloc alts
+  in (\ runtimeFunMap env -> do 
+         v <- actionCaseVal runtimeFunMap env
+         actionCase v actionAlts runtimeFunMap env )
+  where
+    interpAlts myloc alts = 
+      [ case alt of 
+          Alternative dname xs expr -> (Just dname, xs, interpExpr myloc expr)
+          TupleAlternative xs expr -> (Nothing, xs, interpExpr myloc expr)
+      | alt <- alts ]
+
+    actionCase v@(Constr cname args) actionAlts runtimeFunMap env = 
+      case [ (xs, actionExpr)
+           | (Just dname, xs, actionExpr) <- actionAlts, cname==dname ] of
+        ((xs,actionExpr):_) 
+          | length args == length xs -> 
+              actionExpr runtimeFunMap (env ++ zip xs args)
+          | otherwise -> error $ "[Runtime:interpExpr] case alt: arity mismatch: "
+                           ++ show (length args) ++ " != " ++ show (length xs)
+        [] -> error $ "[Runtime:interpExpr] case alt: no match for: " ++ show v
+
+    actionCase v@(Tuple args) [(Nothing, xs, actionExpr)] runtimeFunMap env
+      | length args == length xs = actionExpr runtimeFunMap (env ++ zip xs args)
+      | otherwise = error $ "[Runtime:interpExpr] case alt: arity mismatch: "
+                      ++ show (length args) ++ " != " ++ show (length xs)
+
+    actionCase v@(Tuple args) _ runtimeFunMap env = 
+      error $ "[Runtime:interpExpr] Not a single tuple aternative"
+
+    actionCase v actionAlts runtimeFunMap env = 
+      error $ "[Runtime:interpExpr] Unexpected case value: " ++ show v
+
+interpExpr myloc (App f arg) =
+  (\ runtimeFunMap env -> apply runtimeFunMap f arg)
+
+interpExpr myloc (Prim op locvals argvals) = 
+  (\ runtimeFunMap env -> prim op locvals argvals)
 

@@ -2,6 +2,7 @@
 
 module Prim where
 
+import GHC.Generics
 import Text.JSON.Generic
 
 data PrimOp =
@@ -39,7 +40,7 @@ data PrimOp =
   -- | MkRecOp  -- MkRecOp closure f 
 -- For aeson  
 --  deriving (Show, Eq, Generic)
-  deriving (Eq, Read, Show, Typeable, Data)
+  deriving (Eq, Read, Show, Typeable, Data, Generic)
 
 -- Predefined type names
 unitType   = "Unit"

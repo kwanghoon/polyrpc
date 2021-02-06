@@ -6,3 +6,5 @@ mygrammar.grm
 mygrammar.grm.hash
 prod_rules.txt
 *.cs
+*.r
+*.json

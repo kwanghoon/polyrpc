@@ -22,6 +22,7 @@ import Simpl
 import Verify
 import Execute
 import CodeGen
+import qualified Runtime as R
 
 import Text.JSON.Generic
 import Text.JSON.Pretty
@@ -134,17 +135,19 @@ doProcess cmd file = do
   if _flag_code_gen cmd == True
   then do
     putStrLn "[Code generation]"
-    let csClientFile = prefixOf file ++ "_client.cs"
-    let csClientMainFile = prefixOf file ++ "_main.cs"
-    let csServerFile = prefixOf file ++ "_server.cs"
-    print_expr t_expr csClientMainFile
-    print_funstore (TE._clientstore funStore) csClientFile
-    print_funstore (TE._serverstore funStore) csServerFile
-  else
-    codeGen t_gti funStore t_expr
+    (r_funStore, r_expr) <- codeGen t_gti funStore t_expr
+    
+    let rClientFile = prefixOf file ++ "_client.r"
+    let rClientMainFile = prefixOf file ++ "_main.r"
+    let rServerFile = prefixOf file ++ "_server.r"
+    print_expr r_expr rClientMainFile
+    print_funstore (R._clientstore r_funStore) rClientFile
+    print_funstore (R._serverstore r_funStore) rServerFile
+  else do
+    return ()
 
   -- Execution
-  if _flag_code_gen cmd == False
+  if _flag_code_gen cmd == False && _flag_code_gen cmd == False
   then do
     putStrLn "[Executing codes]"
     v <- execute (_flag_debug_run cmd) t_gti funStore t_expr
@@ -187,11 +190,11 @@ print_cs_json fileName funStore t_expr = do
   writeFile jsonfile $ render
       $ pp_value $ toJSON (funStore :: TE.FunctionStore, t_expr :: TE.Expr)
 
-print_expr :: TE.Expr -> String -> IO ()
+print_expr :: R.Expr -> String -> IO ()
 print_expr expr fileName = do
   writeFile fileName $ show expr
   
-print_funstore :: TE.FunctionMap -> String -> IO ()
+print_funstore :: R.FunctionMap -> String -> IO ()
 print_funstore functionMap fileName = do
   writeFile fileName $ show functionMap
 
