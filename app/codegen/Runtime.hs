@@ -139,7 +139,9 @@ callName = "CALL"
 
 unitName = "UNIT"
 
--- send and receive
+---------------------------------------------------------------------
+-- | Common send and receive  in loop_req, loop_call, and loop_server
+---------------------------------------------------------------------
 send :: Value -> RuntimeM ()
 send v = do
   (mem, _send, _receive) <- get
@@ -153,6 +155,7 @@ receive = do
   (v, mem') <- liftIO $ _receive mem
   put (mem', _send, _receive)
   return v
+---------------------------------------------------------------------
 
 -- JSON
 toJsonString :: Value -> String
