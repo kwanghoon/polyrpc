@@ -73,23 +73,6 @@ instance DA.ToJSON BindingDecl
 
 type Value = Expr
 
--- data Value =
---   -- Compile-time value
---     Var String
-    
---   -- Runtime value
---   | Lit Literal
---   | Tuple [Value]
---   | Constr String [Value]
---   | Closure [Value] CodeName [String] -- values mixed with location values
-
---   -- Runtime value
---   | Addr Integer
---   deriving (Read, Show, Typeable, Data, Generic)
-
--- instance DA.FromJSON Value
--- instance DA.ToJSON Value
-
 data CodeName =
     CodeName String    -- fname (no location values and no types)
   deriving (Eq, Read, Show, Typeable, Data, Generic)
@@ -386,7 +369,31 @@ interpFunMap myloc rFunMap = funMap
       error $ "interpFunMap: not a single arg var: " ++ show (length xs)
 
 interpExpr :: String -> Expr -> RuntimeFunctionMap -> Env -> RuntimeM Value
-interpExpr myloc (UnitM v) = \ runtimeFunMap env -> return (UnitM v)
+
+interpExpr myloc (Var x) = \ runtimeFunMap env -> return $ doSubst env (Var x)
+
+interpExpr myloc (Lit lit) = \ runtimeFunMap env -> return $ Lit lit
+
+interpExpr myloc (Tuple vs) =
+  let actions = map (interpExpr myloc) vs
+  in  \ runtimeFunMap env -> do
+          closed_vs <- mapM (\ action -> action runtimeFunMap env ) actions
+          return $ Tuple closed_vs
+
+interpExpr myloc (Constr cname vs) =
+  let actions = map (interpExpr myloc) vs
+  in  \ runtimeFunMap env -> do
+          closed_vs <- mapM (\ action -> action runtimeFunMap env ) actions
+          return $ Constr cname closed_vs
+
+interpExpr myloc (Closure fvs codeName recf) =
+  let actions = map (interpExpr myloc) fvs
+  in  \ runtimeFunMap env -> do
+          closed_vs <- mapM (\ action -> action runtimeFunMap env ) actions
+          return $ Closure closed_vs codeName recf
+
+interpExpr myloc (UnitM v) =
+  \ runtimeFunMap env -> return $ UnitM (doSubst env v)
 
 interpExpr myloc (BindM [Binding b x bexpr] expr) =
   let actionBexpr = interpExpr myloc bexpr
@@ -400,23 +407,28 @@ interpExpr myloc (BindM [Binding b x bexpr] expr) =
 interpExpr myloc (BindM bindDecls expr) =
  error $ "[Runtime:interpExpr] BindM: not a single binding: " ++ show (length bindDecls)
 
-interpExpr myloc (Req f arg) = \ runtimeFunMap env -> req runtimeFunMap f arg
+interpExpr myloc (Req f arg) =
+  \ runtimeFunMap env -> req runtimeFunMap (doSubst env f) (doSubst env arg)
 
-interpExpr myloc (Call f arg) = \ runtimeFunMap env -> call runtimeFunMap f arg
+interpExpr myloc (Call f arg) =
+  \ runtimeFunMap env -> call runtimeFunMap (doSubst env f) (doSubst env arg)
 
 interpExpr myloc (GenApp locval f arg) = \ runtimeFunMap env -> do
+  let closedf = doSubst env f
+  let closedarg = doSubst env arg
+  
   if myloc == clientLocName then
     case locval of
       Constr fLoc [] ->
-        if myloc == fLoc then apply runtimeFunMap f arg
-        else req runtimeFunMap f arg
+        if myloc == fLoc then apply runtimeFunMap closedf closedarg
+        else req runtimeFunMap closedf closedarg
       _ -> error $ "[Runtime:interpExpr] GenApp@client: invalid location: " ++ show locval
       
   else if myloc == serverLocName then
     case locval of
       Constr fLoc [] ->
-        if myloc == fLoc then apply runtimeFunMap f arg
-        else call runtimeFunMap f arg
+        if myloc == fLoc then apply runtimeFunMap closedf closedarg
+        else call runtimeFunMap closedf closedarg
       _ -> error $ "[Runtime:interpExpr] GenApp@server: invalid location: " ++ show locval
 
   else error $ "[Runtime:interpExpr] GenApp: unknown location: " ++ myloc
@@ -466,8 +478,77 @@ interpExpr myloc (Case value alts) =
       error $ "[Runtime:interpExpr] Unexpected case value: " ++ show v
 
 interpExpr myloc (App f arg) =
-  (\ runtimeFunMap env -> apply runtimeFunMap f arg)
+  (\ runtimeFunMap env -> apply runtimeFunMap (doSubst env f) (doSubst env arg))
 
 interpExpr myloc (Prim op locvals argvals) = 
-  (\ runtimeFunMap env -> prim op locvals argvals)
+  (\ runtimeFunMap env -> prim op (map (doSubst env) locvals) (map (doSubst env) argvals))
 
+
+interpExpr myloc expr =
+  error $ "[Runtime:interpExpr] Unexpected: " ++ show expr
+
+-- | Substitution
+
+doSubst :: [(String,Value)] -> Expr -> Expr
+
+doSubst subst (Var x) =
+  case [ v | (y,v) <- subst, x==y ] of
+   (w : _) -> w
+   _ -> Var x
+
+doSubst subst (Lit lit) = Lit lit
+
+doSubst subst (Tuple vs) = Tuple (map (doSubst subst) vs)
+
+doSubst subst (Constr c vs) = Constr c (map (doSubst subst) vs)
+
+doSubst subst (Closure fvs codeName recfs) =
+  Closure (map (doSubst subst) fvs) codeName recfs
+
+doSubst subst (Addr i) = Addr i
+
+doSubst subst (UnitM v) = UnitM (doSubst subst v)
+
+doSubst subst (BindM bindDecls expr) =
+  let (subst1, bindDecls1) =
+        foldl (\ (subst0, binds0) (Binding istop x expr) ->
+           let subst1 = elim x subst0 in
+             (subst1, binds0 ++ [Binding istop x (doSubst subst1 expr)])
+        ) (subst, []) bindDecls
+  in  BindM bindDecls1 (doSubst subst1 expr)
+
+doSubst subst (Req f arg) = Req (doSubst subst f) (doSubst subst arg)
+
+doSubst subst (Call f arg) = Call (doSubst subst f) (doSubst subst arg)
+
+doSubst subst (GenApp locv f arg) =
+  GenApp (doSubst subst locv) (doSubst subst f) (doSubst subst arg)
+
+doSubst subst (Let bindDecls expr) =
+  let (subst1, bindDecls1) =
+        foldl (\ (subst0, binds0) (Binding istop x expr) ->
+           let subst1 = elim x subst0 in
+             (subst1, binds0 ++ [Binding istop x (doSubst subst1 expr)])
+        ) (subst, []) bindDecls
+  in  Let bindDecls1 (doSubst subst1 expr)
+
+doSubst subst (Case v [TupleAlternative xs expr]) =
+  let subst1 = elims xs subst
+  in  Case (doSubst subst v)
+        [ TupleAlternative xs (doSubst subst1 expr) ]
+
+doSubst subst (Case v alts) =
+  Case (doSubst subst v)
+     (map (\ (Alternative cname xs expr) ->
+             let subst1 = elims xs subst
+             in  Alternative cname xs (doSubst subst1 expr)) alts)
+
+doSubst subst (App f arg) = App (doSubst subst f) (doSubst subst arg)
+
+doSubst subst (Prim op locvs vs) =
+  Prim op (map (doSubst subst) locvs) (map (doSubst subst) vs)
+
+--
+elim x subst = [(y,e) | (y,e)<-subst, y/=x]
+
+elims xs subst = foldl (\subst0 x0 -> elim x0 subst0) subst xs

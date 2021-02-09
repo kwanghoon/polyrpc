@@ -54,8 +54,8 @@ map : {l1 l2}. [a b]. ((a -l1-> b) -l2-> List [a] -l2-> List [b])
 
 // - HTML
 
-nl : [a]. List [a]
-   = Nil;
+// nl : [a]. List [a]
+//    = Nil;
 
 cs : [a]. a -client-> List [a] -client-> List [a]
    = \w @ client

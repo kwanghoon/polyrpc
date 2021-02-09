@@ -42,14 +42,39 @@ compFunMap myloc csFunMap = funMap
 
 compExpr :: CS.Expr -> R.Expr  -- Todo: Compiling Req/Call/GenApp, you will need the current loc.
 
-compExpr (CS.ValExpr (CS.UnitM v)) = R.UnitM (compVal v)
+
+compExpr (CS.ValExpr (CS.UnitM v)) = compExpr' v
+  where
+    compExpr' (CS.TypeAbs _ (CS.ValExpr (CS.UnitM (CS.TypeAbs _ expr recf'))) recfs) = -- Todo: Missing to handle recfs?
+      compExpr expr
+      
+    compExpr' (CS.TypeAbs _ (CS.ValExpr (CS.UnitM v)) recfs) = -- Todo: Missing to handle recfs?
+      R.UnitM (compVal v) 
+
+    compExpr' (CS.TypeAbs _ (CS.ValExpr (CS.BindM bindDecls expr)) recfs) = 
+      R.BindM (map compBindDecl bindDecls) (compExpr expr)
+
+    compExpr' (CS.TypeAbs _ (CS.ValExpr (CS.Req f _ arg)) recfs) = 
+      R.Req (compVal f) (compVal arg)
+
+    compExpr' (CS.TypeAbs _ (CS.ValExpr (CS.Call f _ arg)) recfs) =
+      R.Call (compVal f) (compVal arg)
+
+    compExpr' (CS.TypeAbs _ (CS.ValExpr (CS.GenApp loc f _ arg)) recfs) =
+      R.GenApp (compLoc loc) (compVal f) (compVal arg)
+
+    compExpr' (CS.TypeAbs _ (CS.ValExpr v) recfs) = 
+      error $ "[codegen:compExpr'] ValExpr: Unexpected value: " ++ show v
+
+    compExpr' v = R.UnitM (compVal v)
+
 compExpr (CS.ValExpr (CS.BindM bindDecls expr)) =
   R.BindM (map compBindDecl bindDecls) (compExpr expr)
   
 compExpr (CS.ValExpr (CS.Req f _ arg)) = R.Req (compVal f) (compVal arg)
 compExpr (CS.ValExpr (CS.Call f _ arg)) = R.Call (compVal f) (compVal arg)
 compExpr (CS.ValExpr (CS.GenApp loc f _ arg)) = R.GenApp (compLoc loc) (compVal f) (compVal arg)
-compExpr (CS.ValExpr v) = error $ "[codegen:compVal] ValExpr: Unexpected value: " ++ show v
+compExpr (CS.ValExpr v) = error $ "[codegen:compExpr] ValExpr: Unexpected value: " ++ show v
 
 compExpr (CS.Let bindDecls expr) = R.Let (map compBindDecl bindDecls) (compExpr expr)
 compExpr (CS.Case v _ alts) = R.Case (compVal v) (map compAlt alts)
@@ -66,7 +91,7 @@ compVal (CS.Constr c locs _ vs _) = R.Constr c (map compLoc locs ++ map compVal 
 compVal (CS.Closure vs _ (CS.CodeName f locs _) recfs) =
   R.Closure (map compLoc locs ++ map compVal vs) (R.CodeName f) recfs
   
-compVal (CS.TypeAbs _ expr recfs) = compExpr expr
+compVal (CS.TypeAbs _ expr recfs) = compExpr expr  -- Todo: Missing to handle recfs?
 
 compVal v = error $ "[CodeGen:compVal] Unexpected value: " ++ show v
 
