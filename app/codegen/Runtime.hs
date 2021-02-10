@@ -370,32 +370,36 @@ interpFunMap myloc rFunMap = funMap
 
 interpExpr :: String -> Expr -> RuntimeFunctionMap -> Env -> RuntimeM Value
 
-interpExpr myloc (Var x) = \ runtimeFunMap env -> return $ doSubst env (Var x)
+interpExpr myloc expr = \ runtimeFunMap env -> do
+  liftIO $ putStrLn (take 200 $ show $ doSubst env expr)
+  interpExpr' myloc expr runtimeFunMap env
+  
+interpExpr' myloc (Var x) = \ runtimeFunMap env -> return $ doSubst env (Var x)
 
-interpExpr myloc (Lit lit) = \ runtimeFunMap env -> return $ Lit lit
+interpExpr' myloc (Lit lit) = \ runtimeFunMap env -> return $ Lit lit
 
-interpExpr myloc (Tuple vs) =
+interpExpr' myloc (Tuple vs) =
   let actions = map (interpExpr myloc) vs
   in  \ runtimeFunMap env -> do
           closed_vs <- mapM (\ action -> action runtimeFunMap env ) actions
           return $ Tuple closed_vs
 
-interpExpr myloc (Constr cname vs) =
+interpExpr' myloc (Constr cname vs) =
   let actions = map (interpExpr myloc) vs
   in  \ runtimeFunMap env -> do
           closed_vs <- mapM (\ action -> action runtimeFunMap env ) actions
           return $ Constr cname closed_vs
 
-interpExpr myloc (Closure fvs codeName recf) =
+interpExpr' myloc (Closure fvs codeName recf) =
   let actions = map (interpExpr myloc) fvs
   in  \ runtimeFunMap env -> do
           closed_vs <- mapM (\ action -> action runtimeFunMap env ) actions
           return $ Closure closed_vs codeName recf
 
-interpExpr myloc (UnitM v) =
+interpExpr' myloc (UnitM v) =
   \ runtimeFunMap env -> return $ UnitM (doSubst env v)
 
-interpExpr myloc (BindM [Binding b x bexpr] expr) =
+interpExpr' myloc (BindM [Binding b x bexpr] expr) =
   let actionBexpr = interpExpr myloc bexpr
       actionExpr = interpExpr myloc expr
   in  (\ runtimeFunMap env -> do
@@ -404,16 +408,16 @@ interpExpr myloc (BindM [Binding b x bexpr] expr) =
             UnitM bValue -> actionExpr runtimeFunMap (env ++ [(x, bValue)])
             _ -> error $ "[Runtime:interpExpr] BindM: Not UnitM: " ++ show mValue )
 
-interpExpr myloc (BindM bindDecls expr) =
+interpExpr' myloc (BindM bindDecls expr) =
  error $ "[Runtime:interpExpr] BindM: not a single binding: " ++ show (length bindDecls)
 
-interpExpr myloc (Req f arg) =
+interpExpr' myloc (Req f arg) =
   \ runtimeFunMap env -> req runtimeFunMap (doSubst env f) (doSubst env arg)
 
-interpExpr myloc (Call f arg) =
+interpExpr' myloc (Call f arg) =
   \ runtimeFunMap env -> call runtimeFunMap (doSubst env f) (doSubst env arg)
 
-interpExpr myloc (GenApp locval f arg) = \ runtimeFunMap env -> do
+interpExpr' myloc (GenApp locval f arg) = \ runtimeFunMap env -> do
   let closedf = doSubst env f
   let closedarg = doSubst env arg
   
@@ -433,17 +437,17 @@ interpExpr myloc (GenApp locval f arg) = \ runtimeFunMap env -> do
 
   else error $ "[Runtime:interpExpr] GenApp: unknown location: " ++ myloc
 
-interpExpr myloc (Let [Binding b x bexpr] expr) =
+interpExpr' myloc (Let [Binding b x bexpr] expr) =
   let actionBexpr = interpExpr myloc bexpr
       actionExpr = interpExpr myloc expr
   in (\ runtimeFunMap env -> do
          bValue <- actionBexpr runtimeFunMap env
          actionExpr runtimeFunMap (env ++ [(x, bValue)]) )
 
-interpExpr myloc (Let bindDecls expr) =
+interpExpr' myloc (Let bindDecls expr) =
  error $ "[Runtime:interpExpr] BindM : not a single binding: " ++ show (length bindDecls)
 
-interpExpr myloc (Case value alts) =
+interpExpr' myloc (Case value alts) =
   let actionCaseVal = interpExpr myloc value
       actionAlts = interpAlts myloc alts
   in (\ runtimeFunMap env -> do 
@@ -477,14 +481,14 @@ interpExpr myloc (Case value alts) =
     actionCase v actionAlts runtimeFunMap env = 
       error $ "[Runtime:interpExpr] Unexpected case value: " ++ show v
 
-interpExpr myloc (App f arg) =
+interpExpr' myloc (App f arg) =
   (\ runtimeFunMap env -> apply runtimeFunMap (doSubst env f) (doSubst env arg))
 
-interpExpr myloc (Prim op locvals argvals) = 
+interpExpr' myloc (Prim op locvals argvals) = 
   (\ runtimeFunMap env -> prim op (map (doSubst env) locvals) (map (doSubst env) argvals))
 
 
-interpExpr myloc expr =
+interpExpr' myloc expr =
   error $ "[Runtime:interpExpr] Unexpected: " ++ show expr
 
 -- | Substitution

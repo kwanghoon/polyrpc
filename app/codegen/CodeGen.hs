@@ -79,7 +79,7 @@ compExpr (CS.ValExpr v) = error $ "[codegen:compExpr] ValExpr: Unexpected value:
 compExpr (CS.Let bindDecls expr) = R.Let (map compBindDecl bindDecls) (compExpr expr)
 compExpr (CS.Case v _ alts) = R.Case (compVal v) (map compAlt alts)
 compExpr (CS.App f _ arg) = R.App (compVal f) (compVal arg)
-compExpr (CS.TypeApp f _ _) = compVal f
+compExpr (CS.TypeApp f _ _) = R.UnitM $ compVal f
 compExpr (CS.LocApp f _ locs) = foldl (\ f v -> R.App f v) (compVal f) (map compLoc locs)
 compExpr (CS.Prim op locs _ args) = R.Prim op (map compLoc locs) (map compVal args)
 
