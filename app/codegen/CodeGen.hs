@@ -40,69 +40,64 @@ compFunMap myloc csFunMap = funMap
     codeAbsToPair myloc (CS.CodeLocAbs locvars expr) =
       error $ "compFunMap: not a single loc var: " ++ show (length locvars)
 
-compExpr :: CS.Expr -> R.Expr  -- Todo: Compiling Req/Call/GenApp, you will need the current loc.
+-- | Expression
 
+compExpr :: CS.Expr -> R.Expr 
 
-compExpr (CS.ValExpr (CS.UnitM v)) = compExpr' v
-  where
-    compExpr' (CS.TypeAbs _ (CS.ValExpr (CS.UnitM (CS.TypeAbs _ expr recf'))) recfs) = -- Todo: Missing to handle recfs?
-      compExpr expr
-      
-    compExpr' (CS.TypeAbs _ (CS.ValExpr (CS.UnitM v)) recfs) = -- Todo: Missing to handle recfs?
-      R.UnitM (compVal v) 
-
-    compExpr' (CS.TypeAbs _ (CS.ValExpr (CS.BindM bindDecls expr)) recfs) = 
-      R.BindM (map compBindDecl bindDecls) (compExpr expr)
-
-    compExpr' (CS.TypeAbs _ (CS.ValExpr (CS.Req f _ arg)) recfs) = 
-      R.Req (compVal f) (compVal arg)
-
-    compExpr' (CS.TypeAbs _ (CS.ValExpr (CS.Call f _ arg)) recfs) =
-      R.Call (compVal f) (compVal arg)
-
-    compExpr' (CS.TypeAbs _ (CS.ValExpr (CS.GenApp loc f _ arg)) recfs) =
-      R.GenApp (compLoc loc) (compVal f) (compVal arg)
-
-    compExpr' (CS.TypeAbs _ (CS.ValExpr v) recfs) = 
-      error $ "[codegen:compExpr'] ValExpr: Unexpected value: " ++ show v
-
-    compExpr' v = R.UnitM (compVal v)
-
-compExpr (CS.ValExpr (CS.BindM bindDecls expr)) =
-  R.BindM (map compBindDecl bindDecls) (compExpr expr)
-  
-compExpr (CS.ValExpr (CS.Req f _ arg)) = R.Req (compVal f) (compVal arg)
-compExpr (CS.ValExpr (CS.Call f _ arg)) = R.Call (compVal f) (compVal arg)
-compExpr (CS.ValExpr (CS.GenApp loc f _ arg)) = R.GenApp (compLoc loc) (compVal f) (compVal arg)
-compExpr (CS.ValExpr v) = error $ "[codegen:compExpr] ValExpr: Unexpected value: " ++ show v
+compExpr (CS.ValExpr v) = compVal v
 
 compExpr (CS.Let bindDecls expr) = R.Let (map compBindDecl bindDecls) (compExpr expr)
+
 compExpr (CS.Case v _ alts) = R.Case (compVal v) (map compAlt alts)
+
 compExpr (CS.App f _ arg) = R.App (compVal f) (compVal arg)
-compExpr (CS.TypeApp f _ _) = R.UnitM $ compVal f
+
+compExpr (CS.TypeApp f _ _) = R.Let [R.Binding False xName (compVal f)] (R.UnitM (R.Var xName))
+
 compExpr (CS.LocApp f _ locs) = foldl (\ f v -> R.App f v) (compVal f) (map compLoc locs)
+
 compExpr (CS.Prim op locs _ args) = R.Prim op (map compLoc locs) (map compVal args)
 
+
+-- | value
+
 compVal :: CS.Value -> R.Expr
+
 compVal (CS.Var x) = R.Var x
+
 compVal (CS.Lit lit) = R.Lit lit
+
 compVal (CS.Tuple vs) = R.Tuple (map compVal vs)
+
 compVal (CS.Constr c locs _ vs _) = R.Constr c (map compLoc locs ++ map compVal vs)
+
 compVal (CS.Closure vs _ (CS.CodeName f locs _) recfs) =
   R.Closure (map compLoc locs ++ map compVal vs) (R.CodeName f) recfs
   
-compVal (CS.TypeAbs _ expr recfs) = compExpr expr  -- Todo: Missing to handle recfs?
+compVal (CS.TypeAbs _ expr recfs) = R.BindM [R.Binding False xName (compExpr expr)] (R.Var xName)
 
-compVal v = error $ "[CodeGen:compVal] Unexpected value: " ++ show v
+compVal (CS.UnitM v) = R.UnitM (compVal v)
 
+compVal (CS.BindM bindDecls expr) =
+  R.BindM (map compBindDecl bindDecls) (compExpr expr)
+
+compVal (CS.Req f _ arg) = R.Req (compVal f) (compVal arg)
+
+compVal (CS.Call f _ arg) = R.Call (compVal f) (compVal arg)
+
+compVal (CS.GenApp loc f _ arg) = R.GenApp (compLoc loc) (compVal f) (compVal arg)
+
+-- | binding declaration
 compBindDecl :: CS.BindingDecl -> R.BindingDecl
 compBindDecl (CS.Binding b x _ expr) =
   R.Binding b x (compExpr expr)
 
+-- | alternatives
 compAlt :: CS.Alternative -> R.Alternative
 compAlt (CS.Alternative c xs expr) = R.Alternative c xs (compExpr expr)
 compAlt (CS.TupleAlternative xs expr) = R.TupleAlternative xs (compExpr expr)
 
+-- | location
 compLoc :: Location -> R.Value
 compLoc (Location constloc) 
   | constloc == clientLocName = R.Constr clientLocName []
@@ -111,5 +106,7 @@ compLoc (Location constloc)
 
 compLoc (LocVar x) = R.Var x
 
+-- | a new variable name
+xName = "cg$x"
 
 
