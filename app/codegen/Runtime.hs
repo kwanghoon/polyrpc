@@ -427,22 +427,23 @@ interpExpr' myloc (Call f arg) =
   \ runtimeFunMap env -> call runtimeFunMap (doSubst env f) (doSubst env arg)
 
 interpExpr' myloc (GenApp locval f arg) = \ runtimeFunMap env -> do
+  let closedlocval = doSubst env locval
   let closedf = doSubst env f
   let closedarg = doSubst env arg
   
   if myloc == clientLocName then
-    case locval of
+    case closedlocval of
       Constr fLoc [] ->
         if myloc == fLoc then apply runtimeFunMap closedf closedarg
         else req runtimeFunMap closedf closedarg
-      _ -> error $ "[Runtime:interpExpr] GenApp@client: invalid location: " ++ show locval
+      _ -> error $ "[Runtime:interpExpr] GenApp@client: invalid location: " ++ show closedlocval
       
   else if myloc == serverLocName then
-    case locval of
+    case closedlocval of
       Constr fLoc [] ->
         if myloc == fLoc then apply runtimeFunMap closedf closedarg
         else call runtimeFunMap closedf closedarg
-      _ -> error $ "[Runtime:interpExpr] GenApp@server: invalid location: " ++ show locval
+      _ -> error $ "[Runtime:interpExpr] GenApp@server: invalid location: " ++ show closedlocval
 
   else error $ "[Runtime:interpExpr] GenApp: unknown location: " ++ myloc
 
@@ -486,6 +487,14 @@ interpExpr' myloc (Case value alts) =
 
     actionCase v@(Tuple args) _ runtimeFunMap env = 
       error $ "[Runtime:interpExpr] Not a single tuple aternative"
+
+    actionCase v@(Lit (BoolLit b))
+      [(Just b1, [], actionExpr1), (Just b2, [], actionExpr2)] runtimeFunMap env =
+      let text_b = show b in
+        if text_b==b1 then actionExpr1 runtimeFunMap env
+        else if text_b==b2 then actionExpr2 runtimeFunMap env
+        else error $ "[Runtime:interpExpr] Unexpected boolean aternative: "
+                        ++ b1 ++ " and " ++ b2
 
     actionCase v actionAlts runtimeFunMap env = 
       error $ "[Runtime:interpExpr] Unexpected case value: " ++ show v
