@@ -173,13 +173,13 @@ loop_req funMap = do
   x <- receive
   case x of
     Constr "UNIT" [v] ->
-      return $ UnitM v
+      return $ v
       
     Constr "CALL" [f, arg] -> do
       w <- apply funMap f arg
       case w of
         UnitM warg -> do
-          send (Constr "UNIT" [warg])
+          send (Constr "UNIT" [w])  -- i.e., UNIT (UnitM value)
           loop_req funMap
         _ -> error $ "[Runtime:loop_req] UnitM: Unexpected: " ++ show w
 
@@ -188,13 +188,13 @@ loop_call funMap = do
   x <- receive
   case x of
     Constr "UNIT" [v] ->
-      return $ UnitM v
+      return $ v
       
     Constr "REQ" [f, arg] -> do
       w <- apply funMap f arg
       case w of
-        UnitM wag -> do
-          send (Constr "UNIT" [w])
+        UnitM warg -> do
+          send (Constr "UNIT" [w])  -- i.e., UNIT (UnitM value)
           loop_call funMap
         _ -> error $ "[Runtime:loop_call] UnitM: Unexpected: " ++ show w
 
@@ -206,7 +206,7 @@ loop_server funMap = do
       w <- apply funMap f arg
       case w of
         UnitM warg -> do
-          send (Constr "UNIT" [w])
+          send (Constr "UNIT" [w])  -- i.e., UNIT (UnitM value)
           loop_server funMap
         _ -> error $ "[Runtime:loop_server] UnitM: Unexpected: " ++ show w
 
