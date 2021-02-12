@@ -63,7 +63,7 @@ compFunMap myloc csFunMap = do compFunMap' myloc csFunMap
   where
     compFunMap' myloc csFunMap = do
       foldM (\ r_FunMap (f, (_, CS.Code locvars _ xs opencode)) -> do
-        let fvvars = locvars ++ xs
+        let fvvars = xs ++ locvars
         (ys, expr) <- codeAbsToPair myloc opencode
         return $ r_FunMap ++ [(f, R.Code fvvars (R.CodeAbs ys expr))] ) [] csFunMap
 
@@ -138,7 +138,7 @@ compVal (CS.Constr c locs _ vs _) = do
 compVal (CS.Closure vs _ (CS.CodeName f locs _) recfs) = do
   let r_locs = map compLoc locs
   ( r_vs, ctx_vs ) <- compVals vs
-  return (R.Closure (r_locs ++ r_vs) (R.CodeName f) recfs, ctx_vs)
+  return (R.Closure (r_vs ++ r_locs) (R.CodeName f) recfs, ctx_vs)
   
 compVal (CS.TypeAbs _ expr recfs) = do
   (r_expr, ctx_expr) <- compExpr expr

@@ -187,7 +187,7 @@ loop_req funMap = do
           loop_req funMap
         _ -> error $ "[Runtime:loop_req] UnitM: Unexpected: " ++ show w
 
-    _ -> error $ "[Runtime:loop_req] Unexpected: neither UNIT nor CALL" ++ show x
+    _ -> error $ "[Runtime:loop_req] Unexpected: neither UNIT nor CALL: " ++ show x
 
 loop_call :: RuntimeFunctionMap -> RuntimeM Value
 loop_call funMap = do
@@ -204,7 +204,7 @@ loop_call funMap = do
           loop_call funMap
         _ -> error $ "[Runtime:loop_call] UnitM: Unexpected: " ++ show w
 
-    _ -> error $ "[Runtime:loop_req] Unexpected: neither UNIT nor REQ" ++ show x
+    _ -> error $ "[Runtime:loop_call] Unexpected: neither UNIT nor REQ: " ++ show x
 
 loop_server :: RuntimeFunctionMap -> RuntimeM ()
 loop_server funMap = do
@@ -218,7 +218,7 @@ loop_server funMap = do
           loop_server funMap
         _ -> error $ "[Runtime:loop_server] UnitM: Unexpected: " ++ show w
 
-    _ -> error $ "[Runtime:loop_req] Unexpected: Not REQ" ++ show x
+    _ -> error $ "[Runtime:loop_server] Unexpected: Not REQ: " ++ show x
 
 
 -- | Memory
