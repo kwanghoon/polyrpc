@@ -199,11 +199,11 @@ compAlts alts = do
 compAlt :: CS.Alternative -> NameGen (R.Alternative, Context)
 compAlt (CS.Alternative c xs expr) = do
   (r_expr, ctx) <- compExpr expr
-  return (R.Alternative c xs r_expr, ctx)
+  return (R.Alternative c xs (ctx r_expr), ctxID)
   
 compAlt (CS.TupleAlternative xs expr) = do
   (r_expr, ctx) <- compExpr expr
-  return (R.TupleAlternative xs r_expr, ctx)
+  return (R.TupleAlternative xs (ctx r_expr), ctxID)
 
 -- | location
 compLoc :: Location -> R.Value

@@ -149,14 +149,18 @@ apply :: RuntimeFunctionMap -> Value -> Value -> RuntimeM Value
 apply funMap clo@(Closure freeVals (CodeName f) optrecf) w =  -- Tofix: optrecf !!
   case [ code | (g, code) <- funMap, f == g ] of
     (RuntimeCode fvars (RuntimeCodeAbs [_] action) :_) ->
-       let env = zip fvars freeVals ++
-                 case optrecf of
-                   [recf] -> [(recf,clo)]
-                   _ -> []
+       let recenv = case optrecf of
+                      [recf] -> [(recf,clo)]
+                      _ -> []
+           closed_freeVals = map (doSubst recenv) freeVals
+           env = zip fvars closed_freeVals 
        in  action env w
     (RuntimeCode fvars (RuntimeCodeAbs xs action) :_) ->
       error $ "apply: not a single argument in CodeAbs: " ++ show xs
     [] -> error $ "apply: not found in funMap: " ++ f
+
+apply funMap clo w = 
+  error $ "apply: not a closure: " ++ show clo ++ ", " ++ show w
 
 req :: RuntimeFunctionMap -> Value -> Value -> RuntimeM Value
 req funMap f arg = do
@@ -183,6 +187,8 @@ loop_req funMap = do
           loop_req funMap
         _ -> error $ "[Runtime:loop_req] UnitM: Unexpected: " ++ show w
 
+    _ -> error $ "[Runtime:loop_req] Unexpected: neither UNIT nor CALL" ++ show x
+
 loop_call :: RuntimeFunctionMap -> RuntimeM Value
 loop_call funMap = do
   x <- receive
@@ -198,6 +204,8 @@ loop_call funMap = do
           loop_call funMap
         _ -> error $ "[Runtime:loop_call] UnitM: Unexpected: " ++ show w
 
+    _ -> error $ "[Runtime:loop_req] Unexpected: neither UNIT nor REQ" ++ show x
+
 loop_server :: RuntimeFunctionMap -> RuntimeM ()
 loop_server funMap = do
   x <- receive
@@ -209,6 +217,9 @@ loop_server funMap = do
           send (Constr "UNIT" [w])  -- i.e., UNIT (UnitM value)
           loop_server funMap
         _ -> error $ "[Runtime:loop_server] UnitM: Unexpected: " ++ show w
+
+    _ -> error $ "[Runtime:loop_req] Unexpected: Not REQ" ++ show x
+
 
 -- | Memory
 
@@ -372,97 +383,126 @@ interpFunMap myloc rFunMap = funMap
 
     codeAbsToPair myloc (CodeAbs [x] expr) =
       let actionExpr = interpExpr myloc expr in
-      (\env v -> actionExpr funMap (env ++ [(x,v)]))
+      (\env v -> actionExpr funMap ([(x,v)] ++ env))
       
     codeAbsToPair myloc (CodeAbs xs expr) =
       error $ "interpFunMap: not a single arg var: " ++ show (length xs)
 
 interpExpr :: String -> Expr -> RuntimeFunctionMap -> Env -> RuntimeM Value
 
-interpExpr myloc expr = \ runtimeFunMap env -> do
-  liftIO $ putStrLn (take 200 $ show $ doSubst env expr)
-  interpExpr' myloc expr runtimeFunMap env
+interpExpr myloc expr =
+  \ runtimeFunMap env -> do
+      -- liftIO $ putStrLn ({- take 200 $ -} show $ doSubst env expr)
+      interpExpr' myloc expr runtimeFunMap env
   
-interpExpr' myloc (Var x) = \ runtimeFunMap env -> return $ doSubst env (Var x)
+interpExpr' myloc (Var x) =
+  \ runtimeFunMap env -> do
+      let v = doSubst env (Var x)
+      return v
 
 interpExpr' myloc (Lit lit) = \ runtimeFunMap env -> return $ Lit lit
 
 interpExpr' myloc (Tuple vs) =
-  let actions = map (interpExpr myloc) vs
-  in  \ runtimeFunMap env -> do
-          closed_vs <- mapM (\ action -> action runtimeFunMap env ) actions
-          return $ Tuple closed_vs
+  \ runtimeFunMap env -> do
+      let closed_vs = map (doSubst env) vs
+      return $ Tuple closed_vs
 
 interpExpr' myloc (Constr cname vs) =
-  let actions = map (interpExpr myloc) vs
-  in  \ runtimeFunMap env -> do
-          closed_vs <- mapM (\ action -> action runtimeFunMap env ) actions
-          return $ Constr cname closed_vs
+  \ runtimeFunMap env -> do
+      let closed_vs = map (doSubst env) vs
+      return $ Constr cname closed_vs
 
 interpExpr' myloc (Closure fvs codeName recf) =
-  let actions = map (interpExpr myloc) fvs
-  in  \ runtimeFunMap env -> do
-          closed_vs <- mapM (\ action -> action runtimeFunMap env ) actions
-          return $ Closure closed_vs codeName recf
+  \ runtimeFunMap env -> do
+      let closed_fvs = map (doSubst env) fvs
+      return $ Closure closed_fvs codeName recf
 
 interpExpr' myloc (UnitM v) =
-  \ runtimeFunMap env -> return $ UnitM (doSubst env v)
+  \ runtimeFunMap env -> do
+      liftIO $ putStrLn $ show $ doSubst env (UnitM v)
+
+      let closed_v = doSubst env v
+      return $ UnitM closed_v   -- (doSubst env v)
 
 interpExpr' myloc (BindM [Binding b x bexpr] expr) =
   let actionBexpr = interpExpr myloc bexpr
       actionExpr = interpExpr myloc expr
-  in  (\ runtimeFunMap env -> do
-          mValue <- actionBexpr runtimeFunMap env
-          case mValue of
-            UnitM bValue -> actionExpr runtimeFunMap (env ++ [(x, bValue)])
-            _ -> error $ "[Runtime:interpExpr] BindM: Not UnitM: " ++ show mValue )
+  in 
+  \ runtimeFunMap env -> do
+      liftIO $ putStrLn $ show (Binding b x (doSubst env (bexpr)))
+  
+      mValue <- actionBexpr runtimeFunMap env
+      case mValue of
+        UnitM bValue -> actionExpr runtimeFunMap ([(x, bValue)] ++ env)
+        _ -> error $ "[Runtime:interpExpr] BindM: Not UnitM: " ++ show mValue
 
 interpExpr' myloc (BindM bindDecls expr) =
  error $ "[Runtime:interpExpr] BindM: not a single binding: " ++ show (length bindDecls)
 
 interpExpr' myloc (Req f arg) =
-  \ runtimeFunMap env -> req runtimeFunMap (doSubst env f) (doSubst env arg)
+  \ runtimeFunMap env -> do
+     liftIO $ putStrLn $ show (doSubst env (Req f arg))
+     
+     let closed_f = doSubst env f 
+     let closed_arg = doSubst env arg
+     req runtimeFunMap closed_f closed_arg   -- (doSubst env f) (doSubst env arg)
 
 interpExpr' myloc (Call f arg) =
-  \ runtimeFunMap env -> call runtimeFunMap (doSubst env f) (doSubst env arg)
+  \ runtimeFunMap env -> do
+     liftIO $ putStrLn $ show (doSubst env (Call f arg))
+     
+     let closed_f = doSubst env f
+     let closed_arg = doSubst env arg
+     call runtimeFunMap closed_f closed_arg  -- (doSubst env f) (doSubst env arg)
 
-interpExpr' myloc (GenApp locval f arg) = \ runtimeFunMap env -> do
-  let closedlocval = doSubst env locval
-  let closedf = doSubst env f
-  let closedarg = doSubst env arg
+interpExpr' myloc (GenApp locval f arg) =
+  \ runtimeFunMap env -> do
+     liftIO $ putStrLn $ show (doSubst env (GenApp locval f arg))
+     
+     let closed_locval = doSubst env locval
+     let closed_f = doSubst env f
+     let closed_arg = doSubst env arg
   
-  if myloc == clientLocName then
-    case closedlocval of
-      Constr fLoc [] ->
-        if myloc == fLoc then apply runtimeFunMap closedf closedarg
-        else req runtimeFunMap closedf closedarg
-      _ -> error $ "[Runtime:interpExpr] GenApp@client: invalid location: " ++ show closedlocval
+     if myloc == clientLocName then
+       case closed_locval of
+         Constr fLoc [] ->
+           if myloc == fLoc then apply runtimeFunMap closed_f closed_arg
+           else req runtimeFunMap closed_f closed_arg
+         _ -> error $ "[Runtime:interpExpr] GenApp@client: invalid location: " ++ show closed_locval
       
-  else if myloc == serverLocName then
-    case closedlocval of
-      Constr fLoc [] ->
-        if myloc == fLoc then apply runtimeFunMap closedf closedarg
-        else call runtimeFunMap closedf closedarg
-      _ -> error $ "[Runtime:interpExpr] GenApp@server: invalid location: " ++ show closedlocval
+     else if myloc == serverLocName then
+       case closed_locval of
+         Constr fLoc [] ->
+           if myloc == fLoc then apply runtimeFunMap closed_f closed_arg
+           else call runtimeFunMap closed_f closed_arg
+         _ -> error $ "[Runtime:interpExpr] GenApp@server: invalid location: " ++ show closed_locval
 
-  else error $ "[Runtime:interpExpr] GenApp: unknown location: " ++ myloc
+     else error $ "[Runtime:interpExpr] GenApp: unknown location: " ++ myloc
 
 interpExpr' myloc (Let [Binding b x bexpr] expr) =
   let actionBexpr = interpExpr myloc bexpr
       actionExpr = interpExpr myloc expr
-  in (\ runtimeFunMap env -> do
-         bValue <- actionBexpr runtimeFunMap env
-         actionExpr runtimeFunMap (env ++ [(x, bValue)]) )
+  in
+  \ runtimeFunMap env -> do
+      liftIO $ putStrLn $ show (Binding b x (doSubst env (bexpr)))
+  
+      bValue <- actionBexpr runtimeFunMap env
+      actionExpr runtimeFunMap ([(x, bValue)] ++ env)
 
 interpExpr' myloc (Let bindDecls expr) =
  error $ "[Runtime:interpExpr] BindM : not a single binding: " ++ show (length bindDecls)
 
 interpExpr' myloc (Case value alts) =
-  let actionCaseVal = interpExpr myloc value
-      actionAlts = interpAlts myloc alts
-  in (\ runtimeFunMap env -> do 
-         v <- actionCaseVal runtimeFunMap env
-         actionCase v actionAlts runtimeFunMap env )
+  let actionAlts = interpAlts myloc alts
+  in
+  \ runtimeFunMap env -> do 
+      liftIO $ putStrLn $ show $ doSubst env $ Case value []
+      liftIO $ mapM_ (\alt -> case alt of
+                                Alternative c xs _ -> putStrLn $ " " ++ c ++ " " ++ show xs
+                                TupleAlternative xs _ -> putStrLn $ " " ++ show xs) alts
+  
+      let v = doSubst env value -- actionCaseVal runtimeFunMap env
+      actionCase v actionAlts runtimeFunMap env
   where
     interpAlts myloc alts = 
       [ case alt of 
@@ -474,14 +514,14 @@ interpExpr' myloc (Case value alts) =
       case [ (xs, actionExpr)
            | (Just dname, xs, actionExpr) <- actionAlts, cname==dname ] of
         ((xs,actionExpr):_) 
-          | length args == length xs -> 
-              actionExpr runtimeFunMap (env ++ zip xs args)
+          | length args == length xs -> do
+              actionExpr runtimeFunMap (zip xs args ++ env)
           | otherwise -> error $ "[Runtime:interpExpr] case alt: arity mismatch: "
                            ++ show (length args) ++ " != " ++ show (length xs)
         [] -> error $ "[Runtime:interpExpr] case alt: no match for: " ++ show v
 
     actionCase v@(Tuple args) [(Nothing, xs, actionExpr)] runtimeFunMap env
-      | length args == length xs = actionExpr runtimeFunMap (env ++ zip xs args)
+      | length args == length xs = actionExpr runtimeFunMap (zip xs args ++ env)
       | otherwise = error $ "[Runtime:interpExpr] case alt: arity mismatch: "
                       ++ show (length args) ++ " != " ++ show (length xs)
 
@@ -500,11 +540,20 @@ interpExpr' myloc (Case value alts) =
       error $ "[Runtime:interpExpr] Unexpected case value: " ++ show v
 
 interpExpr' myloc (App f arg) =
-  (\ runtimeFunMap env -> apply runtimeFunMap (doSubst env f) (doSubst env arg))
+  \ runtimeFunMap env -> do
+      liftIO $ putStrLn $ show $ doSubst env $ App f arg
+      
+      let closed_f = doSubst env f
+      let closed_arg = doSubst env arg
+      apply runtimeFunMap closed_f closed_arg
 
 interpExpr' myloc (Prim op locvals argvals) = 
-  (\ runtimeFunMap env -> prim op (map (doSubst env) locvals) (map (doSubst env) argvals))
-
+  \ runtimeFunMap env -> do
+      liftIO $ putStrLn $ show $ doSubst env $ Prim op locvals argvals
+      
+      let closed_locvals = map (doSubst env) locvals
+      let closed_argvals = map (doSubst env) argvals
+      prim op closed_locvals closed_argvals
 
 interpExpr' myloc expr =
   error $ "[Runtime:interpExpr] Unexpected: " ++ show expr
