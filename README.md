@@ -40,7 +40,7 @@ Hello World
 
  
 ### Web runtime systems for PolyRPC
- - [A web runtime system in Haskell](https://github.com/todomvc)
+ - [A web runtime system in Haskell](https://github.com/kwanghoon/todomvc)
  - [An experimental web runtime system in Scala by Bob Reynders](https://github.com/tzbob/rrpc)
 
 
