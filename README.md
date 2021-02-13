@@ -39,7 +39,8 @@ Hello World
    - The algorithm is slightly extended for the predicative System F calculus with the polymorphic location constructs, and is implemented as in the [bidi-polyloc branch](https://github.com/kwanghoon/bidi/tree/polyloc).
 
  
-### A web runtime system
+### Web runtime systems for PolyRPC
+ - [A web runtime system in Haskell](https://github.com/todomvc)
  - [An experimental web runtime system in Scala by Bob Reynders](https://github.com/tzbob/rrpc)
 
 
