@@ -205,12 +205,20 @@ view : Model -client-> Html [Msg]
             // let { tds: List [TodoItem] = (! {server} ref) }
               Element "div" nlA
               (csH (header str)
+	      (csH (Element "link"
+	        (csA (Attribute "rel" "stylesheet")
+	        (csA (Attribute "href" "r/index.css")
+		nlA)) nlH)
               (csH (showList visibleList)
               (csH (footer (count {client} 
                 (filter {client} 
                   (\ti @ client. case ti { TodoItem txt done e => if done then False else True })
                   visibleList)))
-              nlH)))
+	      (csH (Element "link"
+	        (csA (Attribute "rel" "stylesheet")
+	        (csA (Attribute "href" "r/base.css")
+		nlA)) nlH)
+              nlH)))))
 
             // end
           };
