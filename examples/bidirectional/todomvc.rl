@@ -204,21 +204,21 @@ view : Model -client-> Html [Msg]
           case m { Content str visibleList ref =>
             // let { tds: List [TodoItem] = (! {server} ref) }
               Element "div" nlA
+	      // (csH (Element "link"
+	        // (csA (Attribute "rel" "stylesheet")
+	        // (csA (Attribute "href" "r/index.css")
+		// nlA)) nlH)
               (csH (header str)
-	      (csH (Element "link"
-	        (csA (Attribute "rel" "stylesheet")
-	        (csA (Attribute "href" "r/index.css")
-		nlA)) nlH)
               (csH (showList visibleList)
               (csH (footer (count {client} 
                 (filter {client} 
                   (\ti @ client. case ti { TodoItem txt done e => if done then False else True })
                   visibleList)))
-	      (csH (Element "link"
-	        (csA (Attribute "rel" "stylesheet")
-	        (csA (Attribute "href" "r/base.css")
-		nlA)) nlH)
-              nlH)))))
+	      // (csH (Element "link"
+	      //  (csA (Attribute "rel" "stylesheet")
+	      //  (csA (Attribute "href" "r/base.css")
+	      //	nlA)) nlH)
+              nlH))) // ))
 
             // end
           };
@@ -300,5 +300,5 @@ init : Model
      = Content "" (! {server} serverModel) serverModel;
 
 main : Page [Model Msg]
-     = Page init view update "#body"
+     = Page init view update "body"
 
