@@ -47,6 +47,9 @@ data Config =
 --  deriving (Show, Typeable, Data)
 
 
+report :: Bool
+report = False
+
 --
 execute :: Bool -> GlobalTypeInfo -> FunctionStore -> Expr -> IO Value
 execute debug gti funStore mainExpr = do
@@ -141,6 +144,7 @@ clientExpr fun_store evctx (Case (Lit (BoolLit b)) casety alts) client_stack mem
 
 -- (E-App)
 clientExpr fun_store evctx (App clo@(Closure vs vstys codename recf) funty arg) client_stack mem_c server_stack mem_s = do
+  assert report $ putStrLn "App-client"
   let CodeName fname locs tys = codename
   case [code | (gname,(codetype,code))<-_clientstore fun_store, fname==gname] of
     ((Code locvars tyvars fvvars (CodeAbs [(x,_)] expr)):_) -> do
@@ -176,6 +180,7 @@ clientExpr fun_store evctx (TypeApp clo@(TypeAbs tyvars expr recf) funty argtys)
 
 -- (E-LApp)
 clientExpr fun_store evctx (LocApp clo@(Closure vs vstys codename recf) funty [argloc]) client_stack mem_c server_stack mem_s = do
+  assert report $ putStrLn "LApp-client"
   let CodeName fname locs tys = codename
   case [code | (gname, (codetype,code))<-_clientstore fun_store, fname==gname] of
     ((Code locvars tyvars fvvars (CodeLocAbs [l] expr)):_) -> do
@@ -203,11 +208,13 @@ clientValue fun_store [] (UnitM v) client_stack mem_c (top_evctx:server_stack) m
 
 -- (E-Req)
 clientValue fun_store evctx (Req f funty arg) client_stack mem_c server_stack mem_s = do
+  assert report $ putStrLn "Req-client"
   let client_stack1 = if null evctx then client_stack else (toFun evctx):client_stack
   return $ ServerConfig client_stack1 mem_c [] (App f funty arg) server_stack mem_s
 
 -- (E-Gen-C-C) and (E-Gen-C-S)
 clientValue fun_store evctx (GenApp loc f funty arg) client_stack mem_c server_stack mem_s = do
+  assert report $ putStrLn "GenApp-client"
   if loc==clientLoc then
     return $ ClientConfig evctx (App f funty arg) client_stack mem_c server_stack mem_s
   else if loc==serverLoc then
@@ -269,6 +276,7 @@ serverExpr fun_store client_stack mem_c evctx (Case (Lit (BoolLit b)) casety alt
 
 -- (E-App)
 serverExpr fun_store client_stack mem_c evctx (App clo@(Closure vs vstys codename recf) funty arg) server_stack mem_s = do
+  assert report $ putStrLn "App-server"
   let CodeName fname locs tys = codename
   case [code | (gname,(codetyps,code))<-_serverstore fun_store, fname==gname] of
     ((Code locvars tyvars fvvars (CodeAbs [(x,_)] expr)):_) -> do
@@ -306,6 +314,7 @@ serverExpr fun_store client_stack mem_c evctx (TypeApp clo@(TypeAbs tyvars expr 
 
 -- (E-LApp)
 serverExpr fun_store client_stack mem_c evctx (LocApp clo@(Closure vs vstys codename recf) funty [argloc]) server_stack mem_s = do
+  assert report $ putStrLn "LApp-server"
   let CodeName fname locs tys = codename
   case [code | (gname, (codetype,code))<-_serverstore fun_store, fname==gname] of
     ((Code locvars tyvars fvvars (CodeLocAbs [l] expr)):_) -> do
@@ -335,11 +344,13 @@ serverValue fun_store (top_evctx:client_stack) mem_c [] (UnitM v) server_stack m
 
 -- (E-Call)
 serverValue fun_store client_stack mem_c evctx (Call f funty arg) server_stack mem_s = do
+  assert report $ putStrLn "Call-server"
   let server_stack1 = if null evctx then server_stack else (toFun evctx):server_stack
   return $ ClientConfig [] (App f funty arg) client_stack mem_c server_stack1 mem_s
 
 -- (E-Gen-C-C) and (E-Gen-S-C)
 serverValue fun_store client_stack mem_c evctx (GenApp loc f funty arg) server_stack mem_s = do
+  assert report $ putStrLn "GenApp-server"
   if loc==serverLoc then
     return $ ServerConfig client_stack mem_c evctx (App f funty arg) server_stack mem_s
   else if loc==clientLoc then

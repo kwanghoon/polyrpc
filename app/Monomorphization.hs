@@ -41,8 +41,8 @@ mono gti toplevelDecls basicLib = do
                           mono_top <- monoToplevel (Location clientLocName) top
                           return $ mono_tops ++ mono_top) []
                   ( datatypes ++
-                    [ BindingTopLevel (Binding True x ty expr)
-                    | (x,ty,expr) <- basicLib ] ++
+                    [ BindingTopLevel (Binding True x ty expr)  -- | Report the changed size
+                    | (x,ty,expr) <- basicLib ] ++              -- | (Comment these two lines!)
                     binds )
                 
               return (mono_basicLib, mono_toplevelDecls))

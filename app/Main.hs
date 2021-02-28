@@ -17,6 +17,7 @@ import qualified CSExpr as TE
 import TypeCheck
 import TypeInf
 import Monomorphization
+import Report
 import Compile
 import Simpl
 import Verify
@@ -92,6 +93,14 @@ doProcess cmd file = do
       (mono_gti, mono_toplevelDecls, mono_basicLib) <-
         mono gti elab_toplevelDecls basicLib
 
+      -- | Report the changed size -----------------------------------------------------
+      -- (mono_gti, mono_toplevelDecls1, mono_basicLib) <-
+      --   mono gti elab_toplevelDecls1 basicLib
+
+      -- putStrLn $ " - The original size:      " ++ (show (reportSize elab_toplevelDecls1))
+      -- putStrLn $ " - The monomorphized size: " ++ (show (reportSize mono_toplevelDecls1))
+      -- | -----------------------------------------------------------------------------
+
       -- verbose (_flag_debug_monomorphization cmd) $ putStrLn "Dumping..."
       -- verbose (_flag_debug_monomorphization cmd) $ putStrLn $ show $ elab_toplevelDecls1
 
@@ -113,6 +122,11 @@ doProcess cmd file = do
   verbose (_flag_debug_compile cmd) $ putStrLn $ (show t_expr ++ "\n")
 
   print_cs cmd file funStore t_expr
+
+  -- | Report the changed size --------------------------------------------------------
+  -- putStrLn $ " - Closure size:      " ++ show (let (x,y,_) = reportCloSize funStore in (x, y))
+  -- | ---------------------------------------------------------------------------------
+
 
   putStrLn "[Verifying after compilation]"
   verify t_gti funStore t_expr
