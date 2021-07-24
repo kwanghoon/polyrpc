@@ -21,6 +21,7 @@ module Expr(Expr(..), ExprVar, AST(..), BindingDecl(..), DataTypeDecl(..)
   , toASTIdTypeLocSeq, toASTIdTypeLoc
   , toASTAlternativeSeq, toASTAlternative
   , toASTTriple, toASTLit
+  , toASTOptLocation
   , subst, substs, substs_, tyExprSubst, tyExprSubsts, locExprSubst, locExprSubsts
   , typeconOrVar, isRec
   , splitTopLevelDecls, collectDataTypeDecls, elabConTypeDecls, collectDataTypeInfo
@@ -296,6 +297,7 @@ data AST =
   | ASTType    { fromASTType    :: Type  }
   | ASTLocationSeq { fromASTLocationSeq :: [Location] }
   | ASTLocation    { fromASTLocation    :: Location  }
+  | ASTOptLocation    { fromASTOptLocation    :: Maybe Location  }
 
   | ASTBindingDeclSeq { fromASTBindingDeclSeq :: [BindingDecl] }
   | ASTBindingDecl    { fromASTBindingDecl    :: BindingDecl  }
@@ -328,6 +330,7 @@ toASTTypeSeq types = ASTTypeSeq types
 toASTType ty     = ASTType ty
 toASTLocationSeq locations = ASTLocationSeq locations
 toASTLocation location     = ASTLocation location
+toASTOptLocation maybeLocation     = ASTOptLocation maybeLocation
 
 toASTBindingDeclSeq bindings = ASTBindingDeclSeq bindings
 toASTBindingDecl binding     = ASTBindingDecl binding

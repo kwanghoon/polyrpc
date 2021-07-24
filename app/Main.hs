@@ -9,6 +9,7 @@ import Lexer
 import Terminal
 import Parser
 import qualified ParserBidi as PB
+import qualified ParserBidiLinks as PBLinks
 import Type
 import Expr
 import BasicLib
@@ -58,7 +59,8 @@ doProcess cmd file = do
   -- exprSeqAst <- parsing parserSpec terminalList
 
   putStrLn "[Parsing-Surface syntax]"
-  exprSeqAst <- parsing PB.parserSpec terminalList
+  -- exprSeqAst <- parsing PB.parserSpec terminalList
+  exprSeqAst <- parsing PBLinks.parserSpec terminalList
 
   verbose (_flag_debug_parse cmd) $ putStrLn "Dumping..."
   verbose (_flag_debug_parse cmd) $ putStrLn $ show $ fromASTTopLevelDeclSeq exprSeqAst

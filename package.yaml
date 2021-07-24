@@ -44,6 +44,7 @@ executables:
     source-dirs:
     - app
     - app/ast
+    - app/surface
     - app/bidi
     - app/cs
     - app/codegen

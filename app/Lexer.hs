@@ -23,7 +23,8 @@ lexerSpec = LexerSpec
         ("\\}"    , mkFn CLOSE_BRACE_TOKEN),
         ("\\["    , mkFn OPEN_BRACKET_TOKEN),
         ("\\]"    , mkFn CLOSE_BRACKET_TOKEN),
-        ("-[a-zA-Z][a-zA-Z0-9]*->", mkFn LOCFUN_TOKEN),
+        ("-[a-zA-Z][a-zA-Z0-9]*->", mkFn LOCFUN_TOKEN), -- Not used for ParserBidiPlus.hs
+        ("->"     , mkFn FUN_TOKEN),                    -- A -> B for ParserBidiPlus.hs 
         ("\\."    , mkFn DOT_TOKEN),
         ("\\,"    , mkFn COMMA_TOKEN),
         ("\\;"    , mkFn SEMICOLON_TOKEN),
@@ -61,6 +62,8 @@ lexerSpec = LexerSpec
         ("case"    , mkFn KEYWORD_CASE_TOKEN),
         ("or"      , mkFn KEYWORD_OR_TOKEN),
         ("and"     , mkFn KEYWORD_AND_TOKEN),
+        ("forall"  , mkFn FORALL_TOKEN),
+        ("exists"  , mkFn EXISTS_TOKEN),
         ("[a-zA-Z_][a-zA-Z0-9_]*"    , mkFn IDENTIFIER_TOKEN)
       ]
   } 

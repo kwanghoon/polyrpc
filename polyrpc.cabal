@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 85e629f339c8ad7ad4bf20d9aa76be66fed0229bd15a358c9ead51fbb447fe5f
+-- hash: 53c30a5580af5498a16fae0c5dcd0dc860562c0b55a75caaeebaab52cbcd694b
 
 name:           polyrpc
 version:        0.2.2.0
@@ -36,6 +36,7 @@ executable polyrpc
       Monomorphization
       Parser
       ParserBidi
+      ParserBidiLinks
       Simpl
       Token
       TypeCheck
@@ -46,6 +47,7 @@ executable polyrpc
       Location
       Prim
       Type
+      SurfaceType
       Context
       NameGen
       Naming
@@ -62,6 +64,7 @@ executable polyrpc
   hs-source-dirs:
       app
       app/ast
+      app/surface
       app/bidi
       app/cs
       app/codegen
