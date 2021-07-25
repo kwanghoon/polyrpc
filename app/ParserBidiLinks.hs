@@ -82,9 +82,7 @@ parserSpec = ParserSpec
       ("FunType -> AppType", \rhs -> get rhs 1),
 
       ("FunType -> AppType -> FunType", \rhs ->
-          let locfun = getText rhs 2
-              -- loc = init (init (tail locfun))  -- extract Loc from -Loc-> ( a bit hard-coded!!)
-              loc = SurfaceType.noLocName
+          let loc = SurfaceType.noLocName
           in  toASTType (FunType
                           (fromASTType (get rhs 1))
                           (locOrVar loc)
@@ -109,14 +107,14 @@ parserSpec = ParserSpec
       -- Todo: Fix to delete [ and ]!!
       -- ("AppType -> AppType FunTypes", \rhs ->
       ("AppType -> AppType AtomicType", \rhs ->
-          let tys = fromASTTypeSeq (get rhs 2) in
+          let ty = fromASTType (get rhs 2) in
           case fromASTType (get rhs 1) of
-            ConType name locs [] -> toASTType (ConType name locs tys)
-            ConType name locs tys' ->
-              error $ "[Parser] Not supported: multiple types: " ++ name ++ " " ++ show tys' ++ " " ++ show tys
-            TypeVarType name -> toASTType (ConType name [] tys) -- Now this will never happen!
-            ty ->
-              error $ "[Parser] Not supported yet: " ++ show ty ++ " not ConType: " ++ show tys),
+            ConType name locs tys -> toASTType (ConType name locs (tys ++ [ty]))
+            -- ConType name locs tys' ->
+            --   error $ "[Parser] Not supported: multiple types: " ++ name ++ " " ++ show tys' ++ " " ++ show tys
+            TypeVarType name -> toASTType (ConType name [] [ty]) -- Now this will never happen!
+            ty0 ->
+              error $ "[Parser] Not supported yet: " ++ show ty0 ++ " not ConType: " ++ show ty),
 
       {- OptAtomicTypes -}
       ("OptAtomicTypes -> ", \rhs -> toASTTypeSeq [] ),
@@ -299,7 +297,7 @@ parserSpec = ParserSpec
       ("OptAtLoc -> ", \rhs -> toASTOptLocation Nothing),
 
       -- Todo: Location should be a constant?
-      ("OptAtLoc -> @ identifier", \rhs -> toASTOptLocation (Just (fromASTLocation (get rhs 2))) ),
+      ("OptAtLoc -> @ Location", \rhs -> toASTOptLocation (Just (fromASTLocation (get rhs 2))) ),
 
       {- Alternatives -}
       ("Alternatives -> Alternative", \rhs -> toASTAlternativeSeq [fromASTAlternative (get rhs 1)] ),
