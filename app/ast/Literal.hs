@@ -8,6 +8,9 @@ import Text.JSON.Generic
 import qualified Data.Aeson as DA
 import GHC.Generics
 
+import Data.Text.Prettyprint.Doc hiding (Pretty)
+import Data.Text.Prettyprint.Doc.Util
+
 data Literal =
     IntLit Int
   | StrLit String
@@ -29,3 +32,8 @@ trueLit  = "True"
 falseLit = "False"
 unitLit  = "()"
 
+---
+ppLit (IntLit i) = pretty (show i)
+ppLit (StrLit s) = pretty s
+ppLit (BoolLit b) = pretty (show b)
+ppLit (UnitLit) = lparen <> rparen

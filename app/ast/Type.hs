@@ -2,6 +2,7 @@
 
 module Type where
 
+import Common
 import Prim
 import Data.Char
 import Data.Set(Set)
@@ -12,8 +13,11 @@ import qualified Data.Set as S
 import Text.JSON.Generic
 
 import Naming
-import Pretty
+import Pretty hiding (pretty)
 import Location
+
+import Data.Text.Prettyprint.Doc hiding (Pretty)
+import Data.Text.Prettyprint.Doc.Util
 
 data Type =
     TypeVarType TypeVar
@@ -249,6 +253,45 @@ instance Pretty Type where
       forall_prec :: Int
       forall_prec = 1
       fun_prec    = 1
+
+
+ppType :: Type -> Doc ()
+ppType (TypeVarType v) = pretty v
+
+ppType (TupleType tys) = group $
+  lparen
+    <> concatWith (\x y -> x <> comma <+> y) (map ppType tys)
+    <> rparen
+    
+ppType (FunType ty1 loc ty2) = group $
+  ppParenType ty1
+    <+> pretty "->"
+    <+> ppParenType ty2
+    
+ppType (TypeAbsType vs ty) = group $
+  slash <> backslash
+    <> fillSep (map pretty vs)
+    <> dot
+    <> nest nest_width (line <> ppType ty)
+    
+ppType (LocAbsType vs ty) = group $
+  lbrace
+    <> fillSep (map pretty vs)
+    <> rbrace
+    <> dot
+    <> nest nest_width (line <> ppType ty)
+  
+ppType (ConType d locs tys) = group $
+  pretty d
+    <+> ppLocations locs
+    <+> ppParenTypes tys
+
+ppParenTypes tys = fillSep (map ppParenType tys)
+
+ppParenType (TypeVarType v) = ppType (TypeVarType v)
+ppParenType (TupleType tys) = ppType (TupleType tys)
+ppParenType (ConType c [] []) = ppType (ConType c [] [])
+ppParenType ty = group (lparen <> ppType ty <> rparen)
 
 -- | typeSubst A α B = [A/α]B
 typeSubst :: Type -> TypeVar -> Type -> Type

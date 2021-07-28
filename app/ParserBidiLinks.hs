@@ -11,6 +11,20 @@ module ParserBidiLinks where
 --   (6) ! expr  vs. ! {Loc} expr
 --   (7) var := expr  vs. var := {Loc} expr
 
+--   Design consideration
+
+--    - Programmers have only to write client and server, not location
+--      variables.
+--
+--    - No explicit location abstractions in function declarations
+--      but in datatype declarations.
+--
+--    - At most one location abstraction in function declarations
+--      but more can be in datatype declarations.
+--
+--    - Basically, location abstractions are assumed to be in the
+--      prenex form. No higher-ranked location abstraction types.
+
 import CommonParserUtil
 import Location
 import Token

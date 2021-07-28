@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.33.0.
+-- This file has been generated from package.yaml by hpack version 0.34.4.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 53c30a5580af5498a16fae0c5dcd0dc860562c0b55a75caaeebaab52cbcd694b
+-- hash: 914f9103335c995527399228a22f2053b90d344afae00bc482798e5bbbaf5d9e
 
 name:           polyrpc
 version:        0.2.2.0
@@ -76,10 +76,10 @@ executable polyrpc
     , base >=4.7 && <5
     , bytestring
     , containers >=0.6.0 && <0.7
-    , json >=0.10 && <0.11
+    , json ==0.10.*
     , mtl >=2.2.2 && <=2.2.2
     , pretty >=1.1.3 && <1.2
-    , prettyprinter >=1.6.1 && <1.7
+    , prettyprinter >=1.6.2 && <=1.7.0
     , regex-tdfa
     , transformers >=0.5.6.2 && <=0.5.6.2
     , unordered-containers >=0.2.10.0 && <=0.2.12.0
@@ -101,11 +101,11 @@ test-suite polyrpc-test
     , base >=4.7 && <5
     , bytestring
     , containers >=0.6.0 && <0.7
-    , json >=0.10 && <0.11
+    , json ==0.10.*
     , mtl >=2.2.2 && <=2.2.2
     , polyrpc
     , pretty >=1.1.3 && <1.2
-    , prettyprinter >=1.6.1 && <1.7
+    , prettyprinter >=1.6.2 && <=1.7.0
     , regex-tdfa
     , transformers >=0.5.6.2 && <=0.5.6.2
     , unordered-containers >=0.2.10.0 && <=0.2.12.0

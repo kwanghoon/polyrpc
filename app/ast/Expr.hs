@@ -26,8 +26,10 @@ module Expr(Expr(..), ExprVar, AST(..), BindingDecl(..), DataTypeDecl(..)
   , typeconOrVar, isRec
   , splitTopLevelDecls, collectDataTypeDecls, elabConTypeDecls, collectDataTypeInfo
   , builtinDatatypes
+  , ppExpr
   ) where
 
+import Common
 import Location
 import Prim
 import Literal
@@ -36,10 +38,12 @@ import Type
 -- import GHC.Generics
 -- import Data.Aeson
 import Text.JSON.Generic
-import Pretty
+import Pretty hiding (pretty)
 import Util
 
 import Data.Char
+import Data.Text.Prettyprint.Doc hiding (Pretty)
+import Data.Text.Prettyprint.Doc.Util
 
 --
 data Expr =
@@ -557,6 +561,117 @@ instance Pretty BindingDecl where
 --       abs_prec  = 1
 --       app_prec  = 10
 --       anno_prec = 1
+
+at = pretty "@"
+underline = pretty "_"
+
+ppExpr :: Expr -> Doc ()
+ppExpr (Var x) = pretty x
+
+ppExpr (TypeAbs xs expr) = group $ 
+  slash <> backslash
+    <> fillSep (map pretty xs)
+    <> dot
+    <> nest nest_width (line <> ppExpr expr)
+
+ppExpr (LocAbs xs expr) = group $ 
+  lbrace 
+    <> fillSep (map pretty xs)
+    <> rbrace
+    <> dot
+    <> nest nest_width (line <> ppExpr expr)
+  
+ppExpr (Abs varMaybeTyLocs expr) = group $
+  backslash
+    <> fillSep (map f varMaybeTyLocs)
+    <> dot
+    <> nest nest_width (line <> ppExpr expr)
+  where
+    f (x, maybeTy, loc) = pretty x <+> colon <+> maybeF maybeTy <+> at <+> ppLocation loc
+
+    maybeF (Just ty) = ppType ty
+    maybeF Nothing = underline
+
+ppExpr (Let bindDecls expr) = group $
+  pretty "let"
+    <> nest nest_width (line <> ppBindDecls bindDecls)
+    <> line <> pretty "in"
+    <> nest nest_width (line <> ppExpr expr)
+                       
+ppExpr (Case expr maybeTy alts) = group $
+  pretty "case"
+    <> nest nest_width (line <> ppExpr expr)
+    <> line <> pretty "of"
+    <> nest nest_width (line <> ppAlts alts)
+  
+ppExpr (App fun maybeTy arg maybeLoc) = group $
+  ppParenExpr fun
+    <> nest nest_width (line <> ppParenExpr arg)
+    
+ppExpr (TypeApp polyfun maybeTy tys) = group $
+  ppParenExpr polyfun
+    <> nest nest_width (line <> ppParenTypes tys)
+    
+ppExpr (LocApp polyfun maybeTy locs) = group $
+  ppParenExpr polyfun
+    <+> lbrace
+    <+> ppLocations locs
+    <+> rbrace
+
+ppExpr (Tuple exprs) = group $
+  lparen
+    <> concatWith (\x y -> x <> comma <> line <> y) (map ppExpr exprs)
+    <> rparen
+    
+ppExpr (Prim op locs tys exprs) = group $
+  ppPrim op
+    <+> ppLocations locs
+    <+> ppParenTypes tys
+    <+> fillSep (map ppParenExpr exprs)
+  
+ppExpr (Lit lit) = group (ppLit lit)
+  
+ppExpr (Constr con locs tys exprs exprTys) = group $
+  pretty con
+    <+> ppLocations locs
+    <+> ppParenTypes tys
+    <+> fillSep (map ppParenExpr exprs)
+
+ppBindDecls bindDecls =
+  concatWith (\x y -> x <> semi <> softline <> y)
+    (map ppBindDecl bindDecls)
+
+ppBindDecl (Binding b x ty expr) = group $
+  pretty x
+    <+> colon
+    <+> ppType ty
+    <+> equals
+    <+> ppExpr expr
+
+ppAlts alts = group $
+  concatWith (\x y -> x <> semi <> line <> y)
+    (map ppAlt alts)
+
+ppAlt (Alternative c xs expr) = group $
+  pretty c
+    <+> fillSep (map pretty xs)
+    <+> pretty "->"
+    <> nest nest_width (line <> ppExpr expr)
+    
+ppAlt (TupleAlternative xs expr) = group $
+  lparen
+    <+> fillSep (map pretty xs)
+    <+> rparen
+    <+> pretty "->"
+    <> nest nest_width (line <> ppExpr expr)
+
+ppParenExpr (Var x) = ppExpr (Var x)
+ppParenExpr (Lit x) = ppExpr (Lit x)
+ppParenExpr (Tuple exprs) = ppExpr (Tuple exprs)
+ppParenExpr (Constr c [] tyArgs [] argTys) = ppExpr (Constr c [] tyArgs [] argTys)
+ppParenExpr (Constr c locs tyArgs exprs argTys) = ppExpr (Constr c locs tyArgs exprs argTys)
+ppParenExpr expr = group (lparen <> ppExpr expr <> rparen)
+
 
 -- | subst e' x e = [e'/x]e
 subst :: Expr -> ExprVar -> Expr -> Expr

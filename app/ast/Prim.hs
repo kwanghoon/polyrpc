@@ -5,6 +5,9 @@ module Prim where
 import GHC.Generics
 import Text.JSON.Generic
 
+import Data.Text.Prettyprint.Doc hiding (Pretty)
+import Data.Text.Prettyprint.Doc.Util
+
 data PrimOp =
     NotPrimOp  --{l}. Bool -l-> Bool
   | OrPrimOp   --{l}. (Bool, Bool) -l-> Bool
@@ -49,4 +52,25 @@ boolType   = "Bool"
 stringType = "String"
 refType    = "Ref"
 
-
+--
+-- Todo: to implement ppPrim
+ppPrim (NotPrimOp) = pretty "!"
+ppPrim (OrPrimOp) = pretty "or"
+ppPrim (AndPrimOp) = pretty "and"
+ppPrim (EqPrimOp) = pretty "=="
+ppPrim (EqStringPrimOp) = pretty "=="
+ppPrim (EqBoolPrimOp) = pretty "=="
+ppPrim (EqIntPrimOp) = pretty "=="
+ppPrim (NeqPrimOp) = pretty "!="
+ppPrim (NeqStringPrimOp) = pretty "!="
+ppPrim (NeqBoolPrimOp) = pretty "!="
+ppPrim (NeqIntPrimOp) = pretty "!="
+ppPrim (LtPrimOp) = pretty "<"
+ppPrim (LePrimOp) = pretty "<="
+ppPrim (GtPrimOp) = pretty ">"
+ppPrim (GePrimOp) = pretty ">="
+ppPrim (AddPrimOp) = pretty "+"
+ppPrim (SubPrimOp) = pretty "-"
+ppPrim (MulPrimOp) = pretty "*"
+ppPrim (DivPrimOp) = pretty "/"
+ppPrim (NegPrimOp) = pretty "-"
