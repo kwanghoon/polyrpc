@@ -2,7 +2,7 @@
 
 module Prim where
 
-import GHC.Generics
+import GHC.Generics hiding (Prefix, Infix)
 import Text.JSON.Generic
 
 import Data.Text.Prettyprint.Doc hiding (Pretty)
@@ -44,6 +44,30 @@ data PrimOp =
 -- For aeson  
 --  deriving (Show, Eq, Generic)
   deriving (Eq, Read, Show, Typeable, Data, Generic)
+
+data Fixity = Prefix | Infix | Postfix deriving Show
+
+fixity_info = [
+    (NotPrimOp, Prefix)
+  , (OrPrimOp, Infix)
+  , (AndPrimOp, Infix)
+  , (EqPrimOp, Infix)
+  , (EqStringPrimOp, Infix)
+  , (EqBoolPrimOp, Infix)
+  , (NeqPrimOp, Infix)
+  , (NeqStringPrimOp, Infix)
+  , (NeqBoolPrimOp, Infix)
+  , (NeqIntPrimOp, Infix)
+  , (LtPrimOp, Infix)
+  , (LePrimOp, Infix)
+  , (GtPrimOp, Infix)
+  , (GePrimOp, Infix)
+  , (AddPrimOp, Infix)
+  , (SubPrimOp, Infix)
+  , (MulPrimOp, Infix)
+  , (DivPrimOp, Infix)
+  , (NegPrimOp, Prefix)
+  ]
 
 -- Predefined type names
 unitType   = "Unit"

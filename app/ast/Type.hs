@@ -265,12 +265,15 @@ ppType (TupleType tys) = group $
     
 ppType (FunType ty1 loc ty2) = group $
   ppParenType ty1
-    <+> pretty "->"
-    <+> ppParenType ty2
+    <+> pretty "-"
+    <> ppLocation loc
+    <> pretty "-"
+    <> pretty ">"
+    <+> ppType ty2
     
 ppType (TypeAbsType vs ty) = group $
-  slash <> backslash
-    <> fillSep (map pretty vs)
+  pretty "forall"
+    <+> fillSep (map pretty vs)
     <> dot
     <> nest nest_width (line <> ppType ty)
     
@@ -283,14 +286,15 @@ ppType (LocAbsType vs ty) = group $
   
 ppType (ConType d locs tys) = group $
   pretty d
-    <+> ppLocations locs
-    <+> ppParenTypes tys
+    <> (if null locs then emptyDoc else emptyDoc <+> lbrace <> ppLocations locs <> rbrace)
+    <> (if null tys then emptyDoc else emptyDoc <+> ppParenTypes tys)
 
+ppParenTypes [] = emptyDoc
 ppParenTypes tys = fillSep (map ppParenType tys)
 
 ppParenType (TypeVarType v) = ppType (TypeVarType v)
 ppParenType (TupleType tys) = ppType (TupleType tys)
-ppParenType (ConType c [] []) = ppType (ConType c [] [])
+ppParenType (ConType c locs tys) = ppType (ConType c locs tys)
 ppParenType ty = group (lparen <> ppType ty <> rparen)
 
 -- | typeSubst A α B = [A/α]B

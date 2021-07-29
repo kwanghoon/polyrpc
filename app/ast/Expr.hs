@@ -27,6 +27,7 @@ module Expr(Expr(..), ExprVar, AST(..), BindingDecl(..), DataTypeDecl(..)
   , splitTopLevelDecls, collectDataTypeDecls, elabConTypeDecls, collectDataTypeInfo
   , builtinDatatypes
   , ppExpr
+  , ppPolyRpcProg
   ) where
 
 import Common
@@ -42,6 +43,7 @@ import Pretty hiding (pretty)
 import Util
 
 import Data.Char
+import Data.List (lookup)
 import Data.Text.Prettyprint.Doc hiding (Pretty)
 import Data.Text.Prettyprint.Doc.Util
 
@@ -587,10 +589,10 @@ ppExpr (Abs varMaybeTyLocs expr) = group $
     <> dot
     <> nest nest_width (line <> ppExpr expr)
   where
-    f (x, maybeTy, loc) = pretty x <+> colon <+> maybeF maybeTy <+> at <+> ppLocation loc
+    f (x, maybeTy, loc) = pretty x <> maybeF maybeTy <+> at <+> ppLocation loc
 
-    maybeF (Just ty) = ppType ty
-    maybeF Nothing = underline
+    maybeF (Just ty) = emptyDoc <+> colon <+> ppType ty <+> emptyDoc
+    maybeF Nothing = emptyDoc
 
 ppExpr (Let bindDecls expr) = group $
   pretty "let"
@@ -600,13 +602,27 @@ ppExpr (Let bindDecls expr) = group $
                        
 ppExpr (Case expr maybeTy alts) = group $
   pretty "case"
-    <> nest nest_width (line <> ppExpr expr)
-    <> line <> pretty "of"
+    <+> ppExpr expr
+    <+> pretty "of"
     <> nest nest_width (line <> ppAlts alts)
-  
+
 ppExpr (App fun maybeTy arg maybeLoc) = group $
-  ppParenExpr fun
-    <> nest nest_width (line <> ppParenExpr arg)
+  ppApp (App fun maybeTy arg maybeLoc)
+  where
+    ppApp (App (App (Var ":=") _ lhs _) _ rhs _) =
+      ppParenExpr lhs
+      <+> pretty ":="
+      -- <> ppLocations locs
+      -- <> ppParenTypes tys
+      <+> ppExpr rhs
+      
+    ppApp (App fun maybeTy arg maybeLoc) = 
+      ppApp fun
+      <> nest nest_width (line <> ppParenExpr arg)
+
+    ppApp (Var x) = pretty x
+    
+    ppApp expr = ppParenExpr expr
     
 ppExpr (TypeApp polyfun maybeTy tys) = group $
   ppParenExpr polyfun
@@ -624,11 +640,30 @@ ppExpr (Tuple exprs) = group $
     <> rparen
     
 ppExpr (Prim op locs tys exprs) = group $
-  ppPrim op
-    <+> ppLocations locs
-    <+> ppParenTypes tys
-    <+> fillSep (map ppParenExpr exprs)
-  
+  case (Data.List.lookup op fixity_info, exprs) of
+    (Just Prefix, [expr])        -> ppPrefix expr
+    (Just Infix, [expr1, expr2]) -> ppInfix expr1 expr2
+    (Just Postfix, [expr])       -> ppPostfix expr
+    (fixty,_) -> error $ "ppExpr Prim: unexpected fixity or # of args: "
+                   ++ show fixty ++ ", " ++ show (length exprs)
+    
+  where
+    ppPrefix expr = ppPrim op
+      <> ppLocations locs
+      -- <> ppParenTypes tys
+      <+> ppParenExpr expr
+
+    ppInfix expr1 expr2 = ppParenExpr expr1
+      <+> ppPrim op
+      <> ppLocations locs
+      -- <> ppParenTypes tys
+      <+> ppParenExpr expr2
+
+    ppPostfix expr = ppParenExpr expr
+      <> ppLocations locs
+      -- <> ppParenTypes tys
+      <+> ppPrim op
+    
 ppExpr (Lit lit) = group (ppLit lit)
   
 ppExpr (Constr con locs tys exprs exprTys) = group $
@@ -660,8 +695,8 @@ ppAlt (Alternative c xs expr) = group $
     
 ppAlt (TupleAlternative xs expr) = group $
   lparen
-    <+> fillSep (map pretty xs)
-    <+> rparen
+    <> concatWith (\x y -> x <> comma <> y) (map pretty xs)
+    <> rparen
     <+> pretty "->"
     <> nest nest_width (line <> ppExpr expr)
 
@@ -671,6 +706,33 @@ ppParenExpr (Tuple exprs) = ppExpr (Tuple exprs)
 ppParenExpr (Constr c [] tyArgs [] argTys) = ppExpr (Constr c [] tyArgs [] argTys)
 ppParenExpr (Constr c locs tyArgs exprs argTys) = ppExpr (Constr c locs tyArgs exprs argTys)
 ppParenExpr expr = group (lparen <> ppExpr expr <> rparen)
+
+ppTyconDecl (TypeCon x tys) = group $
+  pretty x
+    <> (if null tys then emptyDoc else emptyDoc <+> fillSep (map ppParenType tys))
+
+ppTyconDecls tyconDecls = group $
+  concatWith (\x y -> x <+> pipe <+> y)
+    (map ppTyconDecl tyconDecls)
+
+ppDataTypeDecl (DataType d locs tyvars tyconDecls) = group $
+  pretty "data"
+  <+> pretty d
+  <> (if null locs then emptyDoc else emptyDoc <+> lbrace <> fillSep (map pretty locs)  <> rbrace)
+  <> (if null tyvars then emptyDoc else emptyDoc <+> fillSep (map pretty tyvars))
+  <+> equals
+  <> nest nest_width (line <> ppTyconDecls tyconDecls)
+
+ppTopLevelDecl (BindingTopLevel bindDecl) = ppBindDecl bindDecl
+ppTopLevelDecl (DataTypeTopLevel datatypeDecl) = ppDataTypeDecl datatypeDecl
+ppTopLevelDecl (LibDeclTopLevel x ty) = group $
+  pretty x
+  <+> colon
+  <+> ppType ty
+
+ppPolyRpcProg prog =
+  concatWith (\x y -> x <> semi <> line <> y) $
+    map ppTopLevelDecl prog
 
 
 -- | subst e' x e = [e'/x]e

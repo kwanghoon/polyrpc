@@ -104,5 +104,6 @@ ppLocation (Location s) = pretty s
 ppLocation (LocVar v) = pretty v
 
 ppLocations :: [Location] -> Doc ()
+ppLocations [] = emptyDoc
 ppLocations locs = fillSep (map ppLocation locs)
 

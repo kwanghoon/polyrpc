@@ -81,7 +81,7 @@ csA : Attr Msg -> List (Attr Msg) -> List (Attr Msg)
     = cs;
 
 // // Page is: init x view x update x mount point (query selector e.g., #id)
-data Page a = Page a (a -> Html e) (e -> a -> a) String; // Todo: client information has disappeared!
+data Page a e = Page a (a -> Html e) (e -> a -> a) String; // Todo: client information has disappeared!
 
 data TodoItem = TodoItem String Bool Bool;
 data Model = Content String (List TodoItem) (Ref {server} (List TodoItem)); // Todo: server information has disappeared!
@@ -292,6 +292,6 @@ serverModel : Ref {server} (List TodoItem)   // Todo: Ref (List TodoItem) vs. Re
 init : Model
      = Content "" (! serverModel) serverModel;
 
-main : Page (Model Msg)
+main : Page Model Msg
      = Page init view update "body"
 

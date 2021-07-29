@@ -36,6 +36,8 @@ import Data.Maybe
 import System.IO
 import System.Environment (getArgs)
 
+import Data.Text.Prettyprint.Doc.Util (putDocW)
+
 main :: IO ()
 main = do
   args <- getArgs
@@ -63,7 +65,7 @@ doProcess cmd file = do
   exprSeqAst <- parsing PBLinks.parserSpec terminalList
 
   verbose (_flag_debug_parse cmd) $ putStrLn "Dumping..."
-  verbose (_flag_debug_parse cmd) $ putStrLn $ show $ fromASTTopLevelDeclSeq exprSeqAst
+  verbose (_flag_debug_parse cmd) $ putDocW 80 {- putStrLn $ show -} $ ppPolyRpcProg $ fromASTTopLevelDeclSeq exprSeqAst
 
   let toplevelDecls = fromASTTopLevelDeclSeq exprSeqAst
 
