@@ -689,8 +689,8 @@ ppAlts alts = group $
 
 ppAlt (Alternative c xs expr) = group $
   pretty c
-    <+> fillSep (map pretty xs)
-    <+> pretty "->"
+    <+> (if null xs then emptyDoc else fillSep (map pretty xs) <+> emptyDoc)
+    <> pretty "->"
     <> nest nest_width (line <> ppExpr expr)
     
 ppAlt (TupleAlternative xs expr) = group $
