@@ -34,6 +34,6 @@ unitLit  = "()"
 
 ---
 ppLit (IntLit i) = pretty (show i)
-ppLit (StrLit s) = pretty s
+ppLit (StrLit s) = dquote <> pretty s <> dquote
 ppLit (BoolLit b) = pretty (show b)
 ppLit (UnitLit) = lparen <> rparen
