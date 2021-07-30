@@ -264,12 +264,15 @@ ppType (TupleType tys) = group $
     <> rparen
     
 ppType (FunType ty1 loc ty2) = group $
-  ppParenType ty1
+  ppTypeArg ty1        -- NB. List a -> ... not (List a) -> ...
     <+> pretty "-"
     <> ppLocation loc
     <> pretty "-"
     <> pretty ">"
     <+> ppType ty2
+  where
+    ppTypeArg (ConType d locs tys) = ppType (ConType d locs tys)
+    ppTypeArg ty = ppParenType ty
     
 ppType (TypeAbsType vs ty) = group $
   pretty "forall"
@@ -294,7 +297,7 @@ ppParenTypes tys = fillSep (map ppParenType tys)
 
 ppParenType (TypeVarType v) = ppType (TypeVarType v)
 ppParenType (TupleType tys) = ppType (TupleType tys)
-ppParenType (ConType c locs tys) = ppType (ConType c locs tys)
+ppParenType (ConType c [] []) = ppType (ConType c [] [])
 ppParenType ty = group (lparen <> ppType ty <> rparen)
 
 -- | typeSubst A α B = [A/α]B

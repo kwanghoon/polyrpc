@@ -251,8 +251,25 @@ parserSpec = ParserSpec
 
       {- Binding -}
       ("Binding -> identifier : Type = LExpr",
-        \rhs -> toASTBindingDecl (
-                  Binding False (getText rhs 1) (fromASTType (get rhs 3)) (fromASTExpr (get rhs 5))) ),
+        \rhs ->
+          let ty = fromASTType (get rhs 3)
+              lexpr = fromASTExpr (get rhs 5)
+
+              -- Surface syntax dependent!
+              (maybeLoc, extTy) =
+                case lexpr of
+                  -- location abstraction with l 
+                  (LocAbs _ _) ->    
+                    ( Just $ LocVar defaultLocVarName
+                    , LocAbsType [defaultLocVarName] ty)
+
+                  -- location constant a
+                  (Abs ((_,_,loc):_) _) -> (Just $ loc, ty)
+
+                  -- Not abstractions
+                  _ -> (Nothing, ty)
+          in
+          toASTBindingDecl (Binding False (getText rhs 1) (annotateLoc maybeLoc extTy) lexpr) ),
 
 
       {- Bindings -}
@@ -284,7 +301,7 @@ parserSpec = ParserSpec
               
               replaceLoc x = (x, Nothing, getLocFromMaybe maybeLoc)
               
-              optLocAbs Nothing  expr = LocAbs [SurfaceType.optionalLocVarName] expr
+              optLocAbs Nothing  expr = LocAbs [SurfaceType.defaultLocVarName] expr
               optLocAbs (Just _) expr = expr
           in
           toASTExpr
