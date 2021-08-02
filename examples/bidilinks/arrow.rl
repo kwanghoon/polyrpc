@@ -25,18 +25,18 @@ arr_par_fun : forall a b c. (a -> b) -> (a -> c) -> a -> (b,c)
 ////////////////////////////////////////////////////////////////////////////////
 
 // arr (+)
-arr_plus : (Int, Int) -> Int 
-  = arr_fun
+arr_plus : (Int, Int) -> Int    // Todo: Just by {l} (Int,Int) -> Int cannot create /\l. !!
+  = \p. arr_fun                 //       Introduce an eta exapnsion to create /\l. !!
       (\xy.
         case xy {
 	  (x,y) => x + y
 	}
-      )
+      ) p
 ;
 
 // f &&& g >>> arr (+)
 addA : (Int -> Int) -> (Int -> Int) -> Int -> Int
-  = \f g @ client .
+  = \{client} f g .
      arr_seq_fun 
       (arr_par_fun f g)
       (arr_plus)
@@ -46,5 +46,5 @@ addA : (Int -> Int) -> (Int -> Int) -> Int -> Int
 main : Unit
   = print 
       (intToString 
-         (addA (\x @ client . x+1) (\x @ server . x-1) 10))
+         (addA (\{client} x. x+1) (\{server} x. x-1) 10))
 

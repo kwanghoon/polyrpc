@@ -1,5 +1,5 @@
 thunk : forall a. (Unit -> a) -> a
-      = \f @ server. f ();
+      = \{server} f . f ();
 
 // - List library
 
@@ -52,21 +52,23 @@ map : forall a b. (a -> b) -> List a -> List b
 //    = Nil;
 
 cs : forall a. a -> List a -> List a
-   = \w lst @ client. Cons w lst;
+   = \{client} w lst. Cons w lst;
 
 data Html a = Element String (List (Attr a)) (List (Html a)) | Txt String;
-data Attr a = Property String String | Attribute String String | EventBind String a | KeyBind Int a | ValueBind String (String -> a); // Todo: String -client-> a vs. String -> a
+
+data Attr a = Property String String | Attribute String String | EventBind String a | KeyBind Int a 
+            | ValueBind String ({client} String -> a); // Todo: String -client-> a vs. {client} String -> a 
 
 onClick : forall a. a -> Attr a
-        = \msg @ client. EventBind "click" msg;
+        = \{client} msg. EventBind "click" msg;
 onDblClick : forall a. a -> Attr a
-        = \msg @ client. EventBind "dblclick" msg;
+        = \{client} msg. EventBind "dblclick" msg;
 onBlur : forall a. a -> Attr a
-        = \msg @ client. EventBind "blur" msg;
+        = \{client} msg. EventBind "blur" msg;
 onEnter : forall a. a -> Attr a
-        = \msg @ client. KeyBind 13 msg;
+        = \{client} msg. KeyBind 13 msg;
 onInput : forall a. (String -> a) -> Attr a
-        = \msgF @ client. ValueBind "input" msgF;
+        = \{client} msgF. ValueBind "input" msgF;
 
 nlH : List (Html Msg)
     = Nil;
@@ -74,18 +76,24 @@ nlH : List (Html Msg)
 nlA : List (Attr Msg)
     = Nil;
 
-csH : Html Msg -> List (Html Msg) -> List (Html Msg)
+csH : {client} Html Msg -> List (Html Msg) -> List (Html Msg)  -- Todo: Is this mandatory or optional to give a hint, i.e., {client}?
     = cs;  // Todo: csH is a client function since so is cs.
 
-csA : Attr Msg -> List (Attr Msg) -> List (Attr Msg)
+csA : {client} Attr Msg -> List (Attr Msg) -> List (Attr Msg)
     = cs;
 
 // // Page is: init x view x update x mount point (query selector e.g., #id)
-data Page a e = Page a (a -> Html e) (e -> a -> a) String; // Todo: client information has disappeared!
+data Page a e = Page a ( {client} a -> Html e) ( {client} e -> a -> a ) String; 
+        // Todo: {client} a -> Html e and {client} e -> a -> a 
+        //   vs. {client} Page a (a -> Html e) (e -> a -> a) 
+        //   vs. Page {client} a e 
 
 data TodoItem = TodoItem String Bool Bool;
-data Model = Content String (List TodoItem) (Ref {server} (List TodoItem)); // Todo: server information has disappeared!
+
+data Model = Content String (List TodoItem) (Ref {server} (List TodoItem)); 
+
 data Selected = All | Active | Completed;
+
 data Msg = Update String | Submit
          | Toggle Int | Delete Int | Editing Int | Change Int String | Commit Int
          | ClearCompleted | ToggleAll
@@ -107,7 +115,7 @@ newContent: String -> TodoItem -> TodoItem
               case ti { TodoItem content done editing => TodoItem str done editing };
 
 showItem: TodoItem -> Int -> Html Msg
-        = \item idx @ client.
+        = \{client} item idx.
             case item { TodoItem content done editing =>
               Element "li" (csA (Attribute "class"
                 (concat (if done then "completed" else "") (if editing then "editing" else ""))
@@ -138,7 +146,7 @@ showItem: TodoItem -> Int -> Html Msg
             };
 
 showList: List TodoItem -> Html Msg
-        = \items @ client.
+        = \{client} items.
           Element "section"
             (csA (Attribute "class" "main")
             (csA (Attribute "style" "display; block")
@@ -155,7 +163,7 @@ showList: List TodoItem -> Html Msg
             nlH)));
 
 header : String -> Html Msg
-       = \str @ client.
+       = \{client} str.
            Element "header" (csA (Attribute "class" "header") nlA)
              (csH (Element "h1" nlA (csH (Txt "todos") nlH))
              (csH (Element "input"
@@ -170,7 +178,7 @@ header : String -> Html Msg
 
 
 footer : Int -> Html Msg
-       = \count @ client.
+       = \{client} count.
            Element "footer" (csA (Attribute "class" "footer") nlA)
              (csH (Element "span" (csA (Attribute "class" "todo-count") nlA)
                (csH (Txt (concat (intToString count) " items left")) nlH))
@@ -193,7 +201,7 @@ footer : Int -> Html Msg
              nlH)));
 
 view : Model -> Html Msg
-     = \m @ client.
+     = \{client} m.
           case m { Content str visibleList ref =>
             // let { tds: List [TodoItem] = (! ref) } // Todo: ! ref vs ! {server} ref
               Element "div" nlA
@@ -205,7 +213,7 @@ view : Model -> Html Msg
               (csH (showList visibleList)
               (csH (footer (count 
                 (filter 
-                  (\ti @ client. case ti { TodoItem txt done e => if done then False else True })
+                  (\{client} ti. case ti { TodoItem txt done e => if done then False else True }) // Todo: If ommitted, {client}??
                   visibleList)))
 	      // (csH (Element "link"
 	      //  (csA (Attribute "rel" "stylesheet")
@@ -217,23 +225,23 @@ view : Model -> Html Msg
           };
 
 isNotDone : TodoItem -> Bool
-     = \ti @ client. case ti { TodoItem txt done e => if done then False else True };
+     = \{client} ti. case ti { TodoItem txt done e => if done then False else True };
 isDone : TodoItem -> Bool
-     = \ti @ client. case ti { TodoItem txt done e => done };
+     = \{client} ti. case ti { TodoItem txt done e => done };
 
 update : Msg -> Model -> Model
-       = \msg model @ client.
+       = \{client} msg model.
           case model { Content line visibleList ref =>
             case msg {
               Update str => Content str visibleList ref;
               Submit =>
-                case (((\x @ server.
+                case (((\{server} x.
                   ref :=  (Cons (TodoItem line False False)  // Todo: := server vs. :=
                     (! ref))
                 ) ()), model) { (u, m) => Content "" (! ref) ref };
               Toggle idx =>
                 // FIXME Look at let errors? typer
-                case (((\x @ server.
+                case (((\{server} x.
                   ref := (mapOnIndex idx toggleItem
                     (! ref))
 //               let { todos: List TodoItem = ! ref;
@@ -244,18 +252,18 @@ update : Msg -> Model -> Model
                 ) ()), model) { (u, m) => Content line (! ref) ref };
 
               Delete idx =>
-                case (((\x @ server.
+                case (((\{server} x.
                   ref := (delete idx (! ref))
                 ) ()), model) { (u, m) => Content line (! ref) ref };
 
               ClearCompleted =>
-                case (((\x @ server.   // Todo: fine-tune location of computation
+                case (((\{server} x.   // Todo: fine-tune location of computation
                   ref :=  
                     (filter isNotDone (! ref))
                 ) ()), model) { (u, m) => Content line (! ref) ref };
 
               ToggleAll =>
-                case (((\x @ server.
+                case (((\{server} x.
                   ref :=
                     (map toggleItem (! ref))
                 ) ()), model) { (u, m) => Content line (! ref) ref };
@@ -268,26 +276,26 @@ update : Msg -> Model -> Model
                 };
 
               Editing idx =>
-                case (((\x @ server.
+                case (((\{server} x.
                   ref := 
                     (mapOnIndex idx toggleEditing visibleList)
                 ) ()), model) { (u, m) => Content line (! ref) ref };
 
               Commit idx =>
-                case (((\x @ server.
+                case (((\{server} x.
                   ref :=
                     (mapOnIndex idx toggleEditing visibleList)
                 ) ()), model) { (u, m) => Content line (! ref) ref };
 
               Change idx str =>
-                case (((\x @ server.
+                case (((\{server} x.
                   ref :=
                     (mapOnIndex idx (newContent str) visibleList)
                 ) ()), model) { (u, m) => Content line (! ref) ref }
           }};
 
 serverModel : Ref {server} (List TodoItem)   // Todo: Ref (List TodoItem) vs. Ref {server} (List TodoItem) !!!
-            = thunk (\u @ server. ref Nil);  //       Could write ``ref Nil @ server" ??
+            = thunk (\{server} u. ref Nil);  //       Could write ``ref Nil @ server" ??
 
 init : Model
      = Content "" (! serverModel) serverModel;

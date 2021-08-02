@@ -5,13 +5,13 @@
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
-data Stream {l} a =  SNil | SCons a (Unit -> Stream {l} a)
+data Stream {l} a =  SNil | SCons a ({l} Unit -> Stream {l} a) // Todo:  good or bad?
 
 ;
 
 // data Pair {l1 l2} a b = Pair (Ref {l1} a) (Ref {l2} b)
 
-// Pair {l1 l2} : Ref {l1} a -> Ref {l2} b -> Pair {l1 l2} a b
+// data Strange {l l1 l2} a b =  Strange ({l} Pair {l l1 l2} a b -> Unit)  // Todo: good or bad?
 
 // ;
 
@@ -60,15 +60,15 @@ take_stream
 ////////////////////////////////////////////////////////////////////////////////
 
 client_list1 : Stream {client} Int
-   = SCons 1 (\unit @client.
-      SCons 2 (\unit @client.
-        SCons 3 (\unit @client. SNil)))
+   = SCons 1 (\{client} unit.
+      SCons 2 (\{client} unit.
+        SCons 3 (\{client} unit. SNil)))
 ;
 
 server_list1 : Stream {server} Int
-   = SCons 1 (\unit @server.
-      SCons 2 (\unit @server.
-        SCons 3 (\unit @server. SNil)))
+   = SCons 1 (\{server} unit.
+      SCons 2 (\{server} unit.
+        SCons 3 (\{server} unit. SNil)))
 
 ;
 
@@ -77,19 +77,19 @@ test1 : Int
         (tl_stream 
 	  (take_stream 
 	    (map_stream
-	       (\x@client. x+1) client_list1)
+	       (\{client} x. x+1) client_list1)
 	    2))
 	    
 ;
 
 serverToclient
   : Stream {server} Int -> Stream {client} Int
-  = \server_stream @ client .
+  = \{client} server_stream .
       case server_stream {
         SNil => SNil;
 	SCons y ys =>
 	  SCons y
-	    ( \unit @client. serverToclient (ys ()) )
+	    ( \{client} unit. serverToclient (ys ()) )
       }
 ;
 

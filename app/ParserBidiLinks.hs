@@ -2,9 +2,9 @@ module ParserBidiLinks where
 
 -- | A parsimonius approach to location polymorphism
 
---   (1) A -> B   vs. A -Loc-> B
---   (2) \x1 ... xk @ Loc . e  vs. \x1 @ Loc1 ... xk @ Loc . e
---   (3) data D = Con ty1 ... tyn | ...
+--   (1) {Loc} A -> B  vs.  A -Loc-> B  ({Loc} A will actually replace all locations deep inside A)
+--   (2) \{Loc} x1 ... xk . e  vs. \x1 @ Loc ... xk @ Loc . e
+--   (3) data D {l1 ... li} a1 ... ak = Con ty1 ... tyn | ...
 --       vs. data D = {l1 ... li} [a1 ... ak] Con ty1 ... tyn | ...
 --   (4) forall a1 ... ak ty  vs.  [a1 ... ak] ty
 --   (5) ty  vs {l1 ... li} ty
@@ -79,28 +79,31 @@ parserSpec = ParserSpec
 
 
       {- Type -}
-      ("Type -> FunType", \rhs -> get rhs 1 ),
+      ("Type -> LocatedFunType", \rhs -> get rhs 1 ),
 
       -- No location abstraction types in the surface syntax:
       --  Type -> { Identifiers } . Type
 
       -- The syntax of abstraction types is changed:
       --  Type -> [ Identifiers ] . Type
-      ("Type -> forall Identifiers . FunType", \rhs ->
+      ("Type -> forall Identifiers . LocatedFunType", \rhs ->
         toASTType (singleTypeAbsType (TypeAbsType
                                               (fromASTIdSeq (get rhs 2))
                                               (fromASTType (get rhs 4)))) ),
 
+      {- LocatedFunType -}
+      ("LocatedFunType -> OptAtLoc FunType", \rhs ->
+          let maybeLoc = fromASTOptLocation (get rhs 1)
+              funTy = fromASTType (get rhs 2)
+          in  toASTType (annotateLocOnNoName maybeLoc funTy)
+       ),
 
       {- FunType -}
       ("FunType -> AppType", \rhs -> get rhs 1),
 
       ("FunType -> AppType -> FunType", \rhs ->
-          let loc = SurfaceType.noLocName
-          in  toASTType (FunType
-                          (fromASTType (get rhs 1))
-                          (locOrVar loc)
-                          (fromASTType (get rhs 3))) ),
+          let locName = SurfaceType.noLocName
+          in  toASTType (FunType (fromASTType (get rhs 1)) (locOrVar locName) (fromASTType (get rhs 3))) ),
 
 
       {- AppType -}
@@ -194,7 +197,7 @@ parserSpec = ParserSpec
 
 
       {- DataTypeDecl -}
-      ("DataTypeDecl -> data identifier { identifiers } OptIdentifiers = DataTypeDeclRHS", \rhs ->
+      ("DataTypeDecl -> data identifier { Identifiers } OptIdentifiers = DataTypeDeclRHS", \rhs ->
            let name = getText rhs 2
                locvars = fromASTIdSeq (get rhs 4)
                tyvars  = fromASTIdSeq (get rhs 6)
@@ -290,14 +293,14 @@ parserSpec = ParserSpec
       --   \rhs -> toASTExpr (singleTypeAbs (TypeAbs (fromASTIdSeq (get rhs 2)) (fromASTExpr (get rhs 5)))) ),
 
       -- [Desugar OptAtLoc]
-      --   (1) OptAtLoc = @ a:
+      --   (1) OptAtLoc = {a}:
       --        \ x1 @ a ... xk @ a. expr
-      --   (2) OptAtLoc = nothing:
+      --   (2) OptAtLoc =    :
       --        /\l. \x1 @ l ... xk @ l. expr
       
-      ("LExpr -> \\ Identifiers OptAtLoc . LExpr",
+      ("LExpr -> \\ OptAtLoc Identifiers . LExpr",
         \rhs ->
-          let maybeLoc = fromASTOptLocation (get rhs 3)
+          let maybeLoc = fromASTOptLocation (get rhs 2)
               
               replaceLoc x = (x, Nothing, getLocFromMaybe maybeLoc)
               
@@ -308,7 +311,7 @@ parserSpec = ParserSpec
             (optLocAbs maybeLoc
              (singleAbs
               (Abs
-               (map replaceLoc ( fromASTIdSeq (get rhs 2)) )
+               (map replaceLoc ( fromASTIdSeq (get rhs 3)) )
                (fromASTExpr (get rhs 5))))) ),
 
       ("LExpr -> let { Bindings } LExpr end",
@@ -328,7 +331,7 @@ parserSpec = ParserSpec
       ("OptAtLoc -> ", \rhs -> toASTOptLocation Nothing),
 
       -- Todo: Location should be a constant?
-      ("OptAtLoc -> @ Location", \rhs -> toASTOptLocation (Just (fromASTLocation (get rhs 2))) ),
+      ("OptAtLoc -> { Location }", \rhs -> toASTOptLocation (Just (fromASTLocation (get rhs 2))) ),
 
       {- Alternatives -}
       ("Alternatives -> Alternative", \rhs -> toASTAlternativeSeq [fromASTAlternative (get rhs 1)] ),
