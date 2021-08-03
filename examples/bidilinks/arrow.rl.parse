@@ -10,7 +10,7 @@ arr_par_fun : {$l}.
   \{$l} f. \{$l} g. \{$l} x. (f x, g x);
 arr_plus : {$l}. (Int, Int) -$l-> Int = {$l}.
   \{$l} p. arr_fun ({$l}. \{$l} xy. case xy of (x,y) -> x + y) p;
-addA : (Int -client-> Int) -client-> (Int -client-> Int) -client-> Int -client-> Int = \{client} f.
-  \{client} g. arr_seq_fun (arr_par_fun f g) arr_plus;
+addA : {$l}. (Int -$l-> Int) -$l-> (Int -$l-> Int) -$l-> Int -$l-> Int = {$l}.
+  \{$l} f. \{$l} g. arr_seq_fun (arr_par_fun f g) arr_plus;
 main : Unit = print
   (intToString (addA (\{client} x. x + 1) (\{server} x. x - 1) 10))

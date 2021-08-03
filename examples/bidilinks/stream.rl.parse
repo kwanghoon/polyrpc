@@ -21,10 +21,12 @@ take_stream : {$l}. forall a. Stream {l} a -$l-> Int -$l-> Stream {l} a = {$l}.
             False -> SCons y ({$l}. \{$l} unit. take_stream (ys ()) (n - 1));
 client_list1 : Stream {client} Int = SCons
   1
-  (\{client} unit. SCons 2 (\{client} unit. SCons 3 (\{client} unit. SNil)));
+  ({$l}.
+    \{$l} unit. SCons 2 ({$l}. \{$l} unit. SCons 3 ({$l}. \{$l} unit. SNil)));
 server_list1 : Stream {server} Int = SCons
   1
-  (\{server} unit. SCons 2 (\{server} unit. SCons 3 (\{server} unit. SNil)));
+  ({$l}.
+    \{$l} unit. SCons 2 ({$l}. \{$l} unit. SCons 3 ({$l}. \{$l} unit. SNil)));
 test1 : Int = hd_stream
   (tl_stream (take_stream (map_stream (\{client} x. x + 1) client_list1) 2));
 serverToclient : Stream {server} Int -client-> Stream {client} Int = \{client} server_stream.

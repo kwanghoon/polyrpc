@@ -60,15 +60,15 @@ take_stream
 ////////////////////////////////////////////////////////////////////////////////
 
 client_list1 : Stream {client} Int
-   = SCons 1 (\{client} unit.
-      SCons 2 (\{client} unit.
-        SCons 3 (\{client} unit. SNil)))
+   = SCons 1 (\unit.                    // Todo: lifted to a {l}. \{l} unit. ...
+      SCons 2 (\unit.                   // but can be optimized to \{client} unit. ...
+        SCons 3 (\unit. SNil)))         // by compiler!
 ;
 
 server_list1 : Stream {server} Int
-   = SCons 1 (\{server} unit.
-      SCons 2 (\{server} unit.
-        SCons 3 (\{server} unit. SNil)))
+   = SCons 1 (\unit.
+      SCons 2 (\unit.
+        SCons 3 (\unit. SNil)))
 
 ;
 
@@ -89,7 +89,7 @@ serverToclient
         SNil => SNil;
 	SCons y ys =>
 	  SCons y
-	    ( \{client} unit. serverToclient (ys ()) )
+	    ( \{client} unit. serverToclient (ys ()) )  // Todo: Can {client} be omitted?
       }
 ;
 
