@@ -76,7 +76,7 @@ nlH : List (Html Msg)
 nlA : List (Attr Msg)
     = Nil;
 
-csH : {client} Html Msg -> List (Html Msg) -> List (Html Msg)  -- Todo: Is this mandatory or optional to give a hint, i.e., {client}?
+csH : {client} Html Msg -> List (Html Msg) -> List (Html Msg)  // Todo: Is this mandatory or optional to give a hint, i.e., {client}?
     = cs;  // Todo: csH is a client function since so is cs.
 
 csA : {client} Attr Msg -> List (Attr Msg) -> List (Attr Msg)

@@ -585,11 +585,14 @@ ppExpr (LocAbs xs expr) = group $
   
 ppExpr (Abs varMaybeTyLocs expr) = group $
   backslash
-    <> fillSep (map f varMaybeTyLocs)
+    <> lbrace
+    <> ppLocation ( (\(_,_,loc) -> loc) $ head $ varMaybeTyLocs)  --Todo: a dirty hack
+    <> rbrace
+    <+> fillSep (map f varMaybeTyLocs)
     <> dot
     <> nest nest_width (line <> ppExpr expr)
   where
-    f (x, maybeTy, loc) = pretty x <> maybeF maybeTy <+> at <+> ppLocation loc
+    f (x, maybeTy, loc) = pretty x <> maybeF maybeTy --Old style: <+> at <+> ppLocation loc
 
     maybeF (Just ty) = emptyDoc <+> colon <+> ppType ty <+> emptyDoc
     maybeF Nothing = emptyDoc
