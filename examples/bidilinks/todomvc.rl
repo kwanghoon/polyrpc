@@ -76,11 +76,11 @@ nlH : List (Html Msg)
 nlA : List (Attr Msg)
     = Nil;
 
-csH : {client} Html Msg -> List (Html Msg) -> List (Html Msg)  // Todo: Is this mandatory or optional to give a hint, i.e., {client}?
-    = cs;  // Todo: csH is a client function since so is cs.
+csH : Html Msg -> List (Html Msg) -> List (Html Msg)  // Todo: Is this mandatory or optional to give a hint, i.e., {client}?
+    = \{client} h t. cs h t;  // Todo: csH is a client function since so is cs.
 
-csA : {client} Attr Msg -> List (Attr Msg) -> List (Attr Msg)
-    = cs;
+csA : Attr Msg -> List (Attr Msg) -> List (Attr Msg)
+    = \{client} h t. cs h t;
 
 // // Page is: init x view x update x mount point (query selector e.g., #id)
 data Page a e = Page a ( {client} a -> Html e) ( {client} e -> a -> a ) String; 

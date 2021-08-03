@@ -9,12 +9,6 @@ data Stream {l} a =  SNil | SCons a ({l} Unit -> Stream {l} a) // Todo:  good or
 
 ;
 
-// data Pair {l1 l2} a b = Pair (Ref {l1} a) (Ref {l2} b)
-
-// data Strange {l l1 l2} a b =  Strange ({l} Pair {l l1 l2} a b -> Unit)  // Todo: good or bad?
-
-// ;
-
 hd_stream
    : forall a. Stream {l} a -> a
    = \s.

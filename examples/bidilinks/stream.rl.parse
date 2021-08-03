@@ -1,32 +1,35 @@
 data Stream {l} a = SNil | SCons a (Unit -l-> Stream {l} a);
-hd_stream : {$l}. forall a. Stream {l} a -$l-> a = {$l}.
-  \{$l} s. case s of SCons x xs -> x;
-tl_stream : {$l}. forall a. Stream {l} a -$l-> Stream {l} a = {$l}.
-  \{$l} s. case s of SCons x xs -> xs ();
+hd_stream : {$l}. {l}. forall a. Stream {l} a -$l-> a = {$l}.
+  {l}. \{$l} s. case s of SCons x xs -> x;
+tl_stream : {$l}. {l}. forall a. Stream {l} a -$l-> Stream {l} a = {$l}.
+  {l}. \{$l} s. case s of SCons x xs -> xs ();
 map_stream : {$l}.
-  forall a. forall b. (a -$l-> b) -$l-> Stream {l} a -$l-> Stream {l} b = {$l}.
-  \{$l} f.
-    \{$l} xs.
-      case xs of
-        SNil -> SNil;
-        SCons y ys -> SCons (f y) ({$l}. \{$l} unit. map_stream f (ys ()));
-take_stream : {$l}. forall a. Stream {l} a -$l-> Int -$l-> Stream {l} a = {$l}.
-  \{$l} s.
-    \{$l} n.
-      case s of
-        SNil -> SNil;
-        SCons y ys ->
-          case n <= 0 of
-            True -> SNil;
-            False -> SCons y ({$l}. \{$l} unit. take_stream (ys ()) (n - 1));
+  {l}.
+    forall a.
+      forall b. (a -$l-> b) -$l-> Stream {l} a -$l-> Stream {l} b = {$l}.
+  {l}.
+    \{$l} f.
+      \{$l} xs.
+        case xs of
+          SNil -> SNil;
+          SCons y ys -> SCons (f y) (\{$l} unit. map_stream f (ys ()));
+take_stream : {$l}.
+  {l}. forall a. Stream {l} a -$l-> Int -$l-> Stream {l} a = {$l}.
+  {l}.
+    \{$l} s.
+      \{$l} n.
+        case s of
+          SNil -> SNil;
+          SCons y ys ->
+            case n <= 0 of
+              True -> SNil;
+              False -> SCons y (\{$l} unit. take_stream (ys ()) (n - 1));
 client_list1 : Stream {client} Int = SCons
   1
-  ({$l}.
-    \{$l} unit. SCons 2 ({$l}. \{$l} unit. SCons 3 ({$l}. \{$l} unit. SNil)));
+  (\{$l} unit. SCons 2 (\{$l} unit. SCons 3 (\{$l} unit. SNil)));
 server_list1 : Stream {server} Int = SCons
   1
-  ({$l}.
-    \{$l} unit. SCons 2 ({$l}. \{$l} unit. SCons 3 ({$l}. \{$l} unit. SNil)));
+  (\{$l} unit. SCons 2 (\{$l} unit. SCons 3 (\{$l} unit. SNil)));
 test1 : Int = hd_stream
   (tl_stream (take_stream (map_stream (\{client} x. x + 1) client_list1) 2));
 serverToclient : Stream {server} Int -client-> Stream {client} Int = \{client} server_stream.

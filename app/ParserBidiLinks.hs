@@ -34,6 +34,8 @@ import Literal
 import Expr
 import SurfaceType
 
+import Data.Set(delete, toList)
+
 parserSpec :: ParserSpec Token AST
 parserSpec = ParserSpec
   {
@@ -259,20 +261,31 @@ parserSpec = ParserSpec
               lexpr = fromASTExpr (get rhs 5)
 
               -- Surface syntax dependent!
-              (maybeLoc, extTy) =
+              (locAbsTy, locAbsExpr) =
                 case lexpr of
                   -- location abstraction with l 
-                  (LocAbs _ _) ->    
-                    ( Just $ LocVar defaultLocVarName
-                    , LocAbsType [defaultLocVarName] ty)
+                  (LocAbs _ _) ->
+                    let maybeLoc = Just $ LocVar defaultLocVarName
+                        annTy = annotateLoc maybeLoc ty
+                        locvars = toList $ delete defaultLocVarName (freeLVars annTy)
+                    in  ( singleLocAbsType (LocAbsType (defaultLocVarName : locvars) annTy)
+                        , singleLocAbs (LocAbs (defaultLocVarName : locvars) lexpr) )
 
                   -- location constant a
-                  (Abs ((_,_,loc):_) _) -> (Just $ loc, ty)
+                  (Abs ((_,_,loc):_) _) ->
+                    let maybeLoc = Just loc
+                        annTy = annotateLoc maybeLoc ty
+                        locvars = toList $ freeLVars annTy
+                    in  ( singleLocAbsType (LocAbsType locvars annTy)
+                        , singleLocAbs (LocAbs locvars lexpr) )
 
                   -- Not abstractions
-                  _ -> (Nothing, ty)
+                  _ ->
+                    let locvars = toList $ freeLVars ty
+                    in  ( singleLocAbsType (LocAbsType locvars ty)
+                        , singleLocAbs (LocAbs locvars lexpr) )
           in
-          toASTBindingDecl (Binding False (getText rhs 1) (annotateLoc maybeLoc extTy) lexpr) ),
+          toASTBindingDecl (Binding False (getText rhs 1) locAbsTy locAbsExpr)),
 
 
       {- Bindings -}
@@ -304,8 +317,9 @@ parserSpec = ParserSpec
               
               replaceLoc x = (x, Nothing, getLocFromMaybe maybeLoc)
               
-              optLocAbs Nothing  expr = LocAbs [SurfaceType.defaultLocVarName] expr
-              optLocAbs (Just _) expr = expr
+              -- optLocAbs Nothing  expr = LocAbs [SurfaceType.defaultLocVarName] expr
+              -- optLocAbs (Just _) expr = expr
+              optLocAbs _ expr = expr
           in
           toASTExpr
             (optLocAbs maybeLoc
