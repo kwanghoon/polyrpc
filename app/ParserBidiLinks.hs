@@ -255,37 +255,45 @@ parserSpec = ParserSpec
 
 
       {- Binding -}
+      -- Like let-polymorphism, location variables are generalized for each binding
+      
       ("Binding -> identifier : Type = LExpr",
         \rhs ->
           let ty = fromASTType (get rhs 3)
               lexpr = fromASTExpr (get rhs 5)
 
+              locAbsTy =
+                let maybeLoc = Just $ LocVar defaultLocVarName
+                    annTy = annotateLoc maybeLoc ty
+                    locvars = toList $ delete defaultLocVarName (freeLVars annTy)
+                in  singleLocAbsType (LocAbsType (locvars ++ [defaultLocVarName]) annTy)
+                
               -- Surface syntax dependent!
-              (locAbsTy, locAbsExpr) =
-                case lexpr of
-                  -- location abstraction with l 
-                  (LocAbs _ _) ->
-                    let maybeLoc = Just $ LocVar defaultLocVarName
-                        annTy = annotateLoc maybeLoc ty
-                        locvars = toList $ delete defaultLocVarName (freeLVars annTy)
-                    in  ( singleLocAbsType (LocAbsType (defaultLocVarName : locvars) annTy)
-                        , singleLocAbs (LocAbs (defaultLocVarName : locvars) lexpr) )
+              -- (locAbsTy, locAbsExpr) = 
+                -- case lexpr of
+                --   -- location abstraction with l 
+                --   (LocAbs _ _) ->
+                --     let maybeLoc = Just $ LocVar defaultLocVarName
+                --         annTy = annotateLoc maybeLoc ty
+                --         locvars = toList $ delete defaultLocVarName (freeLVars annTy)
+                --     in  ( singleLocAbsType (LocAbsType (locvars ++ [defaultLocVarName]) annTy)
+                --         , singleLocAbs (LocAbs locvars lexpr) )
 
-                  -- location constant a
-                  (Abs ((_,_,loc):_) _) ->
-                    let maybeLoc = Just loc
-                        annTy = annotateLoc maybeLoc ty
-                        locvars = toList $ freeLVars annTy
-                    in  ( singleLocAbsType (LocAbsType locvars annTy)
-                        , singleLocAbs (LocAbs locvars lexpr) )
+                --   -- location constant a
+                --   (Abs ((_,_,loc):_) _) ->
+                --     let maybeLoc = Just loc
+                --         annTy = annotateLoc maybeLoc ty
+                --         locvars = toList $ freeLVars annTy
+                --     in  ( singleLocAbsType (LocAbsType locvars annTy)
+                --         , singleLocAbs (LocAbs locvars lexpr) )
 
-                  -- Not abstractions
-                  _ ->
-                    let locvars = toList $ freeLVars ty
-                    in  ( singleLocAbsType (LocAbsType locvars ty)
-                        , singleLocAbs (LocAbs locvars lexpr) )
+                --   -- Not abstractions
+                --   _ ->
+                --     let locvars = toList $ freeLVars ty
+                --     in  ( singleLocAbsType (LocAbsType locvars ty)
+                --         , singleLocAbs (LocAbs locvars lexpr) )
           in
-          toASTBindingDecl (Binding False (getText rhs 1) locAbsTy locAbsExpr)),
+          toASTBindingDecl (Binding False (getText rhs 1) locAbsTy lexpr)),
 
 
       {- Bindings -}
@@ -309,24 +317,25 @@ parserSpec = ParserSpec
       --   (1) OptAtLoc = {a}:
       --        \ x1 @ a ... xk @ a. expr
       --   (2) OptAtLoc =    :
-      --        /\l. \x1 @ l ... xk @ l. expr
+      --        \x1 @ $empty ... xk @ $empty. expr    At parsing stage, $empty is introduced.
+      --        \x1 @ ^l1 ... xk @ ^lk. expr          Later, $empty will be replaced by ^l
+      --                                              a unification variable by a type check proc.
       
       ("LExpr -> \\ OptAtLoc Identifiers . LExpr",
         \rhs ->
           let maybeLoc = fromASTOptLocation (get rhs 2)
               
-              replaceLoc x = (x, Nothing, getLocFromMaybe maybeLoc)
+              replaceLoc x = (x, Nothing, SurfaceType.getLocFromMaybe maybeLoc)
               
               -- optLocAbs Nothing  expr = LocAbs [SurfaceType.defaultLocVarName] expr
               -- optLocAbs (Just _) expr = expr
-              optLocAbs _ expr = expr
           in
           toASTExpr
-            (optLocAbs maybeLoc
+            -- (optLocAbs maybeLoc
              (singleAbs
               (Abs
                (map replaceLoc ( fromASTIdSeq (get rhs 3)) )
-               (fromASTExpr (get rhs 5))))) ),
+               (fromASTExpr (get rhs 5)))) {- ) -} ),
 
       ("LExpr -> let { Bindings } LExpr end",
         \rhs -> toASTExpr (Let (fromASTBindingDeclSeq (get rhs 3)) (fromASTExpr (get rhs 5))) ),

@@ -5,12 +5,12 @@
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
-data Stream {l} a =  SNil | SCons a ({l} Unit -> Stream {l} a) // Todo:  good or bad?
+data Stream {l} a =  SNil | SCons a (Unit -l-> Stream {l} a)
 
 ;
 
 hd_stream
-   : forall a. Stream {l} a -> a
+   : {l}. forall a. Stream {l} a -> a
    = \s.
       case s {
         SCons x xs => x
@@ -19,7 +19,7 @@ hd_stream
 ;
 
 tl_stream
-   : forall a. Stream {l} a -> Stream {l} a
+   : {l}. forall a. Stream {l} a -> Stream {l} a
    = \s.
       case s {
         SCons x xs => xs ()
@@ -28,7 +28,7 @@ tl_stream
 ;
 
 map_stream
-   : forall a b. (a -> b) -> Stream {l} a -> Stream {l} b
+   : {l}. forall a b. (a -> b) -> Stream {l} a -> Stream {l} b
    = \f xs.
         case xs {
 	 SNil => SNil;
@@ -38,7 +38,7 @@ map_stream
 ;
 
 take_stream
-    : forall a. Stream {l} a -> Int -> Stream {l} a
+    : {l} forall a. Stream {l} a -> Int -> Stream {l} a
     = \s n.
         case s {
 	  SNil => SNil;
@@ -71,19 +71,19 @@ test1 : Int
         (tl_stream 
 	  (take_stream 
 	    (map_stream
-	       (\{client} x. x+1) client_list1)
+	       (\client: x. x+1) client_list1)
 	    2))
 	    
 ;
 
 serverToclient
   : Stream {server} Int -> Stream {client} Int
-  = \{client} server_stream .
+  = \client: server_stream .
       case server_stream {
         SNil => SNil;
 	SCons y ys =>
 	  SCons y
-	    ( \{client} unit. serverToclient (ys ()) )  // Todo: Can {client} be omitted?
+	    ( \client: unit. serverToclient (ys ()) )  // Todo: Can {client} be omitted?
       }
 ;
 

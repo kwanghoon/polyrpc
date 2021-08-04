@@ -46,5 +46,5 @@ addA : (Int -> Int) -> (Int -> Int) -> Int -> Int
 main : Unit
   = print 
       (intToString 
-         (addA (\{client} x. x+1) (\{server} x. x-1) 10))
+         (addA (\client: x. x+1) (\server: x. x-1) 10))
 
