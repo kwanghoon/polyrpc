@@ -10,7 +10,7 @@ data Stream {l} a =  SNil | SCons a (Unit -l-> Stream {l} a)
 ;
 
 hd_stream
-   : {l}. forall a. Stream {l} a -l-> a
+   : {l1 l2}. forall a. Stream {l1} a -l2-> a
    = \s.
       case s {
         SCons x xs => x
@@ -19,7 +19,7 @@ hd_stream
 ;
 
 tl_stream
-   : {l}. forall a. Stream {l} a -l-> Stream {l} a
+   : {l1 l2}. forall a. Stream {l1} a -l2-> Stream {l1} a
    = \s.
       case s {
         SCons x xs => xs ()
@@ -28,7 +28,7 @@ tl_stream
 ;
 
 map_stream
-   : {l}. forall a b. l: (a -> b) -> Stream {l} a -> Stream {l} b
+   : {l1 l2}. forall a b. l2: (a -> b) -> Stream {l1} a -> Stream {l1} b
    = \f xs.
         case xs {
 	 SNil => SNil;
@@ -38,7 +38,7 @@ map_stream
 ;
 
 take_stream
-    : {l}. forall a. l: Stream {l} a -> Int -> Stream {l} a
+    : {l1 l2}. forall a. l2: Stream {l1} a -> Int -> Stream {l1} a
     = \s n.
         case s {
 	  SNil => SNil;
