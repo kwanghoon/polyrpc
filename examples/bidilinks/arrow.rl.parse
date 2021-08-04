@@ -1,16 +1,20 @@
-arr_fun : {$l}. forall a. a -$l-> a = {$l}. \{$l} x. x;
+
+arr_fun : {$l}. forall a. a -$l-> a = \$empty: x. x;
 arr_seq_fun : {$l}.
   forall a.
-    forall b. forall c. (a -$l-> b) -$l-> (b -$l-> c) -$l-> a -$l-> c = {$l}.
-  \{$l} f. \{$l} g. \{$l} x. g (f x);
+    forall b.
+      forall c. (a -$l-> b) -$l-> (b -$l-> c) -$l-> a -$l-> c = \$empty: f.
+  \$empty: g. \$empty: x. g (f x);
 arr_par_fun : {$l}.
   forall a.
     forall b.
-      forall c. (a -$l-> b) -$l-> (a -$l-> c) -$l-> a -$l-> (b, c) = {$l}.
-  \{$l} f. \{$l} g. \{$l} x. (f x, g x);
-arr_plus : {$l}. (Int, Int) -$l-> Int = {$l}.
-  \{$l} p. arr_fun (\{$l} xy. case xy of (x,y) -> x + y) p;
-addA : {$l}. (Int -$l-> Int) -$l-> (Int -$l-> Int) -$l-> Int -$l-> Int = {$l}.
-  \{$l} f. \{$l} g. arr_seq_fun (arr_par_fun f g) arr_plus;
+      forall c. (a -$l-> b) -$l-> (a -$l-> c) -$l-> a -$l-> (b, c) = \$empty: f.
+  \$empty: g. \$empty: x. (f x, g x);
+arr_plus : {$l}. (Int, Int) -$l-> Int = \$empty: p.
+  arr_fun (\$empty: xy. case xy of (x,y) -> x + y) p;
+addA : {$l}.
+  (Int -$l-> Int) -$l-> (Int -$l-> Int) -$l-> Int -$l-> Int = \$empty: f.
+  \$empty: g. arr_seq_fun (arr_par_fun f g) arr_plus;
 main : Unit = print
-  (intToString (addA (\{client} x. x + 1) (\{server} x. x - 1) 10))
+  (intToString (addA (\client: x. x + 1) (\server: x. x - 1) 10))
+

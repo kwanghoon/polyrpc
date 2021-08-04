@@ -66,6 +66,7 @@ doProcess cmd file = do
 
   verbose (_flag_debug_parse cmd) $ putStrLn "Dumping..."
   verbose (_flag_debug_parse cmd) $ putDocW 80 {- putStrLn $ show -} $ ppPolyRpcProg $ fromASTTopLevelDeclSeq exprSeqAst
+  verbose (_flag_debug_parse cmd) $ putStrLn ""
 
   let toplevelDecls = fromASTTopLevelDeclSeq exprSeqAst
 
