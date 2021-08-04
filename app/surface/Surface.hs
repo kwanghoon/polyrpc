@@ -1,11 +1,13 @@
 {-# LANGUAGE DeriveDataTypeable, DeriveGeneric #-}
 
-module SurfaceType where
+module Surface where
 
 import Location
 import Type
 
--- Surface syntax
+--------------------------------------------
+-- The design of surface syntax (Ver.0.1) --
+--------------------------------------------
 {-
 
 (1) In types,
@@ -101,7 +103,7 @@ import Type
 -- For parsing
 noLocName = "$empty"  -- Just to represent A -> B by A -$NoLoc-> B
 
---defaultLocVarName = "$l" -- '$' cannot be written in the surface syntax.
+defaultLocVarName = "$l" -- '$' cannot be written in the surface syntax.
 
 getLocFromMaybe :: Maybe Location -> Location
 getLocFromMaybe (Just loc) = loc 
@@ -121,10 +123,27 @@ annoOnCond cond maybeLoc ty =
   where
     anno loc (TypeVarType x) = TypeVarType x
     anno loc (TupleType tys) = TupleType (map (anno loc) tys)
-    anno loc (FunType ty1 (Location _) ty2) = FunType (anno loc ty1) loc (anno loc ty2)
+    anno loc (FunType ty1 (Location _) ty2) = FunType (anno loc ty1) loc (anno loc ty2) -- Must not happen!!
     anno loc (FunType ty1 (LocVar name) ty2)
       | cond name = FunType (anno loc ty1) loc (anno loc ty2)
-      | otherwise = FunType (anno loc ty1) (LocVar name) (anno loc ty2)
+      | otherwise = FunType (anno loc ty1) (LocVar name) (anno loc ty2) -- Must not happen!!
     anno loc (TypeAbsType xs ty) = TypeAbsType xs (anno loc ty)
     anno loc (LocAbsType ls ty) = LocAbsType ls (anno loc ty)
     anno loc (ConType d locs tys) = ConType d locs (map (anno loc) tys)
+
+
+isTyfromSingleWorld :: Type -> Bool
+isTyfromSingleWorld (TypeVarType x) = True
+isTyfromSingleWorld (TupleType tys) = and (map isTyfromSingleWorld tys)
+isTyfromSingleWorld (FunType ty1 loc ty2) =
+  isTyfromSingleWorld ty1
+  && isTyfromSingleWorld ty2
+  && isLocfromSingleWorld loc
+isTyfromSingleWorld (TypeAbsType xs ty) = isTyfromSingleWorld ty
+isTyfromSingleWorld (LocAbsType ls ty) = False
+isTyfromSingleWorld (ConType d locs tys) = null locs && and (map isTyfromSingleWorld tys)
+
+isLocfromSingleWorld (Location _) = False
+isLocfromSingleWorld (LocVar name)
+  | name == noLocName = True
+  | otherwise = False

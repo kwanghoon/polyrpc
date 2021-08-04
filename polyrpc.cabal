@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 4b2271ba13a4a058ba11bd55be0a611246a2805afa1c3bd4be63fec4eacf5722
+-- hash: cfe02ed4d486871287c638abece05890e7d2e270a33fd2115965afb712cc82b2
 
 name:           polyrpc
 version:        0.2.2.0
@@ -48,7 +48,7 @@ executable polyrpc
       Location
       Prim
       Type
-      SurfaceType
+      Surface
       Context
       NameGen
       Naming

@@ -7,7 +7,7 @@ module Expr(Expr(..), ExprVar, AST(..), BindingDecl(..), DataTypeDecl(..)
   , GlobalTypeInfo(..), Env(..), BasicLibType
   , lookupConstr, lookupCon, lookupDataTypeName
   , lookupConFromDataTypeInfo, lookupPrimOpType
-  , mainName, primOpTypes
+  , mainName, primOpTypes, isAbs
   , singleTypeAbs, singleLocAbs, singleAbs
   , singleTypeApp, singleLocApp
   , setTop
@@ -94,6 +94,10 @@ lookupDataTypeName gti x = [info | (y,info) <- _dataTypeInfo gti, x==y]
 
 lookupCon tycondecls con =
   [tys | (conname, tys) <- tycondecls, con==conname]
+
+--
+isAbs (Abs _ _) = True
+isAbs _ = False
 
 --
 -- Given a constructor name, this returns its type.
@@ -585,9 +589,8 @@ ppExpr (LocAbs xs expr) = group $
   
 ppExpr (Abs varMaybeTyLocs expr) = group $
   backslash
-    <> lbrace
     <> ppLocation ( (\(_,_,loc) -> loc) $ head $ varMaybeTyLocs)  --Todo: a dirty hack
-    <> rbrace
+    <> colon
     <+> fillSep (map f varMaybeTyLocs)
     <> dot
     <> nest nest_width (line <> ppExpr expr)

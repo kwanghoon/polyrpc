@@ -67,7 +67,7 @@ tokenStrList =
     (OPEN_BRACKET_TOKEN, "["),
     (CLOSE_BRACKET_TOKEN, "]"),
     (IDENTIFIER_TOKEN, "identifier"),
-    (LOCFUN_TOKEN, "LocFun"),
+    (LOCFUN_TOKEN, "locFun"),
     (FUN_TOKEN, "->"),
     (FORALL_TOKEN, "forall"),
     (EXISTS_TOKEN, "exists"),

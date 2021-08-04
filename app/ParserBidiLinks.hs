@@ -32,7 +32,7 @@ import Type
 import Prim
 import Literal
 import Expr
-import SurfaceType
+import Surface
 
 import Data.Set(delete, toList)
 
@@ -83,30 +83,41 @@ parserSpec = ParserSpec
       {- Type -}
       ("Type -> LocatedFunType", \rhs -> get rhs 1 ),
 
-      -- No location abstraction types in the surface syntax:
-      --  Type -> { Identifiers } . Type
+      ("Type -> { Identifiers } . Type", \rhs ->
+        toASTType (singleLocAbsType
+                            (LocAbsType (fromASTIdSeq (get rhs 2))
+                                        (fromASTType (get rhs 5)))) ),
 
       -- The syntax of abstraction types is changed:
       --  Type -> [ Identifiers ] . Type
-      ("Type -> forall Identifiers . LocatedFunType", \rhs ->
+      ("Type -> forall Identifiers . Type", \rhs ->
         toASTType (singleTypeAbsType (TypeAbsType
                                               (fromASTIdSeq (get rhs 2))
                                               (fromASTType (get rhs 4)))) ),
 
       {- LocatedFunType -}
-      ("LocatedFunType -> OptAtLoc FunType", \rhs ->
-          let maybeLoc = fromASTOptLocation (get rhs 1)
-              funTy = fromASTType (get rhs 2)
-          in  toASTType (annotateLocOnNoName maybeLoc funTy)
-       ),
+      ("LocatedFunType -> FunType", \rhs -> get rhs 1),
 
+      ("LocatedFunType -> Location : FunType", \rhs ->
+          let loc = fromASTLocation (get rhs 1)
+              funTy = fromASTType (get rhs 3)
+          in  toASTType (annotateLocOnNoName (Just loc) funTy)
+       ),
+      
       {- FunType -}
       ("FunType -> AppType", \rhs -> get rhs 1),
 
       ("FunType -> AppType -> FunType", \rhs ->
-          let locName = SurfaceType.noLocName
+          let locName = Surface.noLocName
           in  toASTType (FunType (fromASTType (get rhs 1)) (locOrVar locName) (fromASTType (get rhs 3))) ),
 
+      ("FunType -> AppType locFun FunType", \rhs ->
+          let locfun = getText rhs 2
+              locName = init (init (tail locfun))  -- extract Loc from -Loc-> ( a bit hard-coded!!)
+          in  toASTType (FunType
+                          (fromASTType (get rhs 1))
+                          (locOrVar locName)
+                          (fromASTType (get rhs 3))) ),
 
       {- AppType -}
       ("AppType -> AtomicType", \rhs -> get rhs 1),
@@ -262,11 +273,17 @@ parserSpec = ParserSpec
           let ty = fromASTType (get rhs 3)
               lexpr = fromASTExpr (get rhs 5)
 
-              locAbsTy =
-                let maybeLoc = Just $ LocVar defaultLocVarName
-                    annTy = annotateLoc maybeLoc ty
-                    locvars = toList $ delete defaultLocVarName (freeLVars annTy)
-                in  singleLocAbsType (LocAbsType (locvars ++ [defaultLocVarName]) annTy)
+              locAbsTy = if isTyfromSingleWorld ty && isAbs lexpr
+                then case lexpr of
+                       Abs ((_,_,loc):_) _ ->
+                         case loc of
+                           Location name -> annotateLoc (Just loc) ty
+                           LocVar name ->
+                             -- assert (name == noLocName)
+                             LocAbsType [defaultLocVarName]
+                               (annotateLoc (Just (LocVar defaultLocVarName)) ty)
+
+                else ty
                 
               -- Surface syntax dependent!
               -- (locAbsTy, locAbsExpr) = 
@@ -320,22 +337,38 @@ parserSpec = ParserSpec
       --        \x1 @ $empty ... xk @ $empty. expr    At parsing stage, $empty is introduced.
       --        \x1 @ ^l1 ... xk @ ^lk. expr          Later, $empty will be replaced by ^l
       --                                              a unification variable by a type check proc.
-      
-      ("LExpr -> \\ OptAtLoc Identifiers . LExpr",
+
+      ("LExpr -> \\ Identifiers . LExpr",
         \rhs ->
-          let maybeLoc = fromASTOptLocation (get rhs 2)
+          let maybeLoc = Nothing
               
-              replaceLoc x = (x, Nothing, SurfaceType.getLocFromMaybe maybeLoc)
+              replaceLoc x = (x, Nothing, Surface.getLocFromMaybe maybeLoc)
               
-              -- optLocAbs Nothing  expr = LocAbs [SurfaceType.defaultLocVarName] expr
+              -- optLocAbs Nothing  expr = LocAbs [Surface.defaultLocVarName] expr
               -- optLocAbs (Just _) expr = expr
           in
           toASTExpr
             -- (optLocAbs maybeLoc
              (singleAbs
               (Abs
-               (map replaceLoc ( fromASTIdSeq (get rhs 3)) )
-               (fromASTExpr (get rhs 5)))) {- ) -} ),
+               (map replaceLoc ( fromASTIdSeq (get rhs 2)) )
+               (fromASTExpr (get rhs 4)))) {- ) -} ),
+      
+      ("LExpr -> \\ Location : Identifiers . LExpr",
+        \rhs ->
+          let maybeLoc = Just (fromASTLocation (get rhs 2))
+              
+              replaceLoc x = (x, Nothing, Surface.getLocFromMaybe maybeLoc)
+              
+              -- optLocAbs Nothing  expr = LocAbs [Surface.defaultLocVarName] expr
+              -- optLocAbs (Just _) expr = expr
+          in
+          toASTExpr
+            -- (optLocAbs maybeLoc
+             (singleAbs
+              (Abs
+               (map replaceLoc ( fromASTIdSeq (get rhs 4)) )
+               (fromASTExpr (get rhs 6)))) {- ) -} ),
 
       ("LExpr -> let { Bindings } LExpr end",
         \rhs -> toASTExpr (Let (fromASTBindingDeclSeq (get rhs 3)) (fromASTExpr (get rhs 5))) ),
@@ -353,8 +386,7 @@ parserSpec = ParserSpec
 
       ("OptAtLoc -> ", \rhs -> toASTOptLocation Nothing),
 
-      -- Todo: Location should be a constant?
-      ("OptAtLoc -> { Location }", \rhs -> toASTOptLocation (Just (fromASTLocation (get rhs 2))) ),
+      ("OptAtLoc -> Location :", \rhs -> toASTOptLocation (Just (fromASTLocation (get rhs 2))) ),
 
       {- Alternatives -}
       ("Alternatives -> Alternative", \rhs -> toASTAlternativeSeq [fromASTAlternative (get rhs 1)] ),
