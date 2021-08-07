@@ -58,7 +58,7 @@ typeInf debug toplevelDecls basicLib = do
   let datatypeDecls = datatypeDecls0 ++ datatypeDecls1
 
   -- 2. collect all types, builtin or user-defined ones
-  typeInfo <- collectDataTypeDecls datatypeDecls
+  typeInfo <- collectTypeInfoDataTypeDecls datatypeDecls
 
   -- 3. elaborate data types
   -- elab_datatypeDecls <- elabDataTypeDecls typeInfo datatypeDecls

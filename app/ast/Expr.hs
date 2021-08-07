@@ -24,7 +24,10 @@ module Expr(Expr(..), ExprVar, AST(..), BindingDecl(..), DataTypeDecl(..)
   , toASTOptLocation
   , subst, substs, substs_, tyExprSubst, tyExprSubsts, locExprSubst, locExprSubsts
   , typeconOrVar, isRec
-  , splitTopLevelDecls, collectDataTypeDecls, elabConTypeDecls, collectDataTypeInfo
+  , splitTopLevelDecls
+  , checkDataTypeDecls, collectTypeInfo, {-obsolete -} collectTypeInfoDataTypeDecls
+  , collectConTypeDecls, {-obsolete -} elabConTypeDecls
+  , collectDataTypeInfo
   , builtinDatatypes
   , ppExpr
   , ppPolyRpcProg
@@ -230,7 +233,9 @@ initEnv = Env { _locVarEnv=[], _typeVarEnv=[], _varEnv=[] }
 
 type BasicLibType = (String, Type, Expr)
 
+-----------------------
 -- | Built-in datatypes
+-----------------------
 
 builtinDatatypes :: [DataTypeDecl]
 builtinDatatypes = [
@@ -259,13 +264,35 @@ splitTopLevelDecl (DataTypeTopLevel datatypeDecl) = return ([], [datatypeDecl])
 splitTopLevelDecl (LibDeclTopLevel x ty) = return ([], [])
 
 
--- 
-collectDataTypeDecls :: Monad m => [DataTypeDecl] -> m TypeInfo
-collectDataTypeDecls datatypeDecls = do
-  let nameTyvarsPairList = map collectDataTypeDecl datatypeDecls
+------------------------------------------------
+-- Collect all types in the form of 'D Locs Tys'
+--   - e.g., String, List a, Steram Loc A, ...)
+--   - Do well-formedness checks!!
+------------------------------------------------
+checkDataTypeDecls :: Monad m => [DataTypeDecl] -> m ()
+checkDataTypeDecls datatypeDecls =
+  mapM_ checkDataTypeDecl datatypeDecls
+
+checkDataTypeDecl (DataType name locvars tyvars typeConDecls) =
+  if isTypeName name
+     && and (map isLocationVarName locvars)
+     && allUnique locvars == []
+     && and (map isTypeVarName tyvars)
+     && allUnique tyvars == []
+  then return ()
+  else error $ "[TypeCheck] collectDataTypeDecls: Invalid datatype: "
+                 ++ name ++ " " ++ show locvars++ " " ++ show tyvars
+
+collectTypeInfo :: Monad m => DataTypeInfo -> m TypeInfo
+collectTypeInfo dataTypeInfo =
+  return $ map (\(name, (locvars, tyvars, _)) -> (name, locvars, tyvars)) dataTypeInfo
+
+collectTypeInfoDataTypeDecls :: Monad m => [DataTypeDecl] -> m TypeInfo
+collectTypeInfoDataTypeDecls datatypeDecls = do
+  let nameTyvarsPairList = map collectTypeInfoDataTypeDecl datatypeDecls
   return nameTyvarsPairList
 
-collectDataTypeDecl (DataType name locvars tyvars typeConDecls) =
+collectTypeInfoDataTypeDecl (DataType name locvars tyvars typeConDecls) =
   if isTypeName name
      && and (map isLocationVarName locvars)
      && allUnique locvars == []
@@ -275,7 +302,13 @@ collectDataTypeDecl (DataType name locvars tyvars typeConDecls) =
   else error $ "[TypeCheck] collectDataTypeDecls: Invalid datatype: "
                  ++ name ++ " " ++ show locvars++ " " ++ show tyvars
 
---
+----------------------------------
+-- Collect all data constructors
+--    - Do well-formedness checks
+----------------------------------
+collectConTypeDecls :: Monad m => [DataTypeDecl] -> m ConTypeInfo
+collectConTypeDecls elab_datatypeDecls = elabConTypeDecls elab_datatypeDecls
+  
 elabConTypeDecls :: Monad m => [DataTypeDecl] -> m ConTypeInfo
 elabConTypeDecls elab_datatypeDecls = do
   conTypeInfoList <- mapM elabConTypeDecl elab_datatypeDecls
