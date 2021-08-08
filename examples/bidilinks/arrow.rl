@@ -28,7 +28,7 @@ arr_par_fun : forall a b c. (a -> b) -> (a -> c) -> a -> (b,c)
 arr_plus : (Int, Int) -> Int    // Todo: Just by {l} (Int,Int) -> Int cannot create /\l. !!
   = \p. arr_fun                 //       Introduce an eta exapnsion to create /\l. !!
       (\xy.                     // arr_fun {?1} [... -?2-> ...] (\xy@?3. ...) 
-        case xy {               //  ?1 == ?2 == ?3 but no more constraint!
+        case xy {               //  ?1, ?2 == ?3 but no more constraint!
 	  (x,y) => x + y        //  We can set the location (\p. ...) to them 
 	}                       //  by having a priority on local application!
       ) p

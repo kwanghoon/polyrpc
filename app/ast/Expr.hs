@@ -688,18 +688,24 @@ ppExpr (Prim op locs tys exprs) = group $
     
   where
     ppPrefix expr = ppPrim op
+      <+> lbrace
       <> ppLocations locs
+      <+> rbrace
       -- <> ppParenTypes tys
       <+> ppParenExpr expr
 
     ppInfix expr1 expr2 = ppParenExpr expr1
       <+> ppPrim op
+      <+> lbrace
       <> ppLocations locs
+      <+> rbrace
       -- <> ppParenTypes tys
       <+> ppParenExpr expr2
 
     ppPostfix expr = ppParenExpr expr
+      <+> lbrace
       <> ppLocations locs
+      <+> rbrace
       -- <> ppParenTypes tys
       <+> ppPrim op
     

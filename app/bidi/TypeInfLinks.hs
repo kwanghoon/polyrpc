@@ -134,7 +134,13 @@ bindingTypes bindingDecls =
 ----------------------------------------------------------------------------
 
 bidi :: GlobalTypeInfo -> Context -> Location -> [BindingDecl] -> TIMonad (Context, [BindingDecl])
-bidi gti gamma loc bindingDecls =  bidiBindingDecls gti gamma loc bindingDecls
+bidi gti gamma loc bindingDecls =  do
+  (gamma, elab_bindingDecls) <- bidiBindingDecls gti gamma loc bindingDecls
+  dummy_fresh_alpha <- lift $ freshTypeVar
+  let instGamma = instUnsolved (CForall dummy_fresh_alpha) loc gamma  -- Todo: a hack
+  return ( instGamma
+         , [ Binding b x (apply instGamma ty) (eapply instGamma expr)
+           | Binding b x ty expr <- elab_bindingDecls ] )
 
 bidiBindingDecls :: GlobalTypeInfo -> Context -> Location -> [BindingDecl] -> TIMonad (Context, [BindingDecl])
 bidiBindingDecls gti gamma loc [] =  return (gamma, [])
@@ -677,7 +683,7 @@ typecheckExpr_ gti gamma loc e (TypeAbsType alphas a) = do
           loc
           (tyExprSubsts (map TypeVarType alphas') alphas e) -- Actually useless!!
           (typeSubsts (map TypeVarType alphas') alphas a)
-  let instgamma' = instUnsolved (CForall (head alphas')) gamma'
+  let instgamma' = instUnsolved (CForall (head alphas')) loc gamma'
   let delta = dropMarker (CForall (head alphas')) gamma'
   return (delta,
           TypeAbs alphas
@@ -691,19 +697,10 @@ typecheckExpr_ gti gamma loc e (LocAbsType ls1 a) = do
        loc
        (locExprSubsts (map LocVar ls') ls1 e) -- Actually useless!!
        (locSubsts (map LocVar ls') ls1 a)
-  let instgamma' = instUnsolved (CLForall (head ls')) gamma'
+  let instgamma' = instUnsolved (CLForall (head ls')) loc gamma'
   let delta = dropMarker (CLForall (head ls')) gamma'
   return (delta, LocAbs ls1 (locExprSubsts (map LocVar ls1) ls' (eapply instgamma' e')))
   
--- typecheckExpr_ gti gamma loc (LocAbs ls0 e) (LocAbsType ls1 a) = do
---   ls' <- lift $ replicateM (length ls0) freshLocationVar
---   (gamma', e') <-
---     typecheckExpr gti (gamma >++ map CLForall ls') loc
---       (locExprSubsts (map LocVar ls') ls0 e) (locSubsts (map LocVar ls') ls1 a)
---   let instgamma' = instUnsolved (CLForall (head ls')) gamma'
---   let delta = dropMarker (CLForall (head ls')) gamma'
---   return (delta, LocAbs ls0 (locExprSubsts (map LocVar ls0) ls' (eapply instgamma' e')))
-
 -- ->I
 -- typecheckExpr_ gti gamma loc (Abs [] e) a = do
 --   typecheckExpr_ gti gamma loc e a
@@ -722,17 +719,6 @@ typecheckExpr_ gti gamma loc (Abs [(x,xtyLocs,LocVar l)] e) (FunType a loc' b)
 typecheckExpr_ gti gamma loc (Abs xTyLocs e) (FunType a loc' b) = do
   throwError $ "typecheckExpr: # of arguments != 1: "
     ++ show (map (\(x,_,_) -> x) xTyLocs) ++ "in Abs"
-
--- typecheckExpr_ gti gamma loc (Abs ((x,mty,loc0):xmtyls) e) (FunType a loc' b) = do
---   -- loc0' <- elabLocation (locVars gamma) loc0
---   let loc0' = loc0
---   x' <- lift $ freshVar
---   gamma0 <- subloc gamma loc' loc0'
---   (gamma1, e') <- typecheckExpr_ gti (gamma0 >++ [cvar x' a]) loc0' (subst (Var x') x (Abs xmtyls e)) b
---   let instgamma1 = instUnsolved (cvar x' a) gamma1
---   let delta = dropMarker (cvar x' a) gamma1
-
---   return (delta, Abs [(x,Just (apply delta a),loc0')] (subst (Var x) x' (eapply instgamma1 e')))
 
 -- Case
 typecheckExpr_ gti gamma loc (Case expr _ alts) caseExprTy = do
@@ -755,9 +741,10 @@ typecheckAbs gti gamma loc (Abs [(x,_,loc0')] e) (FunType a loc' b) = do
   x' <- lift $ freshVar
   gamma0 <- subloc gamma loc' loc0'
   (gamma1, e') <- typecheckExpr gti (gamma0 >++ [cvar x' a]) loc0' (subst (Var x') x e) b
-  let instgamma1 = instUnsolved (cvar x' a) gamma1
   let delta = dropMarker (cvar x' a) gamma1
-  return (delta, Abs [(x,Just (apply delta a), lapply delta loc0')] (subst (Var x) x' (eapply instgamma1 e')))
+  let loc1 = lapply delta loc0'
+  let instgamma1 = instUnsolved (cvar x' a) loc1 gamma1
+  return (delta, Abs [(x,Just (apply delta a), loc1)] (subst (Var x) x' (eapply instgamma1 e')))
 
 
 -- | Alternative synthesising:
@@ -902,8 +889,9 @@ typesynthExpr_ gti gamma loc expr@(Abs xmtyls e) = do
                            >++ map (uncurry cvar)
                                    (zip xs' (map TypeVarType alphas)))
                       (last locs) (substs (map Var xs') xs e) (TypeVarType beta)
-  let instgamma' = instUnsolved (cvar (last xs') (TypeVarType (last alphas))) gamma'
   let delta = dropMarker (cvar (head xs') (TypeVarType (head alphas))) gamma'  -- Todo: Confirm head not last.
+  let instgamma' = instUnsolved (cvar (last xs') (TypeVarType (last alphas)))
+                     (lapply delta (last locs)) gamma'
 
   return (apply delta funty, delta,
           singleAbs $

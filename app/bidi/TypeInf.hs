@@ -974,7 +974,7 @@ typecheckExpr_ gti gamma loc e (TypeAbsType alphas a) = do
           loc
           (tyExprSubsts (map TypeVarType alphas') alphas e)
           (typeSubsts (map TypeVarType alphas') alphas a)
-  let instgamma' = instUnsolved (CForall (head alphas')) gamma'
+  let instgamma' = instUnsolved (CForall (head alphas')) loc gamma'
   let delta = dropMarker (CForall (head alphas')) gamma'
   return (delta,
           TypeAbs alphas
@@ -986,7 +986,7 @@ typecheckExpr_ gti gamma loc (LocAbs ls0 e) (LocAbsType ls1 a) = do
   (gamma', e') <-
     typecheckExpr gti (gamma >++ map CLForall ls') loc
       (locExprSubsts (map LocVar ls') ls0 e) (locSubsts (map LocVar ls') ls1 a)
-  let instgamma' = instUnsolved (CLForall (head ls')) gamma'
+  let instgamma' = instUnsolved (CLForall (head ls')) loc gamma'
   let delta = dropMarker (CLForall (head ls')) gamma'
   return (delta, LocAbs ls0 (locExprSubsts (map LocVar ls0) ls' (eapply instgamma' e')))
 
@@ -1000,7 +1000,7 @@ typecheckExpr_ gti gamma loc (Abs [(x,mty,loc0)] e) (FunType a loc' b) = do
   x' <- lift $ freshVar
   gamma0 <- subloc gamma loc' loc0'
   (gamma1, e') <- typecheckExpr_ gti (gamma0 >++ [cvar x' a]) loc0' (subst (Var x') x e) b
-  let instgamma1 = instUnsolved (cvar x' a) gamma1
+  let instgamma1 = instUnsolved (cvar x' a) loc0 gamma1
   let delta = dropMarker (cvar x' a) gamma1
   return (delta, Abs [(x,Just (apply delta a), loc0')] (subst (Var x) x' (eapply instgamma1 e')))
 
@@ -1010,7 +1010,7 @@ typecheckExpr_ gti gamma loc (Abs ((x,mty,loc0):xmtyls) e) (FunType a loc' b) = 
   x' <- lift $ freshVar
   gamma0 <- subloc gamma loc' loc0'
   (gamma1, e') <- typecheckExpr_ gti (gamma0 >++ [cvar x' a]) loc0' (subst (Var x') x (Abs xmtyls e)) b
-  let instgamma1 = instUnsolved (cvar x' a) gamma1
+  let instgamma1 = instUnsolved (cvar x' a) loc0 gamma1
   let delta = dropMarker (cvar x' a) gamma1
 
   return (delta, Abs [(x,Just (apply delta a),loc0')] (subst (Var x) x' (eapply instgamma1 e')))
@@ -1158,7 +1158,7 @@ typesynthExpr_ gti gamma loc expr@(Abs xmtyls e) = do
                            >++ map (uncurry cvar)
                                    (zip xs' (map TypeVarType alphas)))
                       (last locs) (substs (map Var xs') xs e) (TypeVarType beta)
-  let instgamma' = instUnsolved (cvar (last xs') (TypeVarType (last alphas))) gamma'
+  let instgamma' = instUnsolved (cvar (last xs') (TypeVarType (last alphas))) (last locs) gamma'
   let delta = dropMarker (cvar (head xs') (TypeVarType (head alphas))) gamma'  -- Todo: Confirm head not last.
   return (apply delta funty, delta,
           singleAbs $
