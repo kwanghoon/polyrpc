@@ -66,6 +66,14 @@ server_list1 : Stream {server} Int
 
 ;
 
+// test1 : Int = (((hd_stream { client }) { 'l_au^ }) Int)
+//   ((((tl_stream { client }) { 'l_aw^ }) Int)
+//     ((((take_stream { client }) { 'l_ay^ }) Int)
+//       (((((map_stream { client }) { client }) Int) Int)
+//         (\client: x : Int . x + {client } 1)
+//         client_list1)
+//       2));
+
 test1 : Int
      = hd_stream 
         (tl_stream 

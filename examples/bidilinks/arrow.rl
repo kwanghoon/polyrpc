@@ -43,8 +43,17 @@ addA : (Int -> Int) -> (Int -> Int) -> Int -> Int
 
 ;
 
-main : Unit
-  = print 
-      (intToString 
+// main : Unit = (print { 'l_v^ })
+//   ((intToString { 'l_w^ })
+//     ((addA { client })
+//       (\client: x : Int . x + {client } 1)
+//       (\client: y : Int . (\server: x : Int . x - {server } 1) y)
+//       10))
+
+
+main : Unit                                 // print {?1} and intToString {?2}
+  = print                                   // ?1 and ?2 are unconstrained, so 
+      (intToString                          // we can set the current location (client) to them
+                                            // by having a priority on local application!
          (addA (\client: x. x+1) (\client: y. (\server: x. x-1) y) 10)) // Interesting!!
 
