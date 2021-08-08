@@ -21,6 +21,8 @@ import NameGen
 import Context
 import Pretty
 
+import Surface (noLocName)
+
 import Debug.Trace
 
 -- Todo
@@ -371,19 +373,39 @@ subtype gamma loc0 typ1 typ2 =
       let tys = map (apply theta) (map TypeVarType alphas')
       return (delta, \x -> f (TypeApp x (Just $ apply delta (TypeAbsType alphas a)) tys))
 
+    -- forallLocR
+    (a, LocAbsType locvars2 b) -> do
+      -- Do alpha conversion to avoid clashes
+      locvars <- lift $ replicateM (length locvars2) freshLocationVar
+      (theta, f) <- subtype (gamma >++ map CLForall locvars) loc0 a
+                      (locSubsts (map LocVar locvars) locvars2 b)
+      let delta = dropMarker (CLForall (head locvars)) theta
+      return (delta, \x -> LocAbs locvars2 (f x))
+
+
+    -- forallLocL
+    (LocAbsType locvars1 a, b) -> do
+      -- Do alpha conversion to avoid clashes
+      locvars <- lift $ replicateM (length locvars1) freshExistsLocationVar
+      (theta, f) <- subtype (gamma >++ map CLMarker locvars >++ map CLExists locvars) loc0
+                      (locSubsts (map LocVar locvars) locvars1 a) b
+      let delta = dropMarker (CLMarker (head locvars)) theta
+      let locs = map (lapply theta) (map LocVar locvars)
+      return (delta, \x -> f (LocApp x (Just $ apply delta (LocAbsType locvars1 a)) locs))
+    
     -- forallLoc
-    (LocAbsType locvars1 a, LocAbsType locvars2 b)
-      | locvars1 == locvars2 -> subtype gamma loc0 a b
-      | length locvars1 == length locvars2 -> do
-         locvars <- lift $ replicateM (length locvars1) freshLocationVar
-         (theta, f) <- subtype (gamma >++ map CLMarker locvars) loc0
-                         (locSubsts (map LocVar locvars) locvars1 a)
-                         (locSubsts (map LocVar locvars) locvars2 a)
-         let delta = dropMarker (CLMarker (head locvars)) theta
-         return (delta, f)
-      | otherwise ->
-         throwError $ "subtype: different length of location vars: "
-                           ++ pretty (gamma, typ1, typ2)
+    -- (LocAbsType locvars1 a, LocAbsType locvars2 b)
+    --   | locvars1 == locvars2 -> subtype gamma loc0 a b
+    --   | length locvars1 == length locvars2 -> do
+    --      locvars <- lift $ replicateM (length locvars1) freshLocationVar
+    --      (theta, f) <- subtype (gamma >++ map CLMarker locvars) loc0
+    --                      (locSubsts (map LocVar locvars) locvars1 a)
+    --                      (locSubsts (map LocVar locvars) locvars2 a)
+    --      let delta = dropMarker (CLMarker (head locvars)) theta
+    --      return (delta, f)
+    --   | otherwise ->
+    --      throwError $ "subtype: different length of location vars: "
+    --                        ++ pretty (gamma, typ1, typ2)
 
     -- <:ConType
     (ConType c1 locs1 tys1, ConType c2 locs2 tys2)
@@ -465,13 +487,21 @@ instantiateL_ gamma currLoc alpha a =
                        alpha
                        (typeSubsts (map TypeVarType betas') betas b)
         let delta2 = dropMarker (CForall (head betas')) delta1 -- Todo: Ensure that betas is not null!
-        x <- lift $ freshVar
+        -- x <- lift $ freshVar
         return (delta2, \h -> TypeAbs betas (f h))
 
       -- Note: No polymorphic (location) abstraction is allowed.
 
-      -- InstLAIIL
-      -- LocAbsType locs b -> do  -- Should not be allowed!!
+      -- InstLAIIR
+      LocAbsType locs b -> do
+        -- Do alpha conversion to avoid clashes
+        locs' <- lift $ replicateM (length locs) freshLocationVar
+        (delta1, f) <- instantiateL (gamma >++ map CLForall locs')
+                       currLoc
+                       alpha
+                       (locSubsts (map LocVar locs') locs b)
+        let delta2 = dropMarker (CLForall (head locs')) delta1
+        return (delta2, \h -> LocAbs locs (f h))
 
       -- Note: TupleType and ConType should be monomorphic types that
       --       will be handled above.
@@ -512,8 +542,8 @@ instantiateL_ gamma currLoc alpha a =
 
         return (gamma2, idTr) -- TODO: transform functions for sum types using fs!!
         
-      _ -> throwError $ "The impossible happened! instantiateL: "
-                ++ pretty (gamma, TypeVarType alpha, a)
+      -- _ -> throwError $ "The impossible happened! instantiateL: "
+      --           ++ pretty (gamma, TypeVarType alpha, a)
 
 
 -- | Algorithmic instantiation (right):
@@ -577,8 +607,17 @@ instantiateR_ gamma currLoc a alpha =
 
       -- Note: No polymorphic (location) abstraction is allowed.
 
-      -- InstLAIIR
-      -- LocAbsType locs b -> do  -- Should not be allowed!!
+      -- InstRAIIL
+      LocAbsType locs b -> do
+        -- Do alpha conversion to avoid clashes
+        locs' <- lift $ replicateM (length locs) freshExistsLocationVar
+        (delta1, f) <- instantiateR (gamma >++ map CLMarker locs' >++ map CLExists locs')
+                        currLoc
+                        (locSubsts (map LocVar locs') locs b)
+                        alpha
+        let delta2 = dropMarker (CLMarker (head locs')) delta1
+        let locArgs = map (lapply delta1) (map LocVar locs')  -- delta1, not delta2 !!
+        return (delta2, \h -> f (LocApp h (Just $ apply delta1 (LocAbsType locs b)) locArgs))
 
       -- Note: TupleType and ConType should be monomorphic types that
       --       will be handled above.
@@ -616,8 +655,8 @@ instantiateR_ gamma currLoc a alpha =
                      (gamma0, []) (zip argTys betas)
         return (delta, idTr) -- TODO: transform functions for sum types using fs!!
 
-      _ -> throwError $ "The impossible happened! instantiateR: "
-                ++ pretty (gamma, a, TypeVarType alpha)
+      -- _ -> throwError $ "The impossible happened! instantiateR: "
+      --           ++ pretty (gamma, a, TypeVarType alpha)
 
 
 -- | Type checking:
@@ -636,7 +675,7 @@ typecheckExpr_ gti gamma loc e (TypeAbsType alphas a) = do
   (gamma', e') <-
        typecheckExpr gti (gamma >++ map CForall alphas')
           loc
-          (tyExprSubsts (map TypeVarType alphas') alphas e)
+          (tyExprSubsts (map TypeVarType alphas') alphas e) -- Actually useless!!
           (typeSubsts (map TypeVarType alphas') alphas a)
   let instgamma' = instUnsolved (CForall (head alphas')) gamma'
   let delta = dropMarker (CForall (head alphas')) gamma'
@@ -645,39 +684,55 @@ typecheckExpr_ gti gamma loc e (TypeAbsType alphas a) = do
             (tyExprSubsts (map TypeVarType alphas) alphas' (eapply instgamma' e')))
 
 -- LForallI
-typecheckExpr_ gti gamma loc (LocAbs ls0 e) (LocAbsType ls1 a) = do
-  ls' <- lift $ replicateM (length ls0) freshLocationVar
+typecheckExpr_ gti gamma loc e (LocAbsType ls1 a) = do
+  ls' <- lift $ replicateM (length ls1) freshLocationVar
   (gamma', e') <-
-    typecheckExpr gti (gamma >++ map CLForall ls') loc
-      (locExprSubsts (map LocVar ls') ls0 e) (locSubsts (map LocVar ls') ls1 a)
+    typecheckExpr gti (gamma >++ map CLForall ls')
+       loc
+       (locExprSubsts (map LocVar ls') ls1 e) -- Actually useless!!
+       (locSubsts (map LocVar ls') ls1 a)
   let instgamma' = instUnsolved (CLForall (head ls')) gamma'
   let delta = dropMarker (CLForall (head ls')) gamma'
-  return (delta, LocAbs ls0 (locExprSubsts (map LocVar ls0) ls' (eapply instgamma' e')))
+  return (delta, LocAbs ls1 (locExprSubsts (map LocVar ls1) ls' (eapply instgamma' e')))
+  
+-- typecheckExpr_ gti gamma loc (LocAbs ls0 e) (LocAbsType ls1 a) = do
+--   ls' <- lift $ replicateM (length ls0) freshLocationVar
+--   (gamma', e') <-
+--     typecheckExpr gti (gamma >++ map CLForall ls') loc
+--       (locExprSubsts (map LocVar ls') ls0 e) (locSubsts (map LocVar ls') ls1 a)
+--   let instgamma' = instUnsolved (CLForall (head ls')) gamma'
+--   let delta = dropMarker (CLForall (head ls')) gamma'
+--   return (delta, LocAbs ls0 (locExprSubsts (map LocVar ls0) ls' (eapply instgamma' e')))
 
 -- ->I
-typecheckExpr_ gti gamma loc (Abs [] e) a = do
-  typecheckExpr_ gti gamma loc e a
+-- typecheckExpr_ gti gamma loc (Abs [] e) a = do
+--   typecheckExpr_ gti gamma loc e a
 
-typecheckExpr_ gti gamma loc (Abs [(x,mty,loc0)] e) (FunType a loc' b) = do
-  -- loc0' <- elabLocation (locVars gamma) loc0
-  let loc0' = loc0
-  x' <- lift $ freshVar
-  gamma0 <- subloc gamma loc' loc0'
-  (gamma1, e') <- typecheckExpr_ gti (gamma0 >++ [cvar x' a]) loc0' (subst (Var x') x e) b
-  let instgamma1 = instUnsolved (cvar x' a) gamma1
-  let delta = dropMarker (cvar x' a) gamma1
-  return (delta, Abs [(x,Just (apply delta a), loc0')] (subst (Var x) x' (eapply instgamma1 e')))
+typecheckExpr_ gti gamma loc (Abs [(x,xtyLocs,Location constloc)] e) (FunType a loc' b) =
+  typecheckAbs gti gamma loc (Abs [(x,xtyLocs,Location constloc)] e) (FunType a loc' b)
 
-typecheckExpr_ gti gamma loc (Abs ((x,mty,loc0):xmtyls) e) (FunType a loc' b) = do
-  -- loc0' <- elabLocation (locVars gamma) loc0
-  let loc0' = loc0
-  x' <- lift $ freshVar
-  gamma0 <- subloc gamma loc' loc0'
-  (gamma1, e') <- typecheckExpr_ gti (gamma0 >++ [cvar x' a]) loc0' (subst (Var x') x (Abs xmtyls e)) b
-  let instgamma1 = instUnsolved (cvar x' a) gamma1
-  let delta = dropMarker (cvar x' a) gamma1
+typecheckExpr_ gti gamma loc (Abs [(x,xtyLocs,LocVar l)] e) (FunType a loc' b)
+  | l == noLocName = do
+      l' <- lift freshExistsLocationVar
+      let gamma' = gamma >++ [CLExists l']
+      typecheckAbs gti gamma' loc (Abs [(x,xtyLocs,LocVar l')] e) (FunType a loc' b)
+  | otherwise = throwError $ "typecheckExpr: location variable expected: " ++ noLocName
+                    ++ " but got " ++ l ++ " in Abs with FunType: " ++ show loc'
 
-  return (delta, Abs [(x,Just (apply delta a),loc0')] (subst (Var x) x' (eapply instgamma1 e')))
+typecheckExpr_ gti gamma loc (Abs xTyLocs e) (FunType a loc' b) = do
+  throwError $ "typecheckExpr: # of arguments != 1: "
+    ++ show (map (\(x,_,_) -> x) xTyLocs) ++ "in Abs"
+
+-- typecheckExpr_ gti gamma loc (Abs ((x,mty,loc0):xmtyls) e) (FunType a loc' b) = do
+--   -- loc0' <- elabLocation (locVars gamma) loc0
+--   let loc0' = loc0
+--   x' <- lift $ freshVar
+--   gamma0 <- subloc gamma loc' loc0'
+--   (gamma1, e') <- typecheckExpr_ gti (gamma0 >++ [cvar x' a]) loc0' (subst (Var x') x (Abs xmtyls e)) b
+--   let instgamma1 = instUnsolved (cvar x' a) gamma1
+--   let delta = dropMarker (cvar x' a) gamma1
+
+--   return (delta, Abs [(x,Just (apply delta a),loc0')] (subst (Var x) x' (eapply instgamma1 e')))
 
 -- Case
 typecheckExpr_ gti gamma loc (Case expr _ alts) caseExprTy = do
@@ -694,6 +749,16 @@ typecheckExpr_ gti gamma loc e b = do
 
 -- typecheckExpr_ gti gamma loc e typ = do
 --   throwError $ "typecheckExpr: not implemented yet"
+
+typecheckAbs gti gamma loc (Abs [(x,_,loc0')] e) (FunType a loc' b) = do
+  -- assert (loc0' == Location constloc \/ loc'0 == LocVar l)
+  x' <- lift $ freshVar
+  gamma0 <- subloc gamma loc' loc0'
+  (gamma1, e') <- typecheckExpr gti (gamma0 >++ [cvar x' a]) loc0' (subst (Var x') x e) b
+  let instgamma1 = instUnsolved (cvar x' a) gamma1
+  let delta = dropMarker (cvar x' a) gamma1
+  return (delta, Abs [(x,Just (apply delta a), lapply delta loc0')] (subst (Var x) x' (eapply instgamma1 e')))
+
 
 -- | Alternative synthesising:
 --   typesynthAlt Γ loc alts = (D B, A, Δ) <=> Γ |- alt => D B, A -| Δ
@@ -812,36 +877,53 @@ typesynthExpr_ gti gamma loc expr@(Abs xmtyls e) = do
   alphas <- lift $ replicateM (length xmtyls) freshExistsTypeVar
   beta   <- lift $ freshExistsTypeVar
   -- locs <- mapM (elabLocation (locVars gamma)) $ map thd3 xmtyls
-  let locs = map thd3 xmtyls
   let xs = map fst3 xmtyls
+
+  let checkAllLocConst     = all (\l -> case l of Location _ -> True; _ -> False)
+  let checkAllNoNameLocVar = all (LocVar noLocName ==)
+
+  let initLocs = map thd3 xmtyls
+  locs <- if checkAllLocConst initLocs
+    then return initLocs
+    else if checkAllNoNameLocVar initLocs
+    then do lvars  <- lift $ replicateM (length xmtyls) freshExistsLocationVar
+            return $ map LocVar lvars
+    else throwError $ "typesynthExpr: unexpected locations in Abs: " ++ show initLocs
+
+  let xmtyls' = map (\((x,mty,_), loc) -> (x,mty,loc)) $ zip xmtyls locs
+
   let funty = foldr (\ (loc0, alpha0) ty0 -> FunType (TypeVarType alpha0) loc0 ty0)
                 (TypeVarType beta) (zip locs alphas)
+              
   (gamma', e') <- typecheckExpr gti
                     (gamma >++ map CExists alphas
                            >++ [CExists beta]
+                           >++ [CLExists n | LocVar n <- locs]
                            >++ map (uncurry cvar)
                                    (zip xs' (map TypeVarType alphas)))
                       (last locs) (substs (map Var xs') xs e) (TypeVarType beta)
   let instgamma' = instUnsolved (cvar (last xs') (TypeVarType (last alphas))) gamma'
   let delta = dropMarker (cvar (head xs') (TypeVarType (head alphas))) gamma'  -- Todo: Confirm head not last.
+
   return (apply delta funty, delta,
           singleAbs $
-          Abs (map (\ ((x,_,loc), ty)-> (x,ty,loc))
-              (zip xmtyls (map (Just . apply delta . TypeVarType) alphas)))
+          Abs (map (\ ((x,_,loc), ty)-> (x,ty,lapply delta loc))  -- Todo: OK if lam^noname becomes lam^client or lam^server?
+                (zip xmtyls' (map (Just . apply delta . TypeVarType) alphas)))
                   (substs (map Var xs) xs' (eapply instgamma' e')))
 
+      
 -- ->forall_l=>
-typesynthExpr_ gti gamma loc expr@(LocAbs locvars e) = do
-  ls' <- lift $ replicateM (length locvars) freshLocationVar
-  (polylocbodyty, delta, e') <-
-    typesynthExpr gti (gamma >++ map CLMarker ls' >++ map CLForall ls')
-              loc (locExprSubsts (map LocVar ls') locvars e)
-  return (LocAbsType locvars (locSubsts (map LocVar locvars) ls' polylocbodyty)
-         , foldl (\ delta0 l' ->
-                     singleoutMarker (CLMarker l')
-                       (singleoutMarker (CLForall l') delta0)) delta ls'
-         , singleLocAbs $
-           LocAbs locvars (locExprSubsts (map LocVar locvars) ls' e'))
+-- typesynthExpr_ gti gamma loc expr@(LocAbs locvars e) = do
+--   ls' <- lift $ replicateM (length locvars) freshLocationVar
+--   (polylocbodyty, delta, e') <-
+--     typesynthExpr gti (gamma >++ map CLMarker ls' >++ map CLForall ls')
+--               loc (locExprSubsts (map LocVar ls') locvars e)
+--   return (LocAbsType locvars (locSubsts (map LocVar locvars) ls' polylocbodyty)
+--          , foldl (\ delta0 l' ->
+--                      singleoutMarker (CLMarker l')
+--                        (singleoutMarker (CLForall l') delta0)) delta ls'
+--          , singleLocAbs $
+--            LocAbs locvars (locExprSubsts (map LocVar locvars) ls' e'))
 
 -- Let
 typesynthExpr_ gti gamma loc (Let letBindingDecls expr) = do
@@ -887,12 +969,12 @@ typesynthExpr_ gti gamma loc expr@(App e1 maybeTy e2 maybeLoc) = do
   return (ty2, delta, transformFun e1') -- App (transformFun e1') (Just . apply delta $ a) e2 (Just loc0)
 
 -- forall_l E
-typesynthExpr_ gti gamma loc expr@(LocApp e maybeTy locs0) = do
-  -- locs <- mapM (elabLocation (locVars gamma)) locs0
-  let locs = locs0
-  (a, theta, e') <- typesynthExpr gti gamma loc e
-  (b, delta, transformFun) <- locsapplysynth gti theta loc (apply theta a) locs
-  return (b, delta, transformFun e') -- LocApp (transformFun e') (Just . apply delta $ a) locs
+-- typesynthExpr_ gti gamma loc expr@(LocApp e maybeTy locs0) = do
+--   -- locs <- mapM (elabLocation (locVars gamma)) locs0
+--   let locs = locs0
+--   (a, theta, e') <- typesynthExpr gti gamma loc e
+--   (b, delta, transformFun) <- locsapplysynth gti theta loc (apply theta a) locs
+--   return (b, delta, transformFun e') -- LocApp (transformFun e') (Just . apply delta $ a) locs
 
 -- Tuple
 typesynthExpr_ gti gamma loc expr@(Tuple es) = do
@@ -995,13 +1077,17 @@ typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (nolib gamma, loc,
                          TypeApp f (Just . apply delta $ typ)
                            (map (apply delta) (map TypeVarType alphas')))
 
-    -- ForallApp: Not allowed without any explicit location applications
-    -- LForall l a -> do
-    --   -- Do alpha conversion to avoid clashes
-    --   l' <- lift $ freshLVar
-    --   typeapplysynth (gamma >: CLExists l') loc
-    --                  (locSubst (UnknownExists l') l a)
-    --                  e
+    -- ForallLApp: Not allowed without any explicit location applications
+    LocAbsType ls a -> do
+      -- Do alpha conversion to avoid clashes
+      ls' <- lift $ replicateM (length ls) freshExistsLocationVar
+      (typ', loc0, delta, g)
+        <- typeapplysynth gti (gamma >++ map CLExists ls') loc
+                     (locSubsts (map LocVar ls') ls a) e
+      return (typ', loc0, delta,
+              g . \f -> singleLocApp $
+                         LocApp f (Just . apply delta $ typ)
+                           (map (lapply delta) (map LocVar ls')))
 
     -- alpha^App
     TypeVarType alpha
@@ -1036,31 +1122,31 @@ typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (nolib gamma, loc,
 
 -- | Location application synthesising
 --   locapplysynth Γ loc A loc0 = (C, Δ) <=> Γ |- A . loc0 =>> C -| Δ
-locsapplysynth :: GlobalTypeInfo -> Context -> Location -> Type -> [Location]
-  -> TIMonad (Type, Context, Expr -> Expr)
-locsapplysynth gti gamma loc typ locs0 = traceNS "locsapplysynth" (nolib gamma, loc, typ, locs0) $
-  checkwftype gamma typ $
-  case typ of
-    -- LForall LocApp
-    LocAbsType ls a ->  -- Todo: what happens when |locs0| != |ls|?
-      return (locSubsts locs0 ls a, gamma, \f -> LocApp f (Just typ) locs0)
+-- locsapplysynth :: GlobalTypeInfo -> Context -> Location -> Type -> [Location]
+--   -> TIMonad (Type, Context, Expr -> Expr)
+-- locsapplysynth gti gamma loc typ locs0 = traceNS "locsapplysynth" (nolib gamma, loc, typ, locs0) $
+--   checkwftype gamma typ $
+--   case typ of
+--     -- LForall LocApp
+--     LocAbsType ls a ->  -- Todo: what happens when |locs0| != |ls|?
+--       return (locSubsts locs0 ls a, gamma, \f -> LocApp f (Just typ) locs0)
 
-    -- TForall LocApp
-    TypeAbsType alphas a -> do
-      -- Do alpha conversion to avoid clashes
-      alphas' <- lift $ replicateM (length alphas) freshExistsTypeVar
-      (typ', delta, g) <-
-        locsapplysynth gti (gamma >++ map CExists alphas') loc
-                     (typeSubsts (map TypeVarType alphas') alphas a) locs0
-      return (typ', delta,
-              g . \f -> singleTypeApp $
-                          TypeApp f (Just . apply delta $ typ)
-                            (map (apply delta) (map TypeVarType alphas')))
+--     -- TForall LocApp
+--     TypeAbsType alphas a -> do
+--       -- Do alpha conversion to avoid clashes
+--       alphas' <- lift $ replicateM (length alphas) freshExistsTypeVar
+--       (typ', delta, g) <-
+--         locsapplysynth gti (gamma >++ map CExists alphas') loc
+--                      (typeSubsts (map TypeVarType alphas') alphas a) locs0
+--       return (typ', delta,
+--               g . \f -> singleTypeApp $
+--                           TypeApp f (Just . apply delta $ typ)
+--                             (map (apply delta) (map TypeVarType alphas')))
 
-    -- alpha^: Not allowed because alpha^ is a monomorphic type variable!
+--     -- alpha^: Not allowed because alpha^ is a monomorphic type variable!
 
-    _ -> throwError $ "locsapplysynth: don't know what to do with: "
-               ++ pretty (gamma, loc, typ, locs0)
+--     _ -> throwError $ "locsapplysynth: don't know what to do with: "
+--                ++ pretty (gamma, loc, typ, locs0)
 
 -- | Print some debugging info
 traceNS :: (Pretty a, Pretty b) => String -> a -> TIMonad b -> TIMonad b

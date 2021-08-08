@@ -16,7 +16,7 @@ import BasicLib
 import qualified CSType as TT
 import qualified CSExpr as TE
 import TypeCheck
-import TypeInf
+import TypeInfLinks
 import Monomorphization
 import Report
 import Compile
@@ -77,8 +77,9 @@ doProcess cmd file = do
   let elab_toplevelDecls = lib_toplevelDecls ++ elab_builtinDatatypes ++ elab_toplevelDecls1
 
   verbose (_flag_dump_typecheck cmd) $ putStrLn "Dumping..."
-  verbose (_flag_dump_typecheck cmd) $ putStrLn $ show $ elab_toplevelDecls1
-
+  verbose (_flag_dump_typecheck cmd) $ putDocW 80 {- putStrLn $ show $ -} $ ppPolyRpcProg $ elab_toplevelDecls1
+  verbose (_flag_dump_typecheck cmd) $ putStrLn ""
+  
   let jsonfile = prefixOf file ++ ".json"
   print_rpc cmd jsonfile elab_toplevelDecls1
 
