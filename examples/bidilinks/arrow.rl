@@ -35,7 +35,7 @@ arr_plus : (Int, Int) -> Int    // Todo: Just by {l} (Int,Int) -> Int cannot cre
 ;
 
 // f &&& g >>> arr (+)
-addA : (Int -> Int) -> (Int -> Int) -> Int -> Int
+addA : client: (Int -> Int) -> (Int -> Int) -> Int -> Int
   = \f g .
      arr_seq_fun 
       (arr_par_fun f g)

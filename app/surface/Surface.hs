@@ -123,7 +123,7 @@ annoOnCond cond maybeLoc ty =
   where
     anno loc (TypeVarType x) = TypeVarType x
     anno loc (TupleType tys) = TupleType (map (anno loc) tys)
-    anno loc (FunType ty1 (Location _) ty2) = FunType (anno loc ty1) loc (anno loc ty2) -- Must not happen!!
+    anno loc (FunType ty1 (Location loc0) ty2) = FunType (anno loc ty1) (Location loc0) (anno loc ty2)
     anno loc (FunType ty1 (LocVar name) ty2)
       | cond name = FunType (anno loc ty1) loc (anno loc ty2)
       | otherwise = FunType (anno loc ty1) (LocVar name) (anno loc ty2) -- Must not happen!!

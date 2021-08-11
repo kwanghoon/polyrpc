@@ -187,10 +187,10 @@ parserSpec = ParserSpec
       --   \rhs -> toASTTypeSeq $ fromASTType (get rhs 1) : fromASTTypeSeq (get rhs 2) ),
 
 
-      {- OptFunTypes -}
-      -- ("OptFunTypes -> ", \rhs -> toASTTypeSeq [] ),
+      {- OptType -}
+      -- ("OptType -> ", \rhs -> Nothing ),
 
-      -- ("OptFunTypes -> FunTypes", \rhs -> get rhs 1 ),
+      -- ("OptType -> Type", \rhs -> Just $ get rhs 1 ),
 
 
       {- TopLevel -}
@@ -268,49 +268,26 @@ parserSpec = ParserSpec
       {- Binding -}
       -- Like let-polymorphism, location variables are generalized for each binding
       
-      ("Binding -> identifier : Type = LExpr",
+      ("Binding -> identifier : Type = LExpr",  -- Todo: OptType
         \rhs ->
-          let ty = fromASTType (get rhs 3)
-              lexpr = fromASTExpr (get rhs 5)
+          case fromASTType $ get rhs 3 of
+            ty -> 
+              let lexpr = fromASTExpr (get rhs 5)
 
-              locAbsTy = if isTyfromSingleWorld ty && isAbs lexpr
-                then case lexpr of
-                       Abs ((_,_,loc):_) _ ->
-                         case loc of
-                           Location name -> annotateLoc (Just loc) ty
-                           LocVar name ->
-                             -- assert (name == noLocName)
-                             LocAbsType [defaultLocVarName]
-                               (annotateLoc (Just (LocVar defaultLocVarName)) ty)
+                  locAbsTy = if isTyfromSingleWorld ty && isAbs lexpr
+                    then case lexpr of
+                           Abs ((_,_,loc):_) _ ->
+                             case loc of
+                               Location name -> annotateLoc (Just loc) ty
+                               LocVar name ->
+                                 -- assert (name == noLocName)
+                                 LocAbsType [defaultLocVarName]
+                                   (annotateLoc (Just (LocVar defaultLocVarName)) ty)
 
-                else ty
-                
-              -- Surface syntax dependent!
-              -- (locAbsTy, locAbsExpr) = 
-                -- case lexpr of
-                --   -- location abstraction with l 
-                --   (LocAbs _ _) ->
-                --     let maybeLoc = Just $ LocVar defaultLocVarName
-                --         annTy = annotateLoc maybeLoc ty
-                --         locvars = toList $ delete defaultLocVarName (freeLVars annTy)
-                --     in  ( singleLocAbsType (LocAbsType (locvars ++ [defaultLocVarName]) annTy)
-                --         , singleLocAbs (LocAbs locvars lexpr) )
+                    else ty
 
-                --   -- location constant a
-                --   (Abs ((_,_,loc):_) _) ->
-                --     let maybeLoc = Just loc
-                --         annTy = annotateLoc maybeLoc ty
-                --         locvars = toList $ freeLVars annTy
-                --     in  ( singleLocAbsType (LocAbsType locvars annTy)
-                --         , singleLocAbs (LocAbs locvars lexpr) )
-
-                --   -- Not abstractions
-                --   _ ->
-                --     let locvars = toList $ freeLVars ty
-                --     in  ( singleLocAbsType (LocAbsType locvars ty)
-                --         , singleLocAbs (LocAbs locvars lexpr) )
-          in
-          toASTBindingDecl (Binding False (getText rhs 1) locAbsTy lexpr)),
+              in
+              toASTBindingDecl (Binding False (getText rhs 1) locAbsTy lexpr)),
 
 
       {- Bindings -}
