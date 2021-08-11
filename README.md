@@ -5,6 +5,11 @@
  - A polyrpc programming language system including a parser, a poly rpc type checker, a slicing compiler, a poly cs type checker, and a poly cs interpter.
  - A bidirectional typechecking algorithm to infer many type annotations (not location ones) automatically
  
+### News
+ - A bidirectional location inference algorithm is available at linksrpc branch.
+ - Use --debug-parse to see a desugared term before the inference and --dump-typecheck to check a location inferenced term
+ - For experts, --debug-typecheck is available to see how the bidirectional inference is working in detail. 
+ 
 ### Download and build
 ~~~
   $ git clone https://github.com/kwanghoon/polyrpc
