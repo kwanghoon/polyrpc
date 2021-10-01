@@ -4,10 +4,10 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: cfe02ed4d486871287c638abece05890e7d2e270a33fd2115965afb712cc82b2
+-- hash: f29b61d7beb976fd2d148657c3db081eedc8fc7e9850039c59404c5feb4eddce
 
 name:           polyrpc
-version:        0.2.2.0
+version:        0.3
 synopsis:       PolyRpc
 description:    A multi-tier functional programming language based on the polymorphic RPC calculus. Please see the README on GitHub at <https://github.com/kwanghoon/polyrpc#readme>
 category:       Web

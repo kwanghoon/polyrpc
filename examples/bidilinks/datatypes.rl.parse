@@ -1,7 +1,0 @@
-data Stream {l} a = SNil | SCons a (Unit -l-> Stream {l} a);
-data StreamWrong {l l0} a = SNilWrong | SConsWrong a (Unit -l0-> Stream {l} a);
-data Strange {l l1 l2} a b = Strange (Pair {l1 l2} a b -l-> Unit);
-data Pair {l1 l2} a b = Pair (Ref {l1} a) (Ref {l2} b);
-data Plain {l} = Plain (Unit -l-> Unit);
-data Plain2 {l} = Plain2 (Unit -l-> Unit) (Unit -l-> Unit);
-data List a = Nil | Cons a (List a)
