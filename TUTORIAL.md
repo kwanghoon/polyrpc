@@ -10,11 +10,11 @@
   $ git clone https://github.com/kwanghoon/polyrpc
   $ cd polyrpc
   $ stack build
-  $ cat ./examples/bidilinks/helloworld.rl
+  $ cat ./examples/helloworld.rl
   
   main : Unit = print "Hello World\n"
 
-  $ stack exec -- polyrpc-exe ./examples/bidilinks/helloworld.rl
+  $ stack exec -- polyrpc-exe ./examples/helloworld.rl
   Hello World
   $
 ~~~~

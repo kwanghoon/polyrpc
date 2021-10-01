@@ -4,9 +4,10 @@
  - Allow to write client, server, and location-polymorphic functions
  - A polyrpc programming language system including a parser, a poly rpc type checker, a slicing compiler, a poly cs type checker, and a poly cs interpter.
  - A polymorphic location inference algorithm based on bidirectional typechecking.
+ - Syntactic sugar for location annotations (particularly for location-independent functions)
 
 ### News
- - A bidirectional location inference algorithm is available in the master branch. Examples are available at examples/bidilinks.
+ - A bidirectional location inference algorithm is available in the master branch. Examples are available at examples.
  - Use --debug-parse to see a desugared term before the inference and --dump-typecheck to check a location inferenced term
  - For experts, --debug-typecheck is available to see how the bidirectional inference is working in detail. 
  
@@ -20,7 +21,7 @@
 
 ### Run an polyrpc interpreter
 ~~~
-$ stack exec -- polyrpc ./examples/bidilinks/helloworld.rl
+$ stack exec -- polyrpc ./examples/helloworld.rl
 POLYRPC, version 0.1.0: http://github.com/kwanghoon/polyrpc/
 [Reading] ./examples/helloworld.rl
 [Lexing]
