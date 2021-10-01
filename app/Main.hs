@@ -9,13 +9,14 @@ import Lexer
 import Terminal
 import Parser
 import qualified ParserBidi as PB
+import qualified ParserBidiLinks as PBLinks
 import Type
 import Expr
 import BasicLib
 import qualified CSType as TT
 import qualified CSExpr as TE
 import TypeCheck
-import TypeInf
+import TypeInfLinks
 import Monomorphization
 import Report
 import Compile
@@ -34,6 +35,8 @@ import Text.PrettyPrint
 import Data.Maybe
 import System.IO
 import System.Environment (getArgs)
+
+import Data.Text.Prettyprint.Doc.Util (putDocW)
 
 main :: IO ()
 main = do
@@ -58,10 +61,12 @@ doProcess cmd file = do
   -- exprSeqAst <- parsing parserSpec terminalList
 
   putStrLn "[Parsing-Surface syntax]"
-  exprSeqAst <- parsing PB.parserSpec terminalList
+  -- exprSeqAst <- parsing PB.parserSpec terminalList
+  exprSeqAst <- parsing PBLinks.parserSpec terminalList
 
   verbose (_flag_debug_parse cmd) $ putStrLn "Dumping..."
-  verbose (_flag_debug_parse cmd) $ putStrLn $ show $ fromASTTopLevelDeclSeq exprSeqAst
+  verbose (_flag_debug_parse cmd) $ putDocW 80 {- putStrLn $ show -} $ ppPolyRpcProg $ fromASTTopLevelDeclSeq exprSeqAst
+  verbose (_flag_debug_parse cmd) $ putStrLn ""
 
   let toplevelDecls = fromASTTopLevelDeclSeq exprSeqAst
 
@@ -72,8 +77,9 @@ doProcess cmd file = do
   let elab_toplevelDecls = lib_toplevelDecls ++ elab_builtinDatatypes ++ elab_toplevelDecls1
 
   verbose (_flag_dump_typecheck cmd) $ putStrLn "Dumping..."
-  verbose (_flag_dump_typecheck cmd) $ putStrLn $ show $ elab_toplevelDecls1
-
+  verbose (_flag_dump_typecheck cmd) $ putDocW 80 {- putStrLn $ show $ -} $ ppPolyRpcProg $ elab_toplevelDecls1
+  verbose (_flag_dump_typecheck cmd) $ putStrLn ""
+  
   let jsonfile = prefixOf file ++ ".json"
   print_rpc cmd jsonfile elab_toplevelDecls1
 

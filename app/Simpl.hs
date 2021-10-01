@@ -35,7 +35,7 @@ addVar x useInfo =
 
 initVars :: [(String, Bool)] -> UseInfo -> UseInfo
 initVars xIsTops useInfo =
-  foldl (\useInfo (x,istop) ->
+  L.foldl (\useInfo (x,istop) ->
     let initCount = if istop then 2 else 0
         _varUseInfo = H.insert x initCount (varUseInfo useInfo)
     in  useInfo { varUseInfo = _varUseInfo }) useInfo xIsTops
@@ -46,7 +46,7 @@ rmVar x useInfo =
 
 rmVars :: [String] -> UseInfo -> UseInfo
 rmVars xs useInfo =
-  foldl (\useInfo x -> rmVar x useInfo) useInfo xs
+  L.foldl (\useInfo x -> rmVar x useInfo) useInfo xs
 
 incVar :: String -> UseInfo -> UseInfo
 incVar x useInfo =
@@ -64,7 +64,7 @@ save useInfo xs =
 
 restore :: [(String, Int)] -> UseInfo -> UseInfo
 restore xUseList useInfo =
-  useInfo { varUseInfo = foldl fXUseList hashmap xUseList }
+  useInfo { varUseInfo = L.foldl fXUseList hashmap xUseList }
   where
     hashmap = varUseInfo useInfo
 

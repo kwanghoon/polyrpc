@@ -13,6 +13,9 @@ data Token =
   | CLOSE_BRACKET_TOKEN
   | IDENTIFIER_TOKEN
   | LOCFUN_TOKEN
+  | FUN_TOKEN
+  | FORALL_TOKEN
+  | EXISTS_TOKEN
   | DOT_TOKEN
   | COMMA_TOKEN
   | SEMICOLON_TOKEN
@@ -64,7 +67,10 @@ tokenStrList =
     (OPEN_BRACKET_TOKEN, "["),
     (CLOSE_BRACKET_TOKEN, "]"),
     (IDENTIFIER_TOKEN, "identifier"),
-    (LOCFUN_TOKEN, "LocFun"),
+    (LOCFUN_TOKEN, "locFun"),
+    (FUN_TOKEN, "->"),
+    (FORALL_TOKEN, "forall"),
+    (EXISTS_TOKEN, "exists"),
     (DOT_TOKEN, "."),
     (COMMA_TOKEN, ","),
     (SEMICOLON_TOKEN, ";"),

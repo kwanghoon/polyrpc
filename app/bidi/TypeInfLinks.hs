@@ -1,4 +1,4 @@
-module TypeInf(typeInf) where
+module TypeInfLinks(typeInf) where
 
 import Data.Either
 import Data.Maybe
@@ -21,124 +21,92 @@ import NameGen
 import Context
 import Pretty
 
+import Surface (noLocName)
+
 import Debug.Trace
 
 -- Todo
---   1. Apply context to term to replace all occurrences of alpha^ by
---      some type. [Done]
---   2. Apply elabType in type declarations of let bindings [Done]
---   3. Apply elabLocation in the use of locations at expressions and
---      type declarations [Done]
---   4. elabExpr before typeInf [Done]
---   5. Unconstrained existence type variables remain! [Done]
---   6. Type application terms in an argumnet, (...) expr, do not have
---      type annotations. The subtype returns a transformer? [Done]
-
---   [Remaining questions]
---   7. Should we introduce lambdas over type variables?
---      For example, ... (\x@l. let y: ... a ... = expr) ...
---      How do we know the name of this type variable a when it comes from
---      the inferred type polymorphism as [a]. \x@l. ...?
-
---   8. To implement a transformation is left.
---       : subtype (ConType ..., ConType ...)
---       : instantiateL (alpha, ConType ...)
---       : instantiateL (alpha, TupleType ...)
 
 type TIMonad = ExceptT String (State NameState) -- 'ExceptT String NameGen'
 
-typeInf :: Monad m => Bool -> [TopLevelDecl] -> [BasicLibType] -> m (GlobalTypeInfo, [TopLevelDecl], [TopLevelDecl], [TopLevelDecl])
+-- | typeInf
+--
+--   Input:
+--      (1) Debugging option
+--      (2) User programs
+--      (3) Basic library   (from BasicLib.hs)
+--
+--   Output:
+--      (1) Global type information
+--      (2) User-defined datatypes + bindings
+--      (3) Built-in datatypes
+--      (4) Basic library type declarations
+
+typeInf :: Monad m => Bool -> [TopLevelDecl] -> [BasicLibType] ->
+             m (GlobalTypeInfo, [TopLevelDecl], [TopLevelDecl], [TopLevelDecl])
 typeInf debug toplevelDecls basicLib = do
-  -- 1. split
+  ---------------------------------------------
+  -- 1. split binding decls from datatype decls
+  ---------------------------------------------
   (bindingDecls, userDatatypes) <- splitTopLevelDecls toplevelDecls
 
-  -- let datatypeDecls = builtinDatatypes ++ userDatatypes
-  let datatypeDecls0 = builtinDatatypes
-  let datatypeDecls1 = userDatatypes
-  let datatypeDecls = datatypeDecls0 ++ datatypeDecls1
+  -- let datatypeDecls = builtinDatatypes  -- from Expr.hs
+  --                    ++ userDatatypes   -- from User programs
+  let datatypeDecls = builtinDatatypes ++ userDatatypes
 
-  -- 2. collect all types, builtin or user-defined ones
-  typeInfo <- collectTypeInfoDataTypeDecls datatypeDecls
+  -- 2. check builtin and user-defined datatype decls
+  --    and collect data types from them
+  checkDataTypeDecls datatypeDecls
 
-  -- 3. elaborate data types
-  -- elab_datatypeDecls <- elabDataTypeDecls typeInfo datatypeDecls
-  -- elab_datatypeDecls0 <- elabDataTypeDecls typeInfo datatypeDecls0
-  -- elab_datatypeDecls1 <- elabDataTypeDecls typeInfo datatypeDecls1
-  let elab_datatypeDecls0 = datatypeDecls0
-  let elab_datatypeDecls1 = datatypeDecls1
-  let elab_datatypeDecls = elab_datatypeDecls0 ++ elab_datatypeDecls1
-  dataTypeInfo <- collectDataTypeInfo elab_datatypeDecls
+  dataTypeInfo <- collectDataTypeInfo datatypeDecls
+  typeInfo <- collectTypeInfo dataTypeInfo
 
-  -- 4. elaborate constructor types
-  conTypeInfo <- elabConTypeDecls elab_datatypeDecls
-
-  -- 5. elaborate types declared in the bindings
-  -- partial_elab_bindingDecls <- elabBindingTypes typeInfo [] [] bindingDecls
-  let partial_elab_bindingDecls = bindingDecls
+  -- 3. collect data constructors from builtin and user-defeind datatype decls
+  conTypeInfo <- collectConTypeDecls datatypeDecls
 
 --------------------------------
 -- for fully recursive bindings:
 --------------------------------
-  bindingTypeInfo <- bindingTypes partial_elab_bindingDecls
+  bindingTypeInfo <- bindingTypes bindingDecls
 
-  -- 6. elaborate bindings
+  -- 4. elaborate bindings
   let basicLibTypeInfo = [(x,ty) | (x,ty,expr)<-basicLib]
 
-  let gti = GlobalTypeInfo
-              { _typeInfo=typeInfo
-              , _conTypeInfo=conTypeInfo
-              , _dataTypeInfo=dataTypeInfo
--------------------------------
--- for fully recursive bindings
--------------------------------
---              , _bindingTypeInfo=basicLibTypeInfo ++ bindingTypeInfo }
-              , _bindingTypeInfo=basicLibTypeInfo }
-
-  -- let initEnv = (emptyEnv{_varEnv=_bindingTypeInfo gti ++ bindingTypeInfo})
-  -- elab_bindingDecls <- elaborate gti initEnv clientLoc partial_elab_bindingDecls
+  let init_gti = GlobalTypeInfo
+        { _typeInfo=typeInfo
+        , _conTypeInfo=conTypeInfo
+        , _dataTypeInfo=dataTypeInfo
+        , _bindingTypeInfo=basicLibTypeInfo } -- only for library!!
 
   let libGamma = map (\(x,ty) -> CVar x True ty)
-                   (_bindingTypeInfo gti ++ bindingTypeInfo)
+                   (_bindingTypeInfo init_gti ++ bindingTypeInfo)
   let initGamma = mempty >++ libGamma
   let (elab_bindingDecls) =
         case evalNameGen
                $ runExceptT
                    (do lift $ setDebug debug
-                       bidi gti initGamma clientLoc partial_elab_bindingDecls) of
+                       bidi init_gti initGamma clientLoc bindingDecls) of
           Left err_msg -> error err_msg -- Uncaught error!!
           Right (_,x) -> x
 
-  -- 7. return elaborated data types and bindings
-  let lib_toplevels = [ LibDeclTopLevel x ty | (x,ty) <- basicLibTypeInfo]
-  let elab_toplevels0 =
-        [ DataTypeTopLevel dt | dt <- elab_datatypeDecls0]
-  let elab_toplevels1 =
-        [ DataTypeTopLevel dt | dt <- elab_datatypeDecls1]
+  -- 5. return gti and three toplevels
+  let toplevels_lib_binding_types =
+        [ LibDeclTopLevel x ty | (x,ty) <- basicLibTypeInfo]
+        
+  let toplevels_builtin_datatypes =
+        [ DataTypeTopLevel dt | dt <- builtinDatatypes]
+        
+  let toplevels_user_datatypes_and_bindings =
+        [ DataTypeTopLevel dt | dt <- userDatatypes]
         ++ [ BindingTopLevel bd | bd <- elab_bindingDecls]
 
-  let gti1 = gti {_bindingTypeInfo=basicLibTypeInfo ++ bindingTypeInfo}
+  let gti = init_gti                 -- adding user bindings
+        {_bindingTypeInfo=basicLibTypeInfo ++ bindingTypeInfo} 
 
-  -- elab_toplevels0 : built-in datatypes
-  -- elab_toplevels1 : user-defined datatypes + bindings
-  -- lib_toplevels : basic libraries
-  return (gti1, elab_toplevels1, elab_toplevels0, lib_toplevels)
-
-----------------------------------------------------------------------------
--- 1. Split toplevel declarations into datatypes and bindings
-----------------------------------------------------------------------------
-
--- splitTopLevelDecls :: Monad m =>
---   [TopLevelDecl] -> m ([BindingDecl], [DataTypeDecl])
--- splitTopLevelDecls toplevelDecls = do
---   bindingsDatatypeList <- mapM splitTopLevelDecl toplevelDecls
---   let (bindings,datatypes) = unzip bindingsDatatypeList
---   return (concat bindings, concat datatypes)
-
--- splitTopLevelDecl :: Monad m =>
---   TopLevelDecl -> m ([BindingDecl], [DataTypeDecl])
--- splitTopLevelDecl (BindingTopLevel bindingDecl)   = return ([bindingDecl], [])
--- splitTopLevelDecl (DataTypeTopLevel datatypeDecl) = return ([], [datatypeDecl])
-
+  return (gti
+         , toplevels_user_datatypes_and_bindings
+         , toplevels_builtin_datatypes
+         , toplevels_lib_binding_types)
 
 ----------------------------------------------------------------------------
 -- 2. Collect bultin types and user-defined datatyps
@@ -153,121 +121,26 @@ lookupTypeCon typeInfo x = do
     then return (head found)
     else error $ "lookupConstr: Not found construct : " ++ x
 
--- builtinDatatypes :: [DataTypeDecl]
--- builtinDatatypes = [
---     (DataType unitType   [] [] []), -- data Unit
---     (DataType intType    [] [] []), -- data Int
---     (DataType boolType   [] []      -- data Bool = { True | False }
---       [ TypeCon trueLit  []
---       , TypeCon falseLit [] ]),
---     (DataType stringType [] [] []), -- data String
---     (DataType refType ["l"] ["a"] [])  -- data Ref
---   ]
-
-
--- collectDataTypeDecls :: Monad m => [DataTypeDecl] -> m TypeInfo
--- collectDataTypeDecls datatypeDecls = do
---   let nameTyvarsPairList = map collectDataTypeDecl datatypeDecls
---   return nameTyvarsPairList
-
--- collectDataTypeDecl (DataType name locvars tyvars typeConDecls) =
---   if isTypeName name
---      && and (map isLocationVarName locvars)
---      && allUnique locvars == []
---      && and (map isTypeVarName tyvars)
---      && allUnique tyvars == []
---   then (name, locvars, tyvars)
---   else error $ "[TypeCheck] collectDataTypeDecls: Invalid datatype: "
---                  ++ name ++ " " ++ show locvars++ " " ++ show tyvars
-
-----------------------------------------------------------------------------
--- 3. Elaboration of datatype declarations
---  by elaborating Int as an identifier into ConType Int [],
---     checking duplicate type variables in each datatype declaration, and
---     checking duplicate constructor names in all datatype declarations.
-----------------------------------------------------------------------------
-
--- elabDataTypeDecls :: Monad m => TypeInfo -> [DataTypeDecl] -> m [DataTypeDecl]
--- elabDataTypeDecls typeInfo datatypeDecls =
---   mapM (elabDataTypeDecl typeInfo) datatypeDecls
-
--- elabDataTypeDecl :: Monad m => TypeInfo -> DataTypeDecl -> m DataTypeDecl
--- elabDataTypeDecl typeInfo (DataType name locvars tyvars typeConDecls) = do
---   elab_typeConDecls <- mapM (elabTypeConDecl typeInfo locvars tyvars) typeConDecls
---   return (DataType name locvars tyvars elab_typeConDecls)
-
--- elabTypeConDecl :: Monad m => TypeInfo -> [String] -> [String] -> TypeConDecl -> m TypeConDecl
--- elabTypeConDecl typeInfo locvars tyvars (TypeCon con tys) = do
---   elab_tys <- mapM (elabType typeInfo tyvars locvars ) tys
---   return (TypeCon con elab_tys)
-
-----------------------------------------------------------------------------
--- 4. Elaboration of constructor types
-----------------------------------------------------------------------------
-
--- type ConTypeInfo = [(String, ([Type], String, [String], [String]))]
-
--- lookupConstr :: GlobalTypeInfo -> String -> [([Type], String, [String], [String])]
--- lookupConstr gti x = [z | (con, z) <- _conTypeInfo gti, x==con]
-
--- elabConTypeDecls :: Monad m => [DataTypeDecl] -> m ConTypeInfo
--- elabConTypeDecls elab_datatypeDecls = do
---   conTypeInfoList <- mapM elabConTypeDecl elab_datatypeDecls
---   let conTypeInfo = concat conTypeInfoList
---   case allUnique [con | (con,_) <- conTypeInfo] of
---     [] -> return conTypeInfo
---     (con:_) -> error $ "allConTypeDecls: duplicate constructor: " ++ con
-
--- elabConTypeDecl :: Monad m => DataTypeDecl -> m ConTypeInfo
--- elabConTypeDecl (DataType name locvars tyvars typeConDecls) = do
---   return [ (con, (argtys, name, locvars, tyvars)) | TypeCon con argtys <- typeConDecls ]
-
 ----------------------------------------------------------------------------
 -- 5. Elaboration of types declared in bindings
 ----------------------------------------------------------------------------
 
--- type BindingTypeInfo = [(String, Type)]
-
--- elabBindingTypes :: Monad m => TypeInfo -> [String] -> [String] -> [BindingDecl] -> m [BindingDecl]
--- elabBindingTypes typeInfo tyvars locvars bindingDecls =
---   mapM (\(Binding istop f ty expr)-> do
---            -- elab_ty <- elabType typeInfo tyvars locvars ty
---            -- elab_expr <- elabExpr typeInfo tyvars locvars expr
---            -- return (Binding istop f elab_ty elab_expr)) bindingDecls
---            return (Binding istop f ty expr)) bindingDecls
-
 bindingTypes :: Monad m => [BindingDecl] -> m [(String,Type)]
-bindingTypes partial_elab_bindingDecls =
-  mapM (\(Binding _ f ty _) -> return (f,ty)) partial_elab_bindingDecls
+bindingTypes bindingDecls =
+  mapM (\(Binding _ f ty _) -> return (f,ty)) bindingDecls
 
 ----------------------------------------------------------------------------
 -- 6. Elaboration of bindings
 ----------------------------------------------------------------------------
 
--- data GlobalTypeInfo = GlobalTypeInfo
---        { _typeInfo :: TypeInfo
---        , _conTypeInfo :: ConTypeInfo
---        , _dataTypeInfo :: DataTypeInfo
---        , _bindingTypeInfo :: BindingTypeInfo }
-
--- elaborate :: Monad m => GlobalTypeInfo -> Env -> Location -> [BindingDecl] -> m [BindingDecl]
--- elaborate gti env loc [] =  return []
--- elaborate gti env loc (bindingDecl@(Binding _ f ty _):bindingDecls) = do
---   let gti1 = gti {_bindingTypeInfo = (f,ty):_bindingTypeInfo gti}   -- for self-recursion
---   elab_bindingDecl <- elabBindingDecl gti1 env loc bindingDecl
---   elab_bindingDecls <- elaborate gti1 env loc bindingDecls
---   return (elab_bindingDecl:elab_bindingDecls)
-
--- elabBindingDecl :: Monad m => GlobalTypeInfo -> Env -> Location -> BindingDecl -> m BindingDecl
--- elabBindingDecl gti env loc (Binding istop name ty expr) = do -- ToDo: When name is recursive, expr must be lambda abstraction!
---   -- let env = emptyEnv{_varEnv=_bindingTypeInfo gti}
---   (elab_expr,elab_ty) <- elabExpr gti env loc expr
---   if equalType elab_ty ty
---   then return (Binding istop name ty elab_expr)
---   else error $ "[TypeCheck] elabBindingDecl: Incorrect types: " ++ name ++ "\n" ++ show elab_ty ++ "\n" ++ show ty
-
 bidi :: GlobalTypeInfo -> Context -> Location -> [BindingDecl] -> TIMonad (Context, [BindingDecl])
-bidi gti gamma loc bindingDecls =  bidiBindingDecls gti gamma loc bindingDecls
+bidi gti gamma loc bindingDecls =  do
+  (gamma, elab_bindingDecls) <- bidiBindingDecls gti gamma loc bindingDecls
+  dummy_fresh_alpha <- lift $ freshTypeVar
+  let instGamma = instUnsolved (CForall dummy_fresh_alpha) loc gamma  -- Todo: a hack
+  return ( instGamma
+         , [ Binding b x (apply instGamma ty) (eapply instGamma expr)
+           | Binding b x ty expr <- elab_bindingDecls ] )
 
 bidiBindingDecls :: GlobalTypeInfo -> Context -> Location -> [BindingDecl] -> TIMonad (Context, [BindingDecl])
 bidiBindingDecls gti gamma loc [] =  return (gamma, [])
@@ -281,207 +154,6 @@ bidiBindingDecl :: GlobalTypeInfo -> Context -> Location -> BindingDecl -> TIMon
 bidiBindingDecl gti gamma loc (Binding istop name ty expr) = do -- ToDo: When name is recursive, expr must be lambda abstraction!
   (delta, expr') <- typecheckExpr gti gamma clientLoc expr ty
   return (delta, Binding istop name ty expr')  -- apply delta to expr'???
-
-----------------------------------------------------------------------------
--- [Common] Elaboration of types
-----------------------------------------------------------------------------
--- elabType :: Monad m => TypeInfo -> [TypeVar] -> [LocationVar] -> Type -> m Type
--- elabType typeInfo tyvars locvars (TypeVarType x) = do
---   if elem x tyvars then return (TypeVarType x)
---   else if isConstructorName x then
---           do (_locvars, _tyvars) <- lookupTypeCon typeInfo x
---              if _locvars ==[] && _tyvars == []
---              then return (ConType x [] [])
---              else error $ "[TypeCheck]: elabType: Invalid type constructor: " ++ x
---        else
---           error $ "[TypeCheck] elabType: Not found: " ++ x ++ " in " ++ show tyvars
-
--- elabType typeInfo tyvars locvars (TupleType tys) = do
---   elab_tys <- mapM (elabType typeInfo tyvars locvars) tys
---   return (TupleType elab_tys)
-
--- elabType typeInfo tyvars locvars (FunType ty1 (Location loc) ty2) = do
---   elab_ty1 <- elabType typeInfo tyvars locvars ty1
---   elab_ty2 <- elabType typeInfo tyvars locvars ty2
---   let loc0 = if loc `elem` locvars
---              then LocVar loc else Location loc
---   return (FunType elab_ty1 loc0 elab_ty2)
-
--- elabType typeInfo tyvars locvars (FunType ty1 loc0@(LocVar _) ty2) = do
---   elab_ty1 <- elabType typeInfo tyvars locvars ty1
---   elab_ty2 <- elabType typeInfo tyvars locvars ty2
---   return (FunType elab_ty1 loc0 elab_ty2)
-
--- elabType typeInfo tyvars locvars (TypeAbsType abs_tyvars ty) = do
---   elab_ty <- elabType typeInfo (abs_tyvars ++ tyvars) locvars ty
---   return (TypeAbsType abs_tyvars elab_ty)
-
--- elabType typeInfo tyvars locvars (LocAbsType abs_locvars ty) = do
---   elab_ty <- elabType typeInfo tyvars (abs_locvars ++ locvars) ty
---   return (LocAbsType abs_locvars elab_ty)
-
--- elabType typeInfo tyvars locvars (ConType name locs tys) = do
---   (_locvars, _tyvars) <- lookupTypeCon typeInfo name
---   if length _locvars == length locs && length _tyvars == length tys
---     then do elab_locs <- mapM (elabLocation locvars) locs
---             elab_tys <- mapM (elabType typeInfo tyvars locvars) tys
---             return (ConType name elab_locs elab_tys)
---     else error $ "[TypeCheck]: elabType: Invalud args for ConType: " ++ name
-
-
-----------------------------------------------------------------------------
--- [Common] Elaboration of locations
-----------------------------------------------------------------------------
-
--- elabLocation :: Monad m => [LocationVar] -> Location -> m Location
--- elabLocation locvars (Location loc)
---   | loc `elem` locvars = return (LocVar loc)
---   | otherwise = return (Location loc)
--- elabLocation locvars (LocVar x)
---   | x `elem` locvars = return (LocVar x)
---   | otherwise = error $ "[TypeCheck] elabLocation: Not found LocVar " ++ x
-
-----------------------------------------------------------------------------
--- [Common] Elaboration of expressions
-----------------------------------------------------------------------------
-
--- elabExpr :: Monad m => TypeInfo -> [TypeVar] -> [LocationVar] -> Expr -> m Expr
--- elabExpr typeInfo tyvars locvars (Var x) = return $ Var x
-
--- elabExpr typeInfo tyvars locvars (TypeAbs alphas e) = do
---   e' <- elabExpr typeInfo (alphas++tyvars) locvars e
---   return $ TypeAbs alphas e'
-
--- elabExpr typeInfo tyvars locvars (LocAbs ls e) = do
---   e' <- elabExpr typeInfo tyvars (ls++locvars) e
---   return $ LocAbs ls e'
-
--- elabExpr typeInfo tyvars locvars (Abs xMaybetyLocs e) = do
---   xMaybetyLocs' <- mapM ftriple xMaybetyLocs
---   e' <- elabExpr typeInfo tyvars locvars e
---   return $ Abs xMaybetyLocs' e'
---   where
---     ftriple (x,Nothing,loc) = do
---       loc' <- elabLocation locvars loc
---       return (x, Nothing, loc')
---     ftriple (x,Just ty,loc) = do
---       ty' <- elabType typeInfo tyvars locvars ty
---       loc' <- elabLocation locvars loc
---       return (x, Just ty', loc')
-
--- elabExpr typeInfo tyvars locvars (Let bindingDecls e) = do
---   bindingDecls' <- mapM fBindDecl bindingDecls
---   e' <- elabExpr typeInfo tyvars locvars e
---   return $ Let bindingDecls' e'
---   where
---     fBindDecl (Binding istop x ty expr) = do
---       ty' <- elabType typeInfo tyvars locvars ty
---       expr' <- elabExpr typeInfo tyvars locvars expr
---       return $ Binding istop x ty' expr'
-
--- elabExpr typeInfo tyvars locvars (Case e maybeTy alts) = do
---   e' <- elabExpr typeInfo tyvars locvars e
---   maybeTy' <- mapM (elabType typeInfo tyvars locvars) maybeTy
---   alts' <- mapM fAlt alts
---   return $ Case e' maybeTy' alts'
---   where
---     fAlt (Alternative c xs expr) = do
---       expr' <- elabExpr typeInfo tyvars locvars expr
---       return $ Alternative c xs expr'
---     fAlt (TupleAlternative xs expr) = do
---       expr' <- elabExpr typeInfo tyvars locvars expr
---       return $ TupleAlternative xs expr'
-
--- elabExpr typeInfo tyvars locvars (App e1 maybeTy e2 maybeLoc) = do
---   e1' <- elabExpr typeInfo tyvars locvars e1
---   maybeTy' <- fMaybety maybeTy
---   e2' <- elabExpr typeInfo tyvars locvars e2
---   maybeLoc' <- fMaybeloc maybeLoc
---   return $ App e1' maybeTy' e2' maybeLoc'
-
---   where
---     fMaybety Nothing = return Nothing
---     fMaybety (Just ty) = do
---       ty' <- elabType typeInfo tyvars locvars ty
---       return (Just ty')
-
---     fMaybeloc Nothing = return Nothing
---     fMaybeloc (Just loc) = do
---       loc' <- elabLocation locvars loc
---       return (Just loc')
-
--- elabExpr typeInfo tyvars locvars (TypeApp e1 maybeTy tys) = do
---   e1' <- elabExpr typeInfo tyvars locvars e1
---   maybeTy' <- fMaybety maybeTy
---   tys' <- mapM (elabType typeInfo tyvars locvars) tys
---   return $ TypeApp e1' maybeTy' tys'
-
---   where
---     fMaybety Nothing = return Nothing
---     fMaybety (Just ty) = do
---       ty' <- elabType typeInfo tyvars locvars ty
---       return (Just ty')
-
--- elabExpr typeInfo tyvars locvars (LocApp e1 maybeTy locs) = do
---   e1' <- elabExpr typeInfo tyvars locvars e1
---   maybeTy' <- fMaybety maybeTy
---   locs' <- mapM (elabLocation locvars) locs
---   return $ LocApp e1' maybeTy' locs'
-
---   where
---     fMaybety Nothing = return Nothing
---     fMaybety (Just ty) = do
---       ty' <- elabType typeInfo tyvars locvars ty
---       return (Just ty')
-
--- elabExpr typeInfo tyvars locvars (Tuple exprs) = do
---   exprs' <- mapM (elabExpr typeInfo tyvars locvars) exprs
---   return $ Tuple exprs'
-
--- elabExpr typeInfo tyvars locvars (Prim op locs tys exprs) = do
---   locs' <- mapM (elabLocation locvars) locs
---   tys' <- mapM (elabType typeInfo tyvars locvars) tys
---   exprs' <- mapM (elabExpr typeInfo tyvars locvars) exprs
---   return $ Prim op locs' tys' exprs'
-
--- elabExpr typeInfo tyvars locvars (Lit lit) = return $ Lit lit
-
--- elabExpr typeInfo tyvars locvars (Constr c locs tys exprs argtys) = do
---   locs' <- mapM (elabLocation locvars) locs
---   tys' <- mapM (elabType typeInfo tyvars locvars) tys
---   exprs' <- mapM (elabExpr typeInfo tyvars locvars) exprs
---   argtys' <- mapM (elabType typeInfo tyvars locvars) argtys
---   return $ Constr c locs' tys' exprs' argtys'
-
--- data Env = Env
---        { _locVarEnv  :: [String]
---        , _typeVarEnv :: [String]
---        , _varEnv     :: BindingTypeInfo }
-
-emptyEnv = Env {_varEnv=[], _locVarEnv=[], _typeVarEnv=[]}
-
-lookupVar :: Env -> String -> [Type]
-lookupVar env x = [ty | (y,ty) <- _varEnv env, x==y]
-
-lookupLocVar :: Env -> String -> Bool
-lookupLocVar env x = elem x (_locVarEnv env)
-
-lookupTypeVar :: Env -> String -> Bool
-lookupTypeVar env x = elem x (_typeVarEnv env)
-
---
--- type DataTypeInfo = [(String, ([String], [(String,[Type])]))]
-
--- lookupDataTypeName gti x = [info | (y,info) <- _dataTypeInfo gti, x==y]
-
--- collectDataTypeInfo :: Monad m => [DataTypeDecl] -> m DataTypeInfo
--- collectDataTypeInfo datatypeDecls = do
---   mapM get datatypeDecls
---   where get (DataType name locvars tyvars tycondecls) =
---           return (name, (locvars, tyvars,map f tycondecls))
---         f (TypeCon s tys) = (s,tys)
-
---
 
 -- For making constructor location/type/value functions
 mkLocAbs loc cname tyname [] tyvars argtys = mkTypeAbs loc cname tyname [] tyvars argtys
@@ -707,19 +379,39 @@ subtype gamma loc0 typ1 typ2 =
       let tys = map (apply theta) (map TypeVarType alphas')
       return (delta, \x -> f (TypeApp x (Just $ apply delta (TypeAbsType alphas a)) tys))
 
+    -- forallLocR
+    (a, LocAbsType locvars2 b) -> do
+      -- Do alpha conversion to avoid clashes
+      locvars <- lift $ replicateM (length locvars2) freshLocationVar
+      (theta, f) <- subtype (gamma >++ map CLForall locvars) loc0 a
+                      (locSubsts (map LocVar locvars) locvars2 b)
+      let delta = dropMarker (CLForall (head locvars)) theta
+      return (delta, \x -> LocAbs locvars2 (f x))
+
+
+    -- forallLocL
+    (LocAbsType locvars1 a, b) -> do
+      -- Do alpha conversion to avoid clashes
+      locvars <- lift $ replicateM (length locvars1) freshExistsLocationVar
+      (theta, f) <- subtype (gamma >++ map CLMarker locvars >++ map CLExists locvars) loc0
+                      (locSubsts (map LocVar locvars) locvars1 a) b
+      let delta = dropMarker (CLMarker (head locvars)) theta
+      let locs = map (lapply theta) (map LocVar locvars)
+      return (delta, \x -> f (LocApp x (Just $ apply delta (LocAbsType locvars1 a)) locs))
+    
     -- forallLoc
-    (LocAbsType locvars1 a, LocAbsType locvars2 b)
-      | locvars1 == locvars2 -> subtype gamma loc0 a b
-      | length locvars1 == length locvars2 -> do
-         locvars <- lift $ replicateM (length locvars1) freshLocationVar
-         (theta, f) <- subtype (gamma >++ map CLMarker locvars) loc0
-                         (locSubsts (map LocVar locvars) locvars1 a)
-                         (locSubsts (map LocVar locvars) locvars2 a)
-         let delta = dropMarker (CLMarker (head locvars)) theta
-         return (delta, f)
-      | otherwise ->
-         throwError $ "subtype: different length of location vars: "
-                           ++ pretty (gamma, typ1, typ2)
+    -- (LocAbsType locvars1 a, LocAbsType locvars2 b)
+    --   | locvars1 == locvars2 -> subtype gamma loc0 a b
+    --   | length locvars1 == length locvars2 -> do
+    --      locvars <- lift $ replicateM (length locvars1) freshLocationVar
+    --      (theta, f) <- subtype (gamma >++ map CLMarker locvars) loc0
+    --                      (locSubsts (map LocVar locvars) locvars1 a)
+    --                      (locSubsts (map LocVar locvars) locvars2 a)
+    --      let delta = dropMarker (CLMarker (head locvars)) theta
+    --      return (delta, f)
+    --   | otherwise ->
+    --      throwError $ "subtype: different length of location vars: "
+    --                        ++ pretty (gamma, typ1, typ2)
 
     -- <:ConType
     (ConType c1 locs1 tys1, ConType c2 locs2 tys2)
@@ -801,13 +493,21 @@ instantiateL_ gamma currLoc alpha a =
                        alpha
                        (typeSubsts (map TypeVarType betas') betas b)
         let delta2 = dropMarker (CForall (head betas')) delta1 -- Todo: Ensure that betas is not null!
-        x <- lift $ freshVar
+        -- x <- lift $ freshVar
         return (delta2, \h -> TypeAbs betas (f h))
 
       -- Note: No polymorphic (location) abstraction is allowed.
 
-      -- InstLAIIL
-      -- LocAbsType locs b -> do  -- Should not be allowed!!
+      -- InstLAIIR
+      LocAbsType locs b -> do
+        -- Do alpha conversion to avoid clashes
+        locs' <- lift $ replicateM (length locs) freshLocationVar
+        (delta1, f) <- instantiateL (gamma >++ map CLForall locs')
+                       currLoc
+                       alpha
+                       (locSubsts (map LocVar locs') locs b)
+        let delta2 = dropMarker (CLForall (head locs')) delta1
+        return (delta2, \h -> LocAbs locs (f h))
 
       -- Note: TupleType and ConType should be monomorphic types that
       --       will be handled above.
@@ -848,8 +548,8 @@ instantiateL_ gamma currLoc alpha a =
 
         return (gamma2, idTr) -- TODO: transform functions for sum types using fs!!
         
-      _ -> throwError $ "The impossible happened! instantiateL: "
-                ++ pretty (gamma, TypeVarType alpha, a)
+      -- _ -> throwError $ "The impossible happened! instantiateL: "
+      --           ++ pretty (gamma, TypeVarType alpha, a)
 
 
 -- | Algorithmic instantiation (right):
@@ -913,8 +613,17 @@ instantiateR_ gamma currLoc a alpha =
 
       -- Note: No polymorphic (location) abstraction is allowed.
 
-      -- InstLAIIR
-      -- LocAbsType locs b -> do  -- Should not be allowed!!
+      -- InstRAIIL
+      LocAbsType locs b -> do
+        -- Do alpha conversion to avoid clashes
+        locs' <- lift $ replicateM (length locs) freshExistsLocationVar
+        (delta1, f) <- instantiateR (gamma >++ map CLMarker locs' >++ map CLExists locs')
+                        currLoc
+                        (locSubsts (map LocVar locs') locs b)
+                        alpha
+        let delta2 = dropMarker (CLMarker (head locs')) delta1
+        let locArgs = map (lapply delta1) (map LocVar locs')  -- delta1, not delta2 !!
+        return (delta2, \h -> f (LocApp h (Just $ apply delta1 (LocAbsType locs b)) locArgs))
 
       -- Note: TupleType and ConType should be monomorphic types that
       --       will be handled above.
@@ -952,8 +661,8 @@ instantiateR_ gamma currLoc a alpha =
                      (gamma0, []) (zip argTys betas)
         return (delta, idTr) -- TODO: transform functions for sum types using fs!!
 
-      _ -> throwError $ "The impossible happened! instantiateR: "
-                ++ pretty (gamma, a, TypeVarType alpha)
+      -- _ -> throwError $ "The impossible happened! instantiateR: "
+      --           ++ pretty (gamma, a, TypeVarType alpha)
 
 
 -- | Type checking:
@@ -972,7 +681,7 @@ typecheckExpr_ gti gamma loc e (TypeAbsType alphas a) = do
   (gamma', e') <-
        typecheckExpr gti (gamma >++ map CForall alphas')
           loc
-          (tyExprSubsts (map TypeVarType alphas') alphas e)
+          (tyExprSubsts (map TypeVarType alphas') alphas e) -- Actually useless!!
           (typeSubsts (map TypeVarType alphas') alphas a)
   let instgamma' = instUnsolved (CForall (head alphas')) loc gamma'
   let delta = dropMarker (CForall (head alphas')) gamma'
@@ -981,39 +690,35 @@ typecheckExpr_ gti gamma loc e (TypeAbsType alphas a) = do
             (tyExprSubsts (map TypeVarType alphas) alphas' (eapply instgamma' e')))
 
 -- LForallI
-typecheckExpr_ gti gamma loc (LocAbs ls0 e) (LocAbsType ls1 a) = do
-  ls' <- lift $ replicateM (length ls0) freshLocationVar
+typecheckExpr_ gti gamma loc e (LocAbsType ls1 a) = do
+  ls' <- lift $ replicateM (length ls1) freshLocationVar
   (gamma', e') <-
-    typecheckExpr gti (gamma >++ map CLForall ls') loc
-      (locExprSubsts (map LocVar ls') ls0 e) (locSubsts (map LocVar ls') ls1 a)
+    typecheckExpr gti (gamma >++ map CLForall ls')
+       loc
+       (locExprSubsts (map LocVar ls') ls1 e) -- Actually useless!!
+       (locSubsts (map LocVar ls') ls1 a)
   let instgamma' = instUnsolved (CLForall (head ls')) loc gamma'
   let delta = dropMarker (CLForall (head ls')) gamma'
-  return (delta, LocAbs ls0 (locExprSubsts (map LocVar ls0) ls' (eapply instgamma' e')))
-
+  return (delta, LocAbs ls1 (locExprSubsts (map LocVar ls1) ls' (eapply instgamma' e')))
+  
 -- ->I
-typecheckExpr_ gti gamma loc (Abs [] e) a = do
-  typecheckExpr_ gti gamma loc e a
+-- typecheckExpr_ gti gamma loc (Abs [] e) a = do
+--   typecheckExpr_ gti gamma loc e a
 
-typecheckExpr_ gti gamma loc (Abs [(x,mty,loc0)] e) (FunType a loc' b) = do
-  -- loc0' <- elabLocation (locVars gamma) loc0
-  let loc0' = loc0
-  x' <- lift $ freshVar
-  gamma0 <- subloc gamma loc' loc0'
-  (gamma1, e') <- typecheckExpr_ gti (gamma0 >++ [cvar x' a]) loc0' (subst (Var x') x e) b
-  let instgamma1 = instUnsolved (cvar x' a) loc0 gamma1
-  let delta = dropMarker (cvar x' a) gamma1
-  return (delta, Abs [(x,Just (apply delta a), loc0')] (subst (Var x) x' (eapply instgamma1 e')))
+typecheckExpr_ gti gamma loc (Abs [(x,xtyLocs,Location constloc)] e) (FunType a loc' b) =
+  typecheckAbs gti gamma loc (Abs [(x,xtyLocs,Location constloc)] e) (FunType a loc' b)
 
-typecheckExpr_ gti gamma loc (Abs ((x,mty,loc0):xmtyls) e) (FunType a loc' b) = do
-  -- loc0' <- elabLocation (locVars gamma) loc0
-  let loc0' = loc0
-  x' <- lift $ freshVar
-  gamma0 <- subloc gamma loc' loc0'
-  (gamma1, e') <- typecheckExpr_ gti (gamma0 >++ [cvar x' a]) loc0' (subst (Var x') x (Abs xmtyls e)) b
-  let instgamma1 = instUnsolved (cvar x' a) loc0 gamma1
-  let delta = dropMarker (cvar x' a) gamma1
+typecheckExpr_ gti gamma loc (Abs [(x,xtyLocs,LocVar l)] e) (FunType a loc' b)
+  | l == noLocName = do
+      l' <- lift freshExistsLocationVar
+      let gamma' = gamma >++ [CLExists l']
+      typecheckAbs gti gamma' loc (Abs [(x,xtyLocs,LocVar l')] e) (FunType a loc' b)
+  | otherwise = throwError $ "typecheckExpr: location variable expected: " ++ noLocName
+                    ++ " but got " ++ l ++ " in Abs with FunType: " ++ show loc'
 
-  return (delta, Abs [(x,Just (apply delta a),loc0')] (subst (Var x) x' (eapply instgamma1 e')))
+typecheckExpr_ gti gamma loc (Abs xTyLocs e) (FunType a loc' b) = do
+  throwError $ "typecheckExpr: # of arguments != 1: "
+    ++ show (map (\(x,_,_) -> x) xTyLocs) ++ "in Abs"
 
 -- Case
 typecheckExpr_ gti gamma loc (Case expr _ alts) caseExprTy = do
@@ -1030,6 +735,17 @@ typecheckExpr_ gti gamma loc e b = do
 
 -- typecheckExpr_ gti gamma loc e typ = do
 --   throwError $ "typecheckExpr: not implemented yet"
+
+typecheckAbs gti gamma loc (Abs [(x,_,loc0')] e) (FunType a loc' b) = do
+  -- assert (loc0' == Location constloc \/ loc'0 == LocVar l)
+  x' <- lift $ freshVar
+  gamma0 <- subloc gamma loc' loc0'
+  (gamma1, e') <- typecheckExpr gti (gamma0 >++ [cvar x' a]) loc0' (subst (Var x') x e) b
+  let delta = dropMarker (cvar x' a) gamma1
+  let loc1 = lapply delta loc0'
+  let instgamma1 = instUnsolved (cvar x' a) loc1 gamma1
+  return (delta, Abs [(x,Just (apply delta a), loc1)] (subst (Var x) x' (eapply instgamma1 e')))
+
 
 -- | Alternative synthesising:
 --   typesynthAlt Γ loc alts = (D B, A, Δ) <=> Γ |- alt => D B, A -| Δ
@@ -1148,36 +864,54 @@ typesynthExpr_ gti gamma loc expr@(Abs xmtyls e) = do
   alphas <- lift $ replicateM (length xmtyls) freshExistsTypeVar
   beta   <- lift $ freshExistsTypeVar
   -- locs <- mapM (elabLocation (locVars gamma)) $ map thd3 xmtyls
-  let locs = map thd3 xmtyls
   let xs = map fst3 xmtyls
+
+  let checkAllLocConst     = all (\l -> case l of Location _ -> True; _ -> False)
+  let checkAllNoNameLocVar = all (LocVar noLocName ==)
+
+  let initLocs = map thd3 xmtyls
+  locs <- if checkAllLocConst initLocs
+    then return initLocs
+    else if checkAllNoNameLocVar initLocs
+    then do lvars  <- lift $ replicateM (length xmtyls) freshExistsLocationVar
+            return $ map LocVar lvars
+    else throwError $ "typesynthExpr: unexpected locations in Abs: " ++ show initLocs
+
+  let xmtyls' = map (\((x,mty,_), loc) -> (x,mty,loc)) $ zip xmtyls locs
+
   let funty = foldr (\ (loc0, alpha0) ty0 -> FunType (TypeVarType alpha0) loc0 ty0)
                 (TypeVarType beta) (zip locs alphas)
+              
   (gamma', e') <- typecheckExpr gti
                     (gamma >++ map CExists alphas
                            >++ [CExists beta]
+                           >++ [CLExists n | LocVar n <- locs]
                            >++ map (uncurry cvar)
                                    (zip xs' (map TypeVarType alphas)))
                       (last locs) (substs (map Var xs') xs e) (TypeVarType beta)
-  let instgamma' = instUnsolved (cvar (last xs') (TypeVarType (last alphas))) (last locs) gamma'
   let delta = dropMarker (cvar (head xs') (TypeVarType (head alphas))) gamma'  -- Todo: Confirm head not last.
+  let instgamma' = instUnsolved (cvar (last xs') (TypeVarType (last alphas)))
+                     (lapply delta (last locs)) gamma'
+
   return (apply delta funty, delta,
           singleAbs $
-          Abs (map (\ ((x,_,loc), ty)-> (x,ty,loc))
-              (zip xmtyls (map (Just . apply delta . TypeVarType) alphas)))
+          Abs (map (\ ((x,_,loc), ty)-> (x,ty,lapply delta loc))  -- Todo: OK if lam^noname becomes lam^client or lam^server?
+                (zip xmtyls' (map (Just . apply delta . TypeVarType) alphas)))
                   (substs (map Var xs) xs' (eapply instgamma' e')))
 
+      
 -- ->forall_l=>
-typesynthExpr_ gti gamma loc expr@(LocAbs locvars e) = do
-  ls' <- lift $ replicateM (length locvars) freshLocationVar
-  (polylocbodyty, delta, e') <-
-    typesynthExpr gti (gamma >++ map CLMarker ls' >++ map CLForall ls')
-              loc (locExprSubsts (map LocVar ls') locvars e)
-  return (LocAbsType locvars (locSubsts (map LocVar locvars) ls' polylocbodyty)
-         , foldl (\ delta0 l' ->
-                     singleoutMarker (CLMarker l')
-                       (singleoutMarker (CLForall l') delta0)) delta ls'
-         , singleLocAbs $
-           LocAbs locvars (locExprSubsts (map LocVar locvars) ls' e'))
+-- typesynthExpr_ gti gamma loc expr@(LocAbs locvars e) = do
+--   ls' <- lift $ replicateM (length locvars) freshLocationVar
+--   (polylocbodyty, delta, e') <-
+--     typesynthExpr gti (gamma >++ map CLMarker ls' >++ map CLForall ls')
+--               loc (locExprSubsts (map LocVar ls') locvars e)
+--   return (LocAbsType locvars (locSubsts (map LocVar locvars) ls' polylocbodyty)
+--          , foldl (\ delta0 l' ->
+--                      singleoutMarker (CLMarker l')
+--                        (singleoutMarker (CLForall l') delta0)) delta ls'
+--          , singleLocAbs $
+--            LocAbs locvars (locExprSubsts (map LocVar locvars) ls' e'))
 
 -- Let
 typesynthExpr_ gti gamma loc (Let letBindingDecls expr) = do
@@ -1223,12 +957,12 @@ typesynthExpr_ gti gamma loc expr@(App e1 maybeTy e2 maybeLoc) = do
   return (ty2, delta, transformFun e1') -- App (transformFun e1') (Just . apply delta $ a) e2 (Just loc0)
 
 -- forall_l E
-typesynthExpr_ gti gamma loc expr@(LocApp e maybeTy locs0) = do
-  -- locs <- mapM (elabLocation (locVars gamma)) locs0
-  let locs = locs0
-  (a, theta, e') <- typesynthExpr gti gamma loc e
-  (b, delta, transformFun) <- locsapplysynth gti theta loc (apply theta a) locs
-  return (b, delta, transformFun e') -- LocApp (transformFun e') (Just . apply delta $ a) locs
+-- typesynthExpr_ gti gamma loc expr@(LocApp e maybeTy locs0) = do
+--   -- locs <- mapM (elabLocation (locVars gamma)) locs0
+--   let locs = locs0
+--   (a, theta, e') <- typesynthExpr gti gamma loc e
+--   (b, delta, transformFun) <- locsapplysynth gti theta loc (apply theta a) locs
+--   return (b, delta, transformFun e') -- LocApp (transformFun e') (Just . apply delta $ a) locs
 
 -- Tuple
 typesynthExpr_ gti gamma loc expr@(Tuple es) = do
@@ -1312,90 +1046,6 @@ typesynthExpr_ gti gamma loc expr = do
   throwError $ "typesynth: not implemented yet"
 
 
--- | Alternative synthesising:
---   typesynthAlt Γ loc alts = (D B, A, Δ) <=> Γ |- alt => D B, A -| Δ
--- typesynthAlts :: GlobalTypeInfo -> Context -> Location -> [Alternative] -> TIMonad (Type, Type, Context, [Alternative])
--- typesynthAlts gti gamma loc alts =
---   traceNS "typesynthAlts" (nolib gamma, loc, alts) $ checkwf gamma $
---   if valid alts then typesynthAlts_ gti gamma loc alts
---   else throwError $ "[TypeInf] typesynthAlts: invalid alternatives"
-
---   where
---     valid alts = oneTupleAlt alts || conAlts alts
-
---     oneTupleAlt [TupleAlternative _ _] = True
---     oneTupleAlt _ = False
-
---     conAlts [] = False   -- Having an empty alternative is error!!
---     conAlts [Alternative _ _ _] = True
---     conAlts ((Alternative _ _ _):alts) = conAlts alts
-
--- typesynthAlts_ :: GlobalTypeInfo -> Context -> Location -> [Alternative] -> TIMonad (Type, Type, Context, [Alternative])
--- typesynthAlts_ gti gamma loc (alt:alts) = do  -- Always more than zero!
---   alpha <- lift $ freshTypeVar
---   (ty,ty',gamma',alt') <- typesynthAlt gti gamma loc alt
---   foldM (\ (ty0,ty0',gamma0,alts0) alt0 -> do
---            (ty1,ty1',gamma1,alt1) <- typesynthAlt gti gamma0 loc alt0
---            (gamma2, _) <- subtype gamma1 loc (apply gamma1 ty0)  (apply gamma1 ty1)
---            (gamma3, _) <- subtype gamma2 loc (apply gamma2 ty0') (apply gamma2 ty1')
---            return (apply gamma3 ty1, apply gamma3 ty1', gamma3, alts0++[alt1])
---         ) (ty,ty',gamma',[alt']) alts
-
--- typesynthAlt gti gamma loc alt =
---   traceNS "typesynthAlt" (nolib gamma, loc, alt) $ checkwf gamma $
---   typesynthAlt_ gti gamma loc alt
-
--- Tuple alternative
--- typesynthAlt_ gti gamma loc (TupleAlternative args expr) = do
---   alphas <- lift $ replicateM (length args) freshExistsTypeVar
---   -- beta   <- lift $ freshExistsTypeVar
---   xs     <- lift $ replicateM (length args) freshVar
---   let expr0 = substs (map Var xs) args expr
---   (exprTy, delta, expr')
---      <- typesynthExpr gti
---           (gamma >++ map CExists alphas
---                  -- >++ [CExists beta]
---                  >++ [ cvar x (TypeVarType alpha) | (x, alpha) <- zip xs alphas ])
---           loc expr0 -- (TypeVarType beta)
---   let expr0' = substs (map Var args) xs expr'          
---   return (TupleType (map (apply delta) (map TypeVarType alphas))
---          , exprTy, delta, TupleAlternative args expr0')
-
--- Data constructor alternative
--- typesynthAlt_ gti gamma loc (Alternative con args expr) = do
---   case lookupConFromDataTypeInfo gti con loc of
---     ((locvars,tyvars,argtys,datatypename):_) ->
---       if length argtys==length args
---       then do
---         ls <- lift $ replicateM (length locvars) freshExistsLocationVar
---         alphas <- lift $ replicateM (length tyvars) freshExistsTypeVar
---         xs <- lift $ replicateM (length args) freshVar
-
---         let substLoc = zip locvars (map LocVar ls)
---         let substTy = zip tyvars (map TypeVarType alphas)
-
---         let substedArgtys = map (doSubst substTy . doSubstLoc substLoc) argtys
-
---         let expr0 = substs (map Var xs) args expr
-        
---         (exprTy, gamma', expr') <-
---           typesynthExpr gti
---             (gamma >++ map CLExists ls >++ map CExists alphas 
---                    >++ map (uncurry cvar) (zip xs substedArgtys))
---                loc expr0 
-
---         let expr0' = substs (map Var args) xs expr'
-
---         return (ConType datatypename
---                   (map (lapply gamma') (map LocVar ls))
---                   (map (apply gamma') (map TypeVarType alphas))
---                , exprTy, gamma', Alternative con args expr0')
-
---       else throwError $ "[TypeInf] typesynthAlt: invalid arg length: " ++ con ++ show args
-
---     [] -> throwError $ "[TypeInf] typesynthAlt: constructor not found" ++ con
-
-
 -- | Type application synthesising
 --   typeapplysynth Γ loc A e = (C, Δ) <=> Γ |- A . e =>> C -| Δ
 typeapplysynth :: GlobalTypeInfo -> Context -> Location -> Type -> Expr
@@ -1415,13 +1065,17 @@ typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (nolib gamma, loc,
                          TypeApp f (Just . apply delta $ typ)
                            (map (apply delta) (map TypeVarType alphas')))
 
-    -- ForallApp: Not allowed without any explicit location applications
-    -- LForall l a -> do
-    --   -- Do alpha conversion to avoid clashes
-    --   l' <- lift $ freshLVar
-    --   typeapplysynth (gamma >: CLExists l') loc
-    --                  (locSubst (UnknownExists l') l a)
-    --                  e
+    -- ForallLApp: Not allowed without any explicit location applications
+    LocAbsType ls a -> do
+      -- Do alpha conversion to avoid clashes
+      ls' <- lift $ replicateM (length ls) freshExistsLocationVar
+      (typ', loc0, delta, g)
+        <- typeapplysynth gti (gamma >++ map CLExists ls') loc
+                     (locSubsts (map LocVar ls') ls a) e
+      return (typ', loc0, delta,
+              g . \f -> singleLocApp $
+                         LocApp f (Just . apply delta $ typ)
+                           (map (lapply delta) (map LocVar ls')))
 
     -- alpha^App
     TypeVarType alpha
@@ -1456,31 +1110,31 @@ typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (nolib gamma, loc,
 
 -- | Location application synthesising
 --   locapplysynth Γ loc A loc0 = (C, Δ) <=> Γ |- A . loc0 =>> C -| Δ
-locsapplysynth :: GlobalTypeInfo -> Context -> Location -> Type -> [Location]
-  -> TIMonad (Type, Context, Expr -> Expr)
-locsapplysynth gti gamma loc typ locs0 = traceNS "locsapplysynth" (nolib gamma, loc, typ, locs0) $
-  checkwftype gamma typ $
-  case typ of
-    -- LForall LocApp
-    LocAbsType ls a ->  -- Todo: what happens when |locs0| != |ls|?
-      return (locSubsts locs0 ls a, gamma, \f -> LocApp f (Just typ) locs0)
+-- locsapplysynth :: GlobalTypeInfo -> Context -> Location -> Type -> [Location]
+--   -> TIMonad (Type, Context, Expr -> Expr)
+-- locsapplysynth gti gamma loc typ locs0 = traceNS "locsapplysynth" (nolib gamma, loc, typ, locs0) $
+--   checkwftype gamma typ $
+--   case typ of
+--     -- LForall LocApp
+--     LocAbsType ls a ->  -- Todo: what happens when |locs0| != |ls|?
+--       return (locSubsts locs0 ls a, gamma, \f -> LocApp f (Just typ) locs0)
 
-    -- TForall LocApp
-    TypeAbsType alphas a -> do
-      -- Do alpha conversion to avoid clashes
-      alphas' <- lift $ replicateM (length alphas) freshExistsTypeVar
-      (typ', delta, g) <-
-        locsapplysynth gti (gamma >++ map CExists alphas') loc
-                     (typeSubsts (map TypeVarType alphas') alphas a) locs0
-      return (typ', delta,
-              g . \f -> singleTypeApp $
-                          TypeApp f (Just . apply delta $ typ)
-                            (map (apply delta) (map TypeVarType alphas')))
+--     -- TForall LocApp
+--     TypeAbsType alphas a -> do
+--       -- Do alpha conversion to avoid clashes
+--       alphas' <- lift $ replicateM (length alphas) freshExistsTypeVar
+--       (typ', delta, g) <-
+--         locsapplysynth gti (gamma >++ map CExists alphas') loc
+--                      (typeSubsts (map TypeVarType alphas') alphas a) locs0
+--       return (typ', delta,
+--               g . \f -> singleTypeApp $
+--                           TypeApp f (Just . apply delta $ typ)
+--                             (map (apply delta) (map TypeVarType alphas')))
 
-    -- alpha^: Not allowed because alpha^ is a monomorphic type variable!
+--     -- alpha^: Not allowed because alpha^ is a monomorphic type variable!
 
-    _ -> throwError $ "locsapplysynth: don't know what to do with: "
-               ++ pretty (gamma, loc, typ, locs0)
+--     _ -> throwError $ "locsapplysynth: don't know what to do with: "
+--                ++ pretty (gamma, loc, typ, locs0)
 
 -- | Print some debugging info
 traceNS :: (Pretty a, Pretty b) => String -> a -> TIMonad b -> TIMonad b

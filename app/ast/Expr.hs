@@ -7,7 +7,7 @@ module Expr(Expr(..), ExprVar, AST(..), BindingDecl(..), DataTypeDecl(..)
   , GlobalTypeInfo(..), Env(..), BasicLibType
   , lookupConstr, lookupCon, lookupDataTypeName
   , lookupConFromDataTypeInfo, lookupPrimOpType
-  , mainName, primOpTypes
+  , mainName, primOpTypes, isAbs
   , singleTypeAbs, singleLocAbs, singleAbs
   , singleTypeApp, singleLocApp
   , setTop
@@ -21,12 +21,19 @@ module Expr(Expr(..), ExprVar, AST(..), BindingDecl(..), DataTypeDecl(..)
   , toASTIdTypeLocSeq, toASTIdTypeLoc
   , toASTAlternativeSeq, toASTAlternative
   , toASTTriple, toASTLit
+  , toASTOptLocation
   , subst, substs, substs_, tyExprSubst, tyExprSubsts, locExprSubst, locExprSubsts
   , typeconOrVar, isRec
-  , splitTopLevelDecls, collectDataTypeDecls, elabConTypeDecls, collectDataTypeInfo
+  , splitTopLevelDecls
+  , checkDataTypeDecls, collectTypeInfo, {-obsolete -} collectTypeInfoDataTypeDecls
+  , collectConTypeDecls, {-obsolete -} elabConTypeDecls
+  , collectDataTypeInfo
   , builtinDatatypes
+  , ppExpr
+  , ppPolyRpcProg
   ) where
 
+import Common
 import Location
 import Prim
 import Literal
@@ -35,10 +42,13 @@ import Type
 -- import GHC.Generics
 -- import Data.Aeson
 import Text.JSON.Generic
-import Pretty
+import Pretty hiding (pretty)
 import Util
 
 import Data.Char
+import Data.List (lookup)
+import Data.Text.Prettyprint.Doc hiding (Pretty)
+import Data.Text.Prettyprint.Doc.Util
 
 --
 data Expr =
@@ -87,6 +97,10 @@ lookupDataTypeName gti x = [info | (y,info) <- _dataTypeInfo gti, x==y]
 
 lookupCon tycondecls con =
   [tys | (conname, tys) <- tycondecls, con==conname]
+
+--
+isAbs (Abs _ _) = True
+isAbs _ = False
 
 --
 -- Given a constructor name, this returns its type.
@@ -219,7 +233,9 @@ initEnv = Env { _locVarEnv=[], _typeVarEnv=[], _varEnv=[] }
 
 type BasicLibType = (String, Type, Expr)
 
+-----------------------
 -- | Built-in datatypes
+-----------------------
 
 builtinDatatypes :: [DataTypeDecl]
 builtinDatatypes = [
@@ -248,13 +264,35 @@ splitTopLevelDecl (DataTypeTopLevel datatypeDecl) = return ([], [datatypeDecl])
 splitTopLevelDecl (LibDeclTopLevel x ty) = return ([], [])
 
 
--- 
-collectDataTypeDecls :: Monad m => [DataTypeDecl] -> m TypeInfo
-collectDataTypeDecls datatypeDecls = do
-  let nameTyvarsPairList = map collectDataTypeDecl datatypeDecls
+------------------------------------------------
+-- Collect all types in the form of 'D Locs Tys'
+--   - e.g., String, List a, Steram Loc A, ...)
+--   - Do well-formedness checks!!
+------------------------------------------------
+checkDataTypeDecls :: Monad m => [DataTypeDecl] -> m ()
+checkDataTypeDecls datatypeDecls =
+  mapM_ checkDataTypeDecl datatypeDecls
+
+checkDataTypeDecl (DataType name locvars tyvars typeConDecls) =
+  if isTypeName name
+     && and (map isLocationVarName locvars)
+     && allUnique locvars == []
+     && and (map isTypeVarName tyvars)
+     && allUnique tyvars == []
+  then return ()
+  else error $ "[TypeCheck] collectDataTypeDecls: Invalid datatype: "
+                 ++ name ++ " " ++ show locvars++ " " ++ show tyvars
+
+collectTypeInfo :: Monad m => DataTypeInfo -> m TypeInfo
+collectTypeInfo dataTypeInfo =
+  return $ map (\(name, (locvars, tyvars, _)) -> (name, locvars, tyvars)) dataTypeInfo
+
+collectTypeInfoDataTypeDecls :: Monad m => [DataTypeDecl] -> m TypeInfo
+collectTypeInfoDataTypeDecls datatypeDecls = do
+  let nameTyvarsPairList = map collectTypeInfoDataTypeDecl datatypeDecls
   return nameTyvarsPairList
 
-collectDataTypeDecl (DataType name locvars tyvars typeConDecls) =
+collectTypeInfoDataTypeDecl (DataType name locvars tyvars typeConDecls) =
   if isTypeName name
      && and (map isLocationVarName locvars)
      && allUnique locvars == []
@@ -264,7 +302,13 @@ collectDataTypeDecl (DataType name locvars tyvars typeConDecls) =
   else error $ "[TypeCheck] collectDataTypeDecls: Invalid datatype: "
                  ++ name ++ " " ++ show locvars++ " " ++ show tyvars
 
---
+----------------------------------
+-- Collect all data constructors
+--    - Do well-formedness checks
+----------------------------------
+collectConTypeDecls :: Monad m => [DataTypeDecl] -> m ConTypeInfo
+collectConTypeDecls elab_datatypeDecls = elabConTypeDecls elab_datatypeDecls
+  
 elabConTypeDecls :: Monad m => [DataTypeDecl] -> m ConTypeInfo
 elabConTypeDecls elab_datatypeDecls = do
   conTypeInfoList <- mapM elabConTypeDecl elab_datatypeDecls
@@ -296,6 +340,7 @@ data AST =
   | ASTType    { fromASTType    :: Type  }
   | ASTLocationSeq { fromASTLocationSeq :: [Location] }
   | ASTLocation    { fromASTLocation    :: Location  }
+  | ASTOptLocation    { fromASTOptLocation    :: Maybe Location  }
 
   | ASTBindingDeclSeq { fromASTBindingDeclSeq :: [BindingDecl] }
   | ASTBindingDecl    { fromASTBindingDecl    :: BindingDecl  }
@@ -328,6 +373,7 @@ toASTTypeSeq types = ASTTypeSeq types
 toASTType ty     = ASTType ty
 toASTLocationSeq locations = ASTLocationSeq locations
 toASTLocation location     = ASTLocation location
+toASTOptLocation maybeLocation     = ASTOptLocation maybeLocation
 
 toASTBindingDeclSeq bindings = ASTBindingDeclSeq bindings
 toASTBindingDecl binding     = ASTBindingDecl binding
@@ -554,6 +600,185 @@ instance Pretty BindingDecl where
 --       abs_prec  = 1
 --       app_prec  = 10
 --       anno_prec = 1
+
+at = pretty "@"
+underline = pretty "_"
+
+ppExpr :: Expr -> Doc ()
+ppExpr (Var x) = pretty x
+
+ppExpr (TypeAbs xs expr) = group $ 
+  slash <> backslash
+    <> fillSep (map pretty xs)
+    <> dot
+    <> nest nest_width (line <> ppExpr expr)
+
+ppExpr (LocAbs xs expr) = group $ 
+  lbrace 
+    <> fillSep (map pretty xs)
+    <> rbrace
+    <> dot
+    <> nest nest_width (line <> ppExpr expr)
+  
+ppExpr (Abs varMaybeTyLocs expr) = group $
+  backslash
+    <> ppLocation ( (\(_,_,loc) -> loc) $ head $ varMaybeTyLocs)  --Todo: a dirty hack
+    <> colon
+    <+> fillSep (map f varMaybeTyLocs)
+    <> dot
+    <> nest nest_width (line <> ppExpr expr)
+  where
+    f (x, maybeTy, loc) = pretty x <> maybeF maybeTy --Old style: <+> at <+> ppLocation loc
+
+    maybeF (Just ty) = emptyDoc <+> colon <+> ppType ty <+> emptyDoc
+    maybeF Nothing = emptyDoc
+
+ppExpr (Let bindDecls expr) = group $
+  pretty "let"
+    <> nest nest_width (line <> ppBindDecls bindDecls)
+    <> line <> pretty "in"
+    <> nest nest_width (line <> ppExpr expr)
+                       
+ppExpr (Case expr maybeTy alts) = group $
+  pretty "case"
+    <+> ppExpr expr
+    <+> pretty "of"
+    <> nest nest_width (line <> ppAlts alts)
+
+ppExpr (App fun maybeTy arg maybeLoc) = group $
+  ppApp (App fun maybeTy arg maybeLoc)
+  where
+    ppApp (App (App (Var ":=") _ lhs _) _ rhs _) =
+      ppParenExpr lhs
+      <+> pretty ":="
+      -- <> ppLocations locs
+      -- <> ppParenTypes tys
+      <+> ppExpr rhs
+      
+    ppApp (App fun maybeTy arg maybeLoc) = 
+      ppApp fun
+      <> nest nest_width (line <> ppParenExpr arg)
+
+    ppApp (Var x) = pretty x
+    
+    ppApp expr = ppParenExpr expr
+    
+ppExpr (TypeApp polyfun maybeTy tys) = group $
+  ppParenExpr polyfun
+    <> nest nest_width (line <> ppParenTypes tys)
+    
+ppExpr (LocApp polyfun maybeTy locs) = group $
+  ppParenExpr polyfun
+    <+> lbrace
+    <+> ppLocations locs
+    <+> rbrace
+
+ppExpr (Tuple exprs) = group $
+  lparen
+    <> concatWith (\x y -> x <> comma <> line <> y) (map ppExpr exprs)
+    <> rparen
+    
+ppExpr (Prim op locs tys exprs) = group $
+  case (Data.List.lookup op fixity_info, exprs) of
+    (Just Prefix, [expr])        -> ppPrefix expr
+    (Just Infix, [expr1, expr2]) -> ppInfix expr1 expr2
+    (Just Postfix, [expr])       -> ppPostfix expr
+    (fixty,_) -> error $ "ppExpr Prim: unexpected fixity or # of args: "
+                   ++ show fixty ++ ", " ++ show (length exprs)
+    
+  where
+    ppPrefix expr = ppPrim op
+      <+> lbrace
+      <> ppLocations locs
+      <+> rbrace
+      -- <> ppParenTypes tys
+      <+> ppParenExpr expr
+
+    ppInfix expr1 expr2 = ppParenExpr expr1
+      <+> ppPrim op
+      <+> lbrace
+      <> ppLocations locs
+      <+> rbrace
+      -- <> ppParenTypes tys
+      <+> ppParenExpr expr2
+
+    ppPostfix expr = ppParenExpr expr
+      <+> lbrace
+      <> ppLocations locs
+      <+> rbrace
+      -- <> ppParenTypes tys
+      <+> ppPrim op
+    
+ppExpr (Lit lit) = group (ppLit lit)
+  
+ppExpr (Constr con locs tys exprs exprTys) = group $
+  pretty con
+    <+> ppLocations locs
+    <+> ppParenTypes tys
+    <+> fillSep (map ppParenExpr exprs)
+
+ppBindDecls bindDecls =
+  concatWith (\x y -> x <> semi <> softline <> y)
+    (map ppBindDecl bindDecls)
+
+ppBindDecl (Binding b x ty expr) = group $
+  pretty x
+    <+> colon
+    <+> ppType ty
+    <+> equals
+    <+> ppExpr expr
+
+ppAlts alts = group $
+  concatWith (\x y -> x <> semi <> line <> y)
+    (map ppAlt alts)
+
+ppAlt (Alternative c xs expr) = group $
+  pretty c
+    <+> (if null xs then emptyDoc else fillSep (map pretty xs) <+> emptyDoc)
+    <> pretty "->"
+    <> nest nest_width (line <> ppExpr expr)
+    
+ppAlt (TupleAlternative xs expr) = group $
+  lparen
+    <> concatWith (\x y -> x <> comma <> y) (map pretty xs)
+    <> rparen
+    <+> pretty "->"
+    <> nest nest_width (line <> ppExpr expr)
+
+ppParenExpr (Var x) = ppExpr (Var x)
+ppParenExpr (Lit x) = ppExpr (Lit x)
+ppParenExpr (Tuple exprs) = ppExpr (Tuple exprs)
+ppParenExpr (Constr c [] tyArgs [] argTys) = ppExpr (Constr c [] tyArgs [] argTys)
+ppParenExpr (Constr c locs tyArgs exprs argTys) = ppExpr (Constr c locs tyArgs exprs argTys)
+ppParenExpr expr = group (lparen <> ppExpr expr <> rparen)
+
+ppTyconDecl (TypeCon x tys) = group $
+  pretty x
+    <> (if null tys then emptyDoc else emptyDoc <+> fillSep (map ppParenType tys))
+
+ppTyconDecls tyconDecls = group $
+  concatWith (\x y -> x <+> pipe <+> y)
+    (map ppTyconDecl tyconDecls)
+
+ppDataTypeDecl (DataType d locs tyvars tyconDecls) = group $
+  pretty "data"
+  <+> pretty d
+  <> (if null locs then emptyDoc else emptyDoc <+> lbrace <> fillSep (map pretty locs)  <> rbrace)
+  <> (if null tyvars then emptyDoc else emptyDoc <+> fillSep (map pretty tyvars))
+  <+> equals
+  <> nest nest_width (line <> ppTyconDecls tyconDecls)
+
+ppTopLevelDecl (BindingTopLevel bindDecl) = ppBindDecl bindDecl
+ppTopLevelDecl (DataTypeTopLevel datatypeDecl) = ppDataTypeDecl datatypeDecl
+ppTopLevelDecl (LibDeclTopLevel x ty) = group $
+  pretty x
+  <+> colon
+  <+> ppType ty
+
+ppPolyRpcProg prog =
+  concatWith (\x y -> x <> semi <> line <> y) $
+    map ppTopLevelDecl prog
+
 
 -- | subst e' x e = [e'/x]e
 subst :: Expr -> ExprVar -> Expr -> Expr

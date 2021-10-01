@@ -48,7 +48,7 @@ mono gti toplevelDecls basicLib = do
               return (mono_basicLib, mono_toplevelDecls))
 
   (mono_bindingDecls, mono_datatypeDecls) <- splitTopLevelDecls mono_toplevelDecls
-  mono_typeInfo     <- collectDataTypeDecls mono_datatypeDecls
+  mono_typeInfo     <- collectTypeInfoDataTypeDecls mono_datatypeDecls
   mono_dataTypeInfo <- collectDataTypeInfo  mono_datatypeDecls
   mono_conTypeInfo  <- elabConTypeDecls     mono_datatypeDecls
   

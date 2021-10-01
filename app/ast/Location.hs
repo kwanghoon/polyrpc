@@ -2,13 +2,16 @@
 
 module Location where
 
+import Common
 import Data.Set(Set)
 import qualified Data.Set as S
 
 import Text.JSON.Generic
 
+import Data.Text.Prettyprint.Doc hiding (Pretty)
+
 import Naming
-import Pretty
+import Pretty hiding (pretty)
 
 data Location =
     Location String
@@ -95,3 +98,12 @@ freeLVarsIn loc = case loc of
   LocVar l   -> S.singleton l
 
   
+--
+ppLocation :: Location -> Doc ()
+ppLocation (Location s) = pretty s
+ppLocation (LocVar v) = pretty v
+
+ppLocations :: [Location] -> Doc ()
+ppLocations [] = emptyDoc
+ppLocations locs = fillSep (map ppLocation locs)
+

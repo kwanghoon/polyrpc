@@ -53,8 +53,8 @@ context = Context . reverse
 dropMarker :: ContextElem a -> GContext a -> GContext a
 dropMarker m (Context gamma) = Context $ tail $ dropWhile (/= m) gamma
 
-instUnsolved :: ContextElem a -> GContext a -> GContext a
-instUnsolved m (Context gamma) = Context $ inst gamma
+instUnsolved :: ContextElem a -> Location -> GContext a -> GContext a
+instUnsolved m loc (Context gamma) = Context $ inst gamma
   where
     inst [] = []
     inst (elem:elems)
@@ -62,6 +62,7 @@ instUnsolved m (Context gamma) = Context $ inst gamma
       | otherwise = instElem elem : elems
 
     instElem (CExists alpha) = CExistsSolved alpha unit_type  -- Todo: unit type as unconstrained type
+    instElem (CLExists l)    = CLExistsSolved l loc           --
     instElem elem            = elem
 
 breakMarker :: ContextElem a -> GContext a -> (GContext a, GContext a)
