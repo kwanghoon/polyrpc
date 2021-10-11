@@ -34,18 +34,44 @@ import Type
    ==>
    mapWithCount : {l} forall a b. Int -l-> (a -l-> Int -l-> b) -l-> List a -l-> List b = \idx f xs. ...
 
-  (2-2) e = \{a} x1 ... xn. and ty != {l}. ... and only -> types (not -Loc->) occurring in ty
+  (2-2) e = \a: x1 ... xn. and ty != {l}. ... and only -> types (not -Loc->) occurring in ty
 
-   mapWithCount : forall a b. Int -> (a -> Int -> b) -> List a -> List b = \idx f xs. ...
+   cs : forall a. a -> List a -> List a = \client: w lst. Cons w lst;
    ==>
-   mapWithCount : forall a b. client: Int -> (a -> Int -> b) -> List a -> List b = \idx f xs. ...
+   cs : forall a. client: a -> List a -> List a = \client: w lst. Cons w lst;
    ==>
-   mapWithCount : forall a b. Int -client-> (a -client-> Int -client-> b) -client-> List a -client-> List b = \idx f xs. ...
+   cs : forall a. a -client-> List a -client-> List a = \client: w lst. Cons w lst;
 
 
-(3) Located function types 'Loc: A -> B' is replaced by A' -Loc B'
+  cf. LExpr -> \\ Location : Identifiers . LExpr
+
+
+(3) Located function types 'Loc: A -> B' is replaced by A' -Loc-> B'
     where A' is (Loc: A) and B' is (Loc: B).  though the surface
-    syntax only allows Loc: in front of function types.
+    syntax only allows Loc: in the beginning of types.
+
+  cf. Type -> LocatedFunType
+
+      LocatedFunType -> FunType
+      LocatedFunType -> Location : FunType
+
+
+  (3-1) You can use location variables after location abstractions with them.
+
+  cf. s_five
+        : {l1}. forall a b c. l1: ({l2}. l2: a -> b -> c) -> ({l3}. l3: a -> b) -> a -> c
+        = \f g x. f x (g x)
+
+  (3-2) The replacement of locations after Loc: will stop at another
+        Loc': as can be understood in the above example.
+
+  (3-3) In data type declarations, you may have to write client: more than once.
+
+  cf. data Page a e = Page a ( client: a -> Html e) ( client: e -> a -> a ) String; 
+           // Todo: client: a -> Html e and client: e -> a -> a 
+           //   vs. client: Page a (a -> Html e) (e -> a -> a) 
+           //   vs. Page {client} a e ???
+
 
 (4) In datatype declarations,
 
@@ -61,6 +87,7 @@ import Type
 
    data Stream {l} a =  SNil | SCons a (Unit -l-> Stream {l} a);
 
+   cf. data Stream a {l} is not allowed. Do we need to allow it?
 
  (4-3) No location abstractions and all annotated function types
 
@@ -69,13 +96,19 @@ import Type
    data Attr a = Property String String | Attribute String String | ...
                | ValueBind String (String -client-> a);
 
+   cf. In the example, location variables would be unbound if they
+       occur in the position of client.
 
  (4-4) No location abstractions and some unannotated function types and
        other annotated function types.
 
    [] (syntax error)
 
-   A possible solution:
+   Rationale: Using located function types means programmers know how
+              to fix it themselves. No clever trick is provided by the
+              compiler in the case. Thes simplest is the best!
+
+   cf. A possible solution would be as follows:
 
       [] All the unannotated functions are
 
@@ -88,7 +121,7 @@ import Type
 
       data D {l} a1 ... ak = ... | Ci ... (l: Ai -> Bi) ... | Cj ... (Aj -Loc-> Bj) ...| ...
 
-   We guess that datatypes are rarely using functions types directly!
+   We guess that datatypes rarely use function types directly?!
 
 (5) l: A -Loc->B
 
