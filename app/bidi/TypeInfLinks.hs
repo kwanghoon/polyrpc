@@ -745,6 +745,9 @@ typecheckAbs gti gamma loc (Abs [(x,_,loc0')] e) (FunType a loc' b) = do
   let loc1 = lapply delta loc0'
   let instgamma1 = instUnsolved (cvar x' a) loc1 gamma1
   return (delta, Abs [(x,Just (apply delta a), loc1)] (subst (Var x) x' (eapply instgamma1 e')))
+  
+  -- Todo: delta does not contain solved equations in instgamma'.
+  --       How can we print the information just for debugging?
 
 
 -- | Alternative synthesising:
@@ -893,8 +896,10 @@ typesynthExpr_ gti gamma loc expr@(Abs xmtyls e) = do
   let instgamma' = instUnsolved (cvar (last xs') (TypeVarType (last alphas)))
                      (lapply delta (last locs)) gamma'
 
-  return (apply delta funty, delta,
-          singleAbs $
+  -- Todo: delta does not contain solved equations in instgamma'.
+  --       How can we print the information just for debugging?
+  return (apply delta funty, delta,   
+          singleAbs $                 
           Abs (map (\ ((x,_,loc), ty)-> (x,ty,lapply delta loc))  -- Todo: OK if lam^noname becomes lam^client or lam^server?
                 (zip xmtyls' (map (Just . apply delta . TypeVarType) alphas)))
                   (substs (map Var xs) xs' (eapply instgamma' e')))
