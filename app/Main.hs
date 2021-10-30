@@ -34,19 +34,24 @@ import Text.PrettyPrint
 --import Data.Aeson.Encode.Pretty
 import Data.Maybe
 import System.IO
-import System.Environment (getArgs)
+import System.Environment (getArgs, withArgs)
 
 import Data.Text.Prettyprint.Doc.Util (putDocW)
+
+-- Syntax completion
+import SyntaxCompletionSpec(spec)
 
 main :: IO ()
 main = do
   args <- getArgs
   cmd  <- getCmd args
 
-  let files = _files cmd
+  if "test" `elem` args
+    then withArgs [] spec
+    else do let files = _files cmd
 
-  printVersion
-  mapM_ (doProcess cmd) files -- [ ((build cmd file), file) | file <- files ]
+            printVersion
+            mapM_ (doProcess cmd) files -- [ ((build cmd file), file) | file <- files ]
 
 doProcess cmd file = do
   putStrLn $ "[Reading] " ++ file
@@ -62,7 +67,7 @@ doProcess cmd file = do
 
   putStrLn "[Parsing-Surface syntax]"
   -- exprSeqAst <- parsing PB.parserSpec terminalList
-  exprSeqAst <- parsing PBLinks.parserSpec terminalList
+  exprSeqAst <- parsing False PBLinks.parserSpec terminalList
 
   verbose (_flag_debug_parse cmd) $ putStrLn "Dumping..."
   verbose (_flag_debug_parse cmd) $ putDocW 80 {- putStrLn $ show -} $ ppPolyRpcProg $ fromASTTopLevelDeclSeq exprSeqAst

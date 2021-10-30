@@ -121,10 +121,6 @@ findStr str ((tok,str_):list)
   | otherwise   = findStr str list
 
 instance TokenInterface Token where
-  toToken str   =
-    case findStr str tokenStrList of
-      Nothing  -> error ("toToken: " ++ str)
-      Just tok -> tok
   fromToken tok =
     case findTok tok tokenStrList of
       Nothing  -> error ("fromToken: " ++ show tok)
