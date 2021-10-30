@@ -11,11 +11,11 @@ spec = hspec $ do
     let tc1 = "f : Int = (2 + 3"
     it ("[tc1.sb:simple] " ++ tc1) $ do
       results <- computeCand False tc1 "" True
-      results `shouldBe` [Candidate ""]
+      results `shouldBe` [Candidate "white , white ... white )",Candidate "white )"]
 
     it ("[tc1.sb:nested] " ++ tc1) $ do
       results <- computeCand False tc1 "" False
-      results `shouldBe` []
+      results `shouldBe` [Candidate "white , white ... white )",Candidate "white )"]
 
 
 
