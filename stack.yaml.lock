@@ -12,13 +12,6 @@ packages:
   original:
     hackage: json-0.10
 - completed:
-    hackage: yapb-0.1.0@sha256:f06d20fe7f521cc7b2d0a542a0ceafbe236ce5796750b03d90b88e2dbd1a0f58,3648
-    pantry-tree:
-      size: 3194
-      sha256: f825422eb09d4a0e882372bb489f853286fea66845fd111c882da46f923cef62
-  original:
-    hackage: yapb-0.1.0
-- completed:
     hackage: aeson-1.4.7.1@sha256:6d8d2fd959b7122a1df9389cf4eca30420a053d67289f92cdc0dbc0dab3530ba,7098
     pantry-tree:
       size: 40133

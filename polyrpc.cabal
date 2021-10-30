@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f29b61d7beb976fd2d148657c3db081eedc8fc7e9850039c59404c5feb4eddce
+-- hash: ffe808677961fd2633e9fb3a9b9caaa0462334d5328787ef8526c372cd06560b
 
 name:           polyrpc
 version:        0.3
@@ -62,6 +62,8 @@ executable polyrpc
       Runtime
       Report
       Util
+      SyntaxCompletion
+      SyntaxCompletionSpec
       Paths_polyrpc
   hs-source-dirs:
       app
@@ -71,6 +73,7 @@ executable polyrpc
       app/cs
       app/codegen
       app/util
+      app/syncomp
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson >=1.4.7 && <1.5
@@ -78,6 +81,7 @@ executable polyrpc
     , base >=4.7 && <5
     , bytestring
     , containers >=0.6.0 && <0.7
+    , hspec
     , json ==0.10.*
     , mtl >=2.2.2 && <=2.2.2
     , pretty >=1.1.3 && <1.2
@@ -87,7 +91,7 @@ executable polyrpc
     , transformers >=0.5.6.2 && <=0.5.6.2
     , unordered-containers >=0.2.10.0 && <=0.2.12.0
     , utility-ht >=0.0.15 && <=0.0.15
-    , yapb >=0.1.0 && <=0.1.0
+    , yapb >=0.1.3.3 && <=0.1.3.3
   default-language: Haskell2010
 
 test-suite polyrpc-test
@@ -105,6 +109,7 @@ test-suite polyrpc-test
     , base >=4.7 && <5
     , bytestring
     , containers >=0.6.0 && <0.7
+    , hspec
     , json ==0.10.*
     , mtl >=2.2.2 && <=2.2.2
     , polyrpc
@@ -115,5 +120,5 @@ test-suite polyrpc-test
     , transformers >=0.5.6.2 && <=0.5.6.2
     , unordered-containers >=0.2.10.0 && <=0.2.12.0
     , utility-ht >=0.0.15 && <=0.0.15
-    , yapb >=0.1.0 && <=0.1.0
+    , yapb >=0.1.3.3 && <=0.1.3.3
   default-language: Haskell2010
