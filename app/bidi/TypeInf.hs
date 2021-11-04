@@ -1,3 +1,11 @@
+{-
+  TypeInf:
+
+    Type inference for terms with location abstractions and
+    applications, which is replaced by TypeInfLink for terms without
+    location abstractions and applications.
+-}
+
 module TypeInf(typeInf) where
 
 import Data.Either

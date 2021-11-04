@@ -958,7 +958,7 @@ typesynthExpr_ gti gamma loc (Let letBindingDecls expr) = do
 -- ->E
 typesynthExpr_ gti gamma loc expr@(App e1 maybeTy e2 maybeLoc) = do
   (a, theta, e1') <- typesynthExpr gti gamma loc e1
-  (ty2, loc0, delta, transformFun) <- typeapplysynth gti theta loc (apply theta a) e2
+  (ty2, {- loc0, -} delta, transformFun) <- typeapplysynth gti theta loc (apply theta a) e2
   return (ty2, delta, transformFun e1') -- App (transformFun e1') (Just . apply delta $ a) e2 (Just loc0)
 
 -- forall_l E
@@ -1054,7 +1054,7 @@ typesynthExpr_ gti gamma loc expr = do
 -- | Type application synthesising
 --   typeapplysynth Γ loc A e = (C, Δ) <=> Γ |- A . e =>> C -| Δ
 typeapplysynth :: GlobalTypeInfo -> Context -> Location -> Type -> Expr
-   -> TIMonad (Type, Location, Context, Expr -> Expr)
+   -> TIMonad (Type, {- Location, -} Context, Expr -> Expr)
 typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (nolib gamma, loc, typ, e) $
   checkwftype gamma typ $
   case typ of
@@ -1062,10 +1062,10 @@ typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (nolib gamma, loc,
     TypeAbsType alphas a -> do
       -- Do alpha conversion to avoid clashes
       alphas' <- lift $ replicateM (length alphas) freshExistsTypeVar
-      (typ', loc0, delta, g)
+      (typ', {- loc0, -} delta, g)
         <- typeapplysynth gti (gamma >++ map CExists alphas') loc
                      (typeSubsts (map TypeVarType alphas') alphas a) e
-      return (typ', loc0, delta,
+      return (typ', {- loc0, -} delta,
               g . \f -> singleTypeApp $
                          TypeApp f (Just . apply delta $ typ)
                            (map (apply delta) (map TypeVarType alphas')))
@@ -1074,10 +1074,10 @@ typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (nolib gamma, loc,
     LocAbsType ls a -> do
       -- Do alpha conversion to avoid clashes
       ls' <- lift $ replicateM (length ls) freshExistsLocationVar
-      (typ', loc0, delta, g)
+      (typ', {- loc0, -} delta, g)
         <- typeapplysynth gti (gamma >++ map CLExists ls') loc
                      (locSubsts (map LocVar ls') ls a) e
-      return (typ', loc0, delta,
+      return (typ', {- loc0, -} delta,
               g . \f -> singleLocApp $
                          LocApp f (Just . apply delta $ typ)
                            (map (lapply delta) (map LocVar ls')))
@@ -1099,13 +1099,13 @@ typeapplysynth gti gamma loc typ e = traceNS "typeapplysynth" (nolib gamma, loc,
                          loc
                          e
                          (TypeVarType alpha1)
-      return (TypeVarType alpha2, loc', delta,
+      return (TypeVarType alpha2, {- loc', -} delta,
               \f -> App f (Just . apply delta $ typ) e' (Just $ lapply delta $ loc'))
 
     -- ->App
     FunType a loc' c -> do
       (delta, e') <- typecheckExpr gti gamma loc e a
-      return (c, loc', delta,
+      return (c, {- loc', -} delta,
               \f -> App f (Just . apply delta $ typ) e' (Just $ lapply delta $ loc'))
 
 
