@@ -474,7 +474,7 @@ parserSpec = ParserSpec
 
       ("Comp -> ArithAddSub", \rhs -> get rhs 1 ),
 
-      ("ArithAddSub -> ArithAddSub + ArithMulDiv",
+      ("ArithAddSub -> ArithAddSub + ArithMulDiv",  -- Q: ArithMulDiv -> ... ???
         \rhs -> toASTExpr (Prim AddPrimOp [] [] [fromASTExpr (get rhs 1), fromASTExpr (get rhs 3)]) ),
 
       ("ArithAddSub -> ArithAddSub - ArithMulDiv",

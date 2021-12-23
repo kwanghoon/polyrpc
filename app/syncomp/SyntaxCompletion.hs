@@ -7,7 +7,8 @@ import Expr
 import TokenInterface
 import Terminal
 import Lexer (lexerSpec)
-import Parser (parserSpec)
+-- import Parser (parserSpec)
+import qualified ParserBidiLinks as PBLinks
 import System.IO
 
 -- for syntax completion
@@ -31,7 +32,7 @@ computeCand debug programTextUptoCursor programTextAfterCursor isSimpleMode = (d
     lexingWithLineColumn lexerSpec 1 1 programTextUptoCursor
 
   {- 2. Parsing -}
-  ((do ast <- parsing debug parserSpec terminalListUptoCursor
+  ((do ast <- parsing debug PBLinks.parserSpec terminalListUptoCursor
        successfullyParsed)
 
     `catch` \parseError ->

@@ -70,7 +70,7 @@ parserSpec = ParserSpec
       {- LocFunType -}
       ("LocFunType -> AppType", \rhs -> get rhs 1),
 
-      ("LocFunType -> AppType LocFun LocFunType", \rhs ->
+      ("LocFunType -> AppType locFun LocFunType", \rhs ->
           let locfun = getText rhs 2
               loc = init (init (tail locfun))  -- extract Loc from -Loc-> ( a bit hard-coded!!)
           in  toASTType (FunType

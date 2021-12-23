@@ -39,6 +39,8 @@ import System.Environment (getArgs, withArgs)
 import Data.Text.Prettyprint.Doc.Util (putDocW)
 
 -- Syntax completion
+import EmacsServer
+import SyntaxCompletion(computeCand)
 import SyntaxCompletionSpec(spec)
 
 main :: IO ()
@@ -46,12 +48,15 @@ main = do
   args <- getArgs
   cmd  <- getCmd args
 
+
   if "test" `elem` args
     then withArgs [] spec
-    else do let files = _files cmd
+    else if "emacs" `elem` args
+           then do emacsServer (computeCand False)
+           else do let files = _files cmd
 
-            printVersion
-            mapM_ (doProcess cmd) files -- [ ((build cmd file), file) | file <- files ]
+                   printVersion
+                   mapM_ (doProcess cmd) files -- [ ((build cmd file), file) | file <- files ]
 
 doProcess cmd file = do
   putStrLn $ "[Reading] " ++ file
