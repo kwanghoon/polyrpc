@@ -9,68 +9,75 @@ import Literal
 import Expr
 
 
+-- | Utility
+rule prodRule action              = (prodRule, action, Nothing  )
+ruleWithPrec prodRule action prec = (prodRule, action, Just prec)
+
+-- |
 parserSpec :: ParserSpec Token AST
 parserSpec = ParserSpec
   {
     startSymbol = "TopLevel'",
 
+    tokenPrecAssoc = [],
+    
     parserSpecList =
     [
-      ("TopLevel' -> TopLevel", \rhs -> get rhs 1),
+      rule "TopLevel' -> TopLevel" ( \rhs -> get rhs 1),
 
       {- Identifiers -}
-      ("Identifiers -> identifier", \rhs -> toASTIdSeq [getText rhs 1] ),
+      rule "Identifiers -> identifier" ( \rhs -> toASTIdSeq [getText rhs 1] ),
 
-      ("Identifiers -> identifier Identifiers",
+      rule "Identifiers -> identifier Identifiers" (
         \rhs -> toASTIdSeq (getText rhs 1 : fromASTIdSeq (get rhs 2)) ),
 
 
       {- OptIdentifiers -}
-      ("OptIdentifiers -> ", \rhs -> toASTIdSeq [] ),
+      rule "OptIdentifiers -> " ( \rhs -> toASTIdSeq [] ),
 
-      ("OptIdentifiers -> Identifiers", \rhs -> get rhs 1 ),
+      rule "OptIdentifiers -> Identifiers" ( \rhs -> get rhs 1 ),
 
 
       {- IdentifierCommas -}
-      ("IdentifierCommas -> identifier", \rhs -> toASTIdSeq [getText rhs 1] ),
+      rule "IdentifierCommas -> identifier" ( \rhs -> toASTIdSeq [getText rhs 1] ),
 
-      ("IdentifierCommas -> identifier , IdentifierCommas",
+      rule "IdentifierCommas -> identifier , IdentifierCommas" (
         \rhs -> toASTIdSeq (getText rhs 1 : fromASTIdSeq (get rhs 3)) ),
 
 
       {- OptIdentifierCommas -}
-      ("OptIdentifierCommas -> ", \rhs -> toASTIdSeq [] ),
+      rule "OptIdentifierCommas -> " ( \rhs -> toASTIdSeq [] ),
 
-      ("OptIdentifierCommas -> IdentifierCommas", \rhs -> get rhs 1 ),
+      rule "OptIdentifierCommas -> IdentifierCommas" ( \rhs -> get rhs 1 ),
 
 
       {- Location -}
-      ("Location -> identifier", \rhs -> toASTLocation (Location (getText rhs 1)) ),
+      rule "Location -> identifier" ( \rhs -> toASTLocation (Location (getText rhs 1)) ),
 
 
       {- Locations -}
-      ("Locations -> Identifiers", \rhs ->
+      rule "Locations -> Identifiers" ( \rhs ->
         toASTLocationSeq (map Location (fromASTIdSeq (get rhs 1))) ),
 
 
       {- Type -}
-      ("Type -> LocFunType", \rhs -> get rhs 1 ),
+      rule "Type -> LocFunType" ( \rhs -> get rhs 1 ),
 
-      ("Type -> { Identifiers } . Type", \rhs ->
+      rule "Type -> { Identifiers } . Type" ( \rhs ->
         toASTType (singleLocAbsType
                             (LocAbsType (fromASTIdSeq (get rhs 2))
                                         (fromASTType (get rhs 5)))) ),
 
-      ("Type -> [ Identifiers ] . Type", \rhs ->
+      rule "Type -> [ Identifiers ] . Type" ( \rhs ->
         toASTType (singleTypeAbsType (TypeAbsType
                                               (fromASTIdSeq (get rhs 2))
                                               (fromASTType (get rhs 5)))) ),
 
 
       {- LocFunType -}
-      ("LocFunType -> AppType", \rhs -> get rhs 1),
+      rule "LocFunType -> AppType" ( \rhs -> get rhs 1),
 
-      ("LocFunType -> AppType locFun LocFunType", \rhs ->
+      rule "LocFunType -> AppType locFun LocFunType" ( \rhs ->
           let locfun = getText rhs 2
               loc = init (init (tail locfun))  -- extract Loc from -Loc-> ( a bit hard-coded!!)
           in  toASTType (FunType
@@ -80,9 +87,9 @@ parserSpec = ParserSpec
 
 
       {- AppType -}
-      ("AppType -> AtomicType", \rhs -> get rhs 1),
+      rule "AppType -> AtomicType" ( \rhs -> get rhs 1),
 
-      ("AppType -> AppType { Locations }", \rhs ->
+      rule "AppType -> AppType { Locations }" ( \rhs ->
           let locs = fromASTLocationSeq (get rhs 3) in
           case fromASTType (get rhs 1) of
             ConType name [] [] -> toASTType (ConType name locs [])
@@ -94,7 +101,7 @@ parserSpec = ParserSpec
             ty ->
               error $ "[Parser] Not supported yet: " ++ show ty ++ " not ConType: " ++ show locs),
 
-      ("AppType -> AppType [ LocFunTypes ]", \rhs ->
+      rule "AppType -> AppType [ LocFunTypes ]" ( \rhs ->
           let tys = fromASTTypeSeq (get rhs 3) in
           case fromASTType (get rhs 1) of
             ConType name locs [] -> toASTType (ConType name locs tys)
@@ -106,67 +113,67 @@ parserSpec = ParserSpec
 
 
       {- AtomicType -}
-      ("AtomicType -> TupleType", \rhs -> get rhs 1 ),
+      rule "AtomicType -> TupleType" ( \rhs -> get rhs 1 ),
 
-      ("AtomicType -> ( Type )", \rhs -> get rhs 2 ),
+      rule "AtomicType -> ( Type )" ( \rhs -> get rhs 2 ),
 
-      ("AtomicType -> identifier", \rhs -> toASTType (TypeVarType (getText rhs 1)) ),
+      rule "AtomicType -> identifier" ( \rhs -> toASTType (TypeVarType (getText rhs 1)) ),
 
 
       {- TupleType -}
-      ("TupleType -> ( Type , TypeSeq )",
+      rule "TupleType -> ( Type , TypeSeq )" (
         \rhs -> toASTType (TupleType $
             (fromASTType (get rhs 2)) : (fromASTTypeSeq (get rhs 4))) ),
 
 
       {- TypeSeq -}
-      ("TypeSeq -> Type", \rhs -> toASTTypeSeq [fromASTType (get rhs 1)] ),
+      rule "TypeSeq -> Type" ( \rhs -> toASTTypeSeq [fromASTType (get rhs 1)] ),
 
-      ("TypeSeq -> Type , TypeSeq",
+      rule "TypeSeq -> Type , TypeSeq" (
         \rhs -> toASTTypeSeq $ fromASTType (get rhs 1) : (fromASTTypeSeq (get rhs 3)) ),
 
 
       {- LocFunTypes -}
-      ("LocFunTypes -> LocFunType", \rhs -> toASTTypeSeq [fromASTType (get rhs 1)] ),
+      rule "LocFunTypes -> LocFunType" ( \rhs -> toASTTypeSeq [fromASTType (get rhs 1)] ),
 
-      ("LocFunTypes -> LocFunType LocFunTypes",
+      rule "LocFunTypes -> LocFunType LocFunTypes" (
         \rhs -> toASTTypeSeq $ fromASTType (get rhs 1) : fromASTTypeSeq (get rhs 2) ),
 
 
       {- OptLocFunTypes -}
-      ("OptLocFunTypes -> ", \rhs -> toASTTypeSeq [] ),
+      rule "OptLocFunTypes -> " ( \rhs -> toASTTypeSeq [] ),
 
-      ("OptLocFunTypes -> LocFunTypes", \rhs -> get rhs 1 ),
+      rule "OptLocFunTypes -> LocFunTypes" ( \rhs -> get rhs 1 ),
 
 
       {- TopLevel -}
-      ("TopLevel -> Binding",
+      rule "TopLevel -> Binding" (
         \rhs -> toASTTopLevelDeclSeq [BindingTopLevel (setTop (fromASTBindingDecl (get rhs 1 )))] ),
 
-      ("TopLevel -> Binding ; TopLevel",
+      rule "TopLevel -> Binding ; TopLevel" (
         \rhs -> toASTTopLevelDeclSeq
             $ BindingTopLevel (setTop (fromASTBindingDecl (get rhs 1))) : fromASTTopLevelDeclSeq (get rhs 3) ),
 
-      ("TopLevel -> DataTypeDecl",
+      rule "TopLevel -> DataTypeDecl" (
         \rhs -> toASTTopLevelDeclSeq [DataTypeTopLevel (fromASTDataTypeDecl (get rhs 1))] ),
 
-      ("TopLevel -> DataTypeDecl ; TopLevel",
+      rule "TopLevel -> DataTypeDecl ; TopLevel" (
         \rhs -> toASTTopLevelDeclSeq
             $ DataTypeTopLevel (fromASTDataTypeDecl (get rhs 1)) : (fromASTTopLevelDeclSeq (get rhs 3)) ),
 
 
       {- DataTypeDecl -}
-      ("DataTypeDecl -> data identifier = DataTypeDeclRHS", \rhs ->
+      rule "DataTypeDecl -> data identifier = DataTypeDeclRHS" ( \rhs ->
            let name = getText rhs 2
                (locvars,tyvars,tycondecls) = fromASTTriple (get rhs 4)
            in toASTDataTypeDecl (DataType name locvars tyvars tycondecls)),
 
 
       {- DataTypeDeclRHS -}
-      ("DataTypeDeclRHS -> TypeConDecls", \rhs ->
+      rule "DataTypeDeclRHS -> TypeConDecls" ( \rhs ->
            toASTTriple ([], [], fromASTTypeConDeclSeq (get rhs 1)) ),
 
-      ("DataTypeDeclRHS -> { Identifiers } . DataTypeDeclRHS", \rhs ->
+      rule "DataTypeDeclRHS -> { Identifiers } . DataTypeDeclRHS" ( \rhs ->
            let locvars = fromASTIdSeq (get rhs 2) in
            case fromASTTriple (get rhs 5) of
              ([], tyvars, tycondecls) -> toASTTriple (locvars, tyvars, tycondecls)
@@ -174,7 +181,7 @@ parserSpec = ParserSpec
                error $ "[Parser] Not supported yet: multiple location abstractions: "
                            ++ show locvars' ++ " " ++ show locvars ),
 
-      ("DataTypeDeclRHS -> [ Identifiers ] . DataTypeDeclRHS", \rhs ->
+      rule "DataTypeDeclRHS -> [ Identifiers ] . DataTypeDeclRHS" ( \rhs ->
            let tyvars = fromASTIdSeq (get rhs 2) in
            case fromASTTriple (get rhs 5) of
              ([], [], tycondecls) -> toASTTriple ([], tyvars, tycondecls)
@@ -187,117 +194,117 @@ parserSpec = ParserSpec
 
 
       {- TypeConDecl -}
-      ("TypeConDecl -> identifier OptLocFunTypes",
+      rule "TypeConDecl -> identifier OptLocFunTypes" (
         \rhs -> toASTTypeConDecl (TypeCon (getText rhs 1) (fromASTTypeSeq (get rhs 2))) ),
 
 
       {- TypeConDecls -}
-      ("TypeConDecls -> TypeConDecl",
+      rule "TypeConDecls -> TypeConDecl" (
         \rhs -> toASTTypeConDeclSeq [ fromASTTypeConDecl (get rhs 1) ] ),
 
-      ("TypeConDecls -> TypeConDecl | TypeConDecls",
+      rule "TypeConDecls -> TypeConDecl | TypeConDecls" (
         \rhs -> toASTTypeConDeclSeq $
                   fromASTTypeConDecl (get rhs 1) : fromASTTypeConDeclSeq (get rhs 3) ),
 
 
       {- Binding -}
-      ("Binding -> identifier : Type = LExpr",
+      rule "Binding -> identifier : Type = LExpr" (
         \rhs -> toASTBindingDecl (
                   Binding False (getText rhs 1) (fromASTType (get rhs 3)) (fromASTExpr (get rhs 5))) ),
 
 
       {- Bindings -}
-      ("Bindings -> Binding",
+      rule "Bindings -> Binding" (
         \rhs -> toASTBindingDeclSeq [ fromASTBindingDecl (get rhs 1) ] ),
 
-      ("Bindings -> Binding ; Bindings",
+      rule "Bindings -> Binding ; Bindings" (
         \rhs -> toASTBindingDeclSeq $ fromASTBindingDecl (get rhs 1) : fromASTBindingDeclSeq (get rhs 3) ),
 
 
       {- LExpr -}
-      ("LExpr -> { Identifiers } . LExpr",
+      rule "LExpr -> { Identifiers } . LExpr" (
         \rhs -> toASTExpr (singleLocAbs (LocAbs (fromASTIdSeq (get rhs 2)) (fromASTExpr (get rhs 5)))) ),
 
-      ("LExpr -> [ Identifiers ] . LExpr",
+      rule "LExpr -> [ Identifiers ] . LExpr" (
         \rhs -> toASTExpr (singleTypeAbs (TypeAbs (fromASTIdSeq (get rhs 2)) (fromASTExpr (get rhs 5)))) ),
 
-      ("LExpr -> \\ IdTypeLocSeq . LExpr",
+      rule "LExpr -> \\ IdTypeLocSeq . LExpr" (
         \rhs -> toASTExpr (singleAbs (Abs (fromASTIdTypeLocSeq (get rhs 2)) (fromASTExpr (get rhs 4)))) ),
 
-      ("LExpr -> let { Bindings } LExpr end",
+      rule "LExpr -> let { Bindings } LExpr end" (
         \rhs -> toASTExpr (Let (fromASTBindingDeclSeq (get rhs 3)) (fromASTExpr (get rhs 5))) ),
 
-      ("LExpr -> if Expr then LExpr else LExpr",
+      rule "LExpr -> if Expr then LExpr else LExpr" (
         \rhs -> toASTExpr (Case (fromASTExpr (get rhs 2)) Nothing
                   [ Alternative trueLit  [] (fromASTExpr (get rhs 4))
                   , Alternative falseLit [] (fromASTExpr (get rhs 6)) ]) ),
 
-      ("LExpr -> case Expr { Alternatives }",
+      rule "LExpr -> case Expr { Alternatives }" (
         \rhs -> toASTExpr (Case (fromASTExpr (get rhs 2)) Nothing (fromASTAlternativeSeq (get rhs 4))) ),
 
-      ("LExpr -> Expr", \rhs -> get rhs 1 ),
+      rule "LExpr -> Expr" ( \rhs -> get rhs 1 ),
 
 
       {- IdTypeLocSeq -}
-      ("IdTypeLocSeq -> IdTypeLoc", \rhs -> toASTIdTypeLocSeq [fromASTIdTypeLoc (get rhs 1)] ),
+      rule "IdTypeLocSeq -> IdTypeLoc" ( \rhs -> toASTIdTypeLocSeq [fromASTIdTypeLoc (get rhs 1)] ),
 
-      ("IdTypeLocSeq -> IdTypeLoc IdTypeLocSeq",
+      rule "IdTypeLocSeq -> IdTypeLoc IdTypeLocSeq" (
         \rhs -> toASTIdTypeLocSeq $ fromASTIdTypeLoc (get rhs 1) : fromASTIdTypeLocSeq (get rhs 2) ),
 
 
       {- IdTypeLoc -}
-      ("IdTypeLoc -> identifier : Type @ Location",
+      rule "IdTypeLoc -> identifier : Type @ Location" (
         \rhs -> toASTIdTypeLoc (getText rhs 1, Just (fromASTType (get rhs 3)), fromASTLocation (get rhs 5)) ),
 
 
       {- Alternatives -}
-      ("Alternatives -> Alternative", \rhs -> toASTAlternativeSeq [fromASTAlternative (get rhs 1)] ),
+      rule "Alternatives -> Alternative" ( \rhs -> toASTAlternativeSeq [fromASTAlternative (get rhs 1)] ),
 
-      ("Alternatives -> Alternative ; Alternatives",
+      rule "Alternatives -> Alternative ; Alternatives" (
         \rhs -> toASTAlternativeSeq $ fromASTAlternative (get rhs 1) : fromASTAlternativeSeq (get rhs 3) ),
 
 
       {- Alternative -}
-      ("Alternative -> identifier OptIdentifiers => LExpr",
+      rule "Alternative -> identifier OptIdentifiers => LExpr" (
         \rhs -> toASTAlternative $
                   (Alternative (getText rhs 1) (fromASTIdSeq (get rhs 2)) (fromASTExpr (get rhs 4))) ),
 
-      ("Alternative -> ( OptIdentifierCommas ) => LExpr",
+      rule "Alternative -> ( OptIdentifierCommas ) => LExpr" (
         \rhs -> toASTAlternative $
                   (TupleAlternative (fromASTIdSeq (get rhs 2)) (fromASTExpr (get rhs 5))) ),
 
 
       {- Expr -}
-      ("Expr -> Expr Term",
+      rule "Expr -> Expr Term" (
         \rhs -> toASTExpr (App (fromASTExpr (get rhs 1)) Nothing (fromASTExpr (get rhs 2)) Nothing) ),
 
-      ("Expr -> Expr [ LocFunTypes ]",
+      rule "Expr -> Expr [ LocFunTypes ]" (
         \rhs -> toASTExpr (singleTypeApp (TypeApp (fromASTExpr (get rhs 1)) Nothing (fromASTTypeSeq (get rhs 3)))) ),
 
-      ("Expr -> Expr { Identifiers }",
+      rule "Expr -> Expr { Identifiers }" (
         \rhs -> toASTExpr (singleLocApp (LocApp (fromASTExpr (get rhs 1)) Nothing (map Location (fromASTIdSeq (get rhs 3))))) ),
 
-      ("Expr -> Tuple", \rhs -> get rhs 1 ),
+      rule "Expr -> Tuple" ( \rhs -> get rhs 1 ),
 
-      ("Expr -> AssignExpr", \rhs -> get rhs 1 ),
+      rule "Expr -> AssignExpr" ( \rhs -> get rhs 1 ),
 
 
       {- Tuple -}
-      ("Tuple -> ( LExpr , LExprSeq )",
+      rule "Tuple -> ( LExpr , LExprSeq )" (
         \rhs -> toASTExpr (Tuple $ fromASTExpr (get rhs 2) : fromASTExprSeq (get rhs 4)) ),
 
 
       {- LExprSeq -}
-      ("LExprSeq -> LExpr", \rhs -> toASTExprSeq [ fromASTExpr (get rhs 1) ] ),
+      rule "LExprSeq -> LExpr" ( \rhs -> toASTExprSeq [ fromASTExpr (get rhs 1) ] ),
 
-      ("LExprSeq -> LExpr , LExprSeq",
+      rule "LExprSeq -> LExpr , LExprSeq" (
         \rhs -> toASTExprSeq ( fromASTExpr (get rhs 1) : fromASTExprSeq (get rhs 3)) ),
 
 
       {- AssignExpr -}
-      ("AssignExpr -> DerefExpr", \rhs -> get rhs 1 ),
+      rule "AssignExpr -> DerefExpr" ( \rhs -> get rhs 1 ),
 
-      ("AssignExpr -> DerefExpr := { Identifiers } [ LocFunTypes ] AssignExpr",
+      rule "AssignExpr -> DerefExpr := { Identifiers } [ LocFunTypes ] AssignExpr" (
        \rhs ->
          toASTExpr
          (App
@@ -317,9 +324,9 @@ parserSpec = ParserSpec
 
 
       {- DerefExpr -}
-      ("DerefExpr -> LogicNot", \rhs -> get rhs 1 ),
+      rule "DerefExpr -> LogicNot" ( \rhs -> get rhs 1 ),
 
-      ("DerefExpr -> ! { Identifiers } [ LocFunTypes ] DerefExpr",
+      rule "DerefExpr -> ! { Identifiers } [ LocFunTypes ] DerefExpr" (
        \rhs ->
          toASTExpr
          (App
@@ -332,77 +339,77 @@ parserSpec = ParserSpec
           Nothing
           (fromASTExpr (get rhs 8)) Nothing) ),
 
-      ("DerefExpr -> LogicOr", \rhs -> get rhs 1 ),
+      rule "DerefExpr -> LogicOr" ( \rhs -> get rhs 1 ),
 
 
       {- Expression operations -}
-      ("LogicOr -> LogicOr or LogicAnd",
+      rule "LogicOr -> LogicOr or LogicAnd" (
         \rhs -> toASTExpr (Prim OrPrimOp [] [] [fromASTExpr (get rhs 1), fromASTExpr (get rhs 3)]) ),
 
-      ("LogicOr -> LogicAnd", \rhs -> get rhs 1),
+      rule "LogicOr -> LogicAnd" ( \rhs -> get rhs 1),
 
-      ("LogicAnd -> LogicAnd and CompEqNeq",
+      rule "LogicAnd -> LogicAnd and CompEqNeq" (
         \rhs -> toASTExpr (Prim AndPrimOp [] [] [fromASTExpr (get rhs 1), fromASTExpr (get rhs 3)]) ),
 
-      ("LogicAnd -> CompEqNeq", \rhs -> get rhs 1),
+      rule "LogicAnd -> CompEqNeq" ( \rhs -> get rhs 1),
 
-      ("CompEqNeq -> CompEqNeq == Comp",  -- Assume EqIntPrimOp, which may change to EqBoolOp or EqStringOp later
+      rule "CompEqNeq -> CompEqNeq == Comp" (  -- Assume EqIntPrimOp, which may change to EqBoolOp or EqStringOp later
         \rhs -> toASTExpr (Prim EqIntPrimOp [] [] [fromASTExpr (get rhs 1), fromASTExpr (get rhs 3)]) ),
 
-      ("CompEqNeq -> CompEqNeq != Comp",
+      rule "CompEqNeq -> CompEqNeq != Comp" (
         \rhs -> toASTExpr (Prim NeqPrimOp [] [] [fromASTExpr (get rhs 1), fromASTExpr (get rhs 3)]) ),
 
-      ("CompEqNeq -> Comp", \rhs -> get rhs 1 ),
+      rule "CompEqNeq -> Comp" ( \rhs -> get rhs 1 ),
 
-      ("Comp -> Comp < ArithAddSub",
+      rule "Comp -> Comp < ArithAddSub" (
         \rhs -> toASTExpr (Prim LtPrimOp [] [] [fromASTExpr (get rhs 1), fromASTExpr (get rhs 3)]) ),
 
-      ("Comp -> Comp <= ArithAddSub",
+      rule "Comp -> Comp <= ArithAddSub" (
         \rhs -> toASTExpr (Prim LePrimOp [] [] [fromASTExpr (get rhs 1), fromASTExpr (get rhs 3)]) ),
 
-      ("Comp -> Comp > ArithAddSub",
+      rule "Comp -> Comp > ArithAddSub" (
         \rhs -> toASTExpr (Prim GtPrimOp [] [] [fromASTExpr (get rhs 1), fromASTExpr (get rhs 3)]) ),
 
-      ("Comp -> Comp >= ArithAddSub",
+      rule "Comp -> Comp >= ArithAddSub" (
         \rhs -> toASTExpr (Prim GePrimOp [] [] [fromASTExpr (get rhs 1), fromASTExpr (get rhs 3)]) ),
 
-      ("Comp -> ArithAddSub", \rhs -> get rhs 1 ),
+      rule "Comp -> ArithAddSub" ( \rhs -> get rhs 1 ),
 
-      ("ArithAddSub -> ArithAddSub + ArithMulDiv",
+      rule "ArithAddSub -> ArithAddSub + ArithMulDiv" (
         \rhs -> toASTExpr (Prim AddPrimOp [] [] [fromASTExpr (get rhs 1), fromASTExpr (get rhs 3)]) ),
 
-      ("ArithAddSub -> ArithAddSub - ArithMulDiv",
+      rule "ArithAddSub -> ArithAddSub - ArithMulDiv" (
         \rhs -> toASTExpr (Prim SubPrimOp [] [] [fromASTExpr (get rhs 1), fromASTExpr (get rhs 3)]) ),
 
-      ("ArithAddSub -> ArithMulDiv", \rhs -> get rhs 1 ),
+      rule "ArithAddSub -> ArithMulDiv" ( \rhs -> get rhs 1 ),
 
-      ("ArithMulDiv -> ArithMulDiv * ArithUnary",
+      rule "ArithMulDiv -> ArithMulDiv * ArithUnary" (
         \rhs -> toASTExpr (Prim MulPrimOp [] [] [fromASTExpr (get rhs 1), fromASTExpr (get rhs 3)]) ),
 
-      ("ArithMulDiv -> ArithMulDiv / ArithUnary",
+      rule "ArithMulDiv -> ArithMulDiv / ArithUnary" (
         \rhs -> toASTExpr (Prim DivPrimOp [] [] [fromASTExpr (get rhs 1), fromASTExpr (get rhs 3)]) ),
 
-      ("ArithMulDiv -> ArithUnary", \rhs -> get rhs 1 ),
+      rule "ArithMulDiv -> ArithUnary" ( \rhs -> get rhs 1 ),
 
-      ("ArithUnary -> - Term", \rhs -> toASTExpr (Prim NegPrimOp [] [] [fromASTExpr (get rhs 2)]) ),
+      rule "ArithUnary -> - Term" ( \rhs -> toASTExpr (Prim NegPrimOp [] [] [fromASTExpr (get rhs 2)]) ),
 
-      ("ArithUnary -> Term", \rhs -> get rhs 1 ),
+      rule "ArithUnary -> Term" ( \rhs -> get rhs 1 ),
 
 
       {- Term -}
-      ("Term -> identifier", \rhs -> toASTExpr (Var (getText rhs 1)) ),
+      rule "Term -> identifier" ( \rhs -> toASTExpr (Var (getText rhs 1)) ),
 
-      ("Term -> integer", \rhs -> toASTExpr (Lit (IntLit (read (getText rhs 1)))) ),
+      rule "Term -> integer" ( \rhs -> toASTExpr (Lit (IntLit (read (getText rhs 1)))) ),
 
-      ("Term -> string", \rhs ->
+      rule "Term -> string" ( \rhs ->
           let str = read (getText rhs 1) :: String
           in  toASTExpr (Lit (StrLit str)) ),
 
-      ("Term -> boolean", \rhs -> toASTExpr (Lit (BoolLit (read (getText rhs 1)))) ),
+      rule "Term -> boolean" ( \rhs -> toASTExpr (Lit (BoolLit (read (getText rhs 1)))) ),
 
-      ("Term -> ( )", \rhs -> toASTExpr (Lit UnitLit) ),
+      rule "Term -> ( )" ( \rhs -> toASTExpr (Lit UnitLit) ),
 
-      ("Term -> ( LExpr )", \rhs -> get rhs 2 )
+      rule "Term -> ( LExpr )" ( \rhs -> get rhs 2 )
     ],
 
     baseDir = "./",
