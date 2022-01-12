@@ -62,9 +62,9 @@ doProcess cmd file = do
   putStrLn $ "[Reading] " ++ file
   text <- readFile file
 
-  putStrLn "[Lexing]"
-  terminalList <- lexing lexerSpec text
-  verbose (_flag_debug_lex cmd) $ mapM_ (putStrLn) (map terminalToString terminalList)
+  -- putStrLn "[Lexing]"
+  -- terminalList <- lexing lexerSpec text
+  -- verbose (_flag_debug_lex cmd) $ mapM_ (putStrLn) (map terminalToString terminalList)
 
 
   -- putStrLn "[Parsing]"
@@ -72,7 +72,7 @@ doProcess cmd file = do
 
   putStrLn "[Parsing-Surface syntax]"
   -- exprSeqAst <- parsing PB.parserSpec terminalList
-  exprSeqAst <- parsing False PBLinks.parserSpec terminalList
+  exprSeqAst <- parsing False PBLinks.parserSpec ((), 1, 1, text)
 
   verbose (_flag_debug_parse cmd) $ putStrLn "Dumping..."
   verbose (_flag_debug_parse cmd) $ putDocW 80 {- putStrLn $ show -} $ ppPolyRpcProg $ fromASTTopLevelDeclSeq exprSeqAst
