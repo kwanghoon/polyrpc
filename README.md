@@ -1,4 +1,4 @@
- polyrpc
+# Polyrpc
 
 ### A multi-tier functional programming language based on the polymorphic rpc calculus
  - Allow to write client, server, and location-polymorphic functions
