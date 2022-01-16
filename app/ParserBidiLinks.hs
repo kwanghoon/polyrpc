@@ -33,7 +33,6 @@ import Prim
 import Literal
 import Expr
 import Surface
-import Lexer
 
 import Data.Set(delete, toList)
 
@@ -48,8 +47,6 @@ parserSpec = ParserSpec
     startSymbol = "TopLevel'",
 
     tokenPrecAssoc = [],
-    
-    chumLexerSpec = lexerSpec,
     
     parserSpecList =
     [

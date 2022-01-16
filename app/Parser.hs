@@ -7,8 +7,6 @@ import Type
 import Prim
 import Literal
 import Expr
-import Lexer
-
 
 -- | Utility
 rule prodRule action              = (prodRule, action, Nothing  )
@@ -22,8 +20,6 @@ parserSpec = ParserSpec
 
     tokenPrecAssoc = [],
 
-    chumLexerSpec = lexerSpec,
-    
     parserSpecList =
     [
       rule "TopLevel' -> TopLevel" ( \rhs -> return $ get rhs 1),
