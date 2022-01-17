@@ -4,6 +4,7 @@ module Main where
 
 import CommonParserUtil
 
+import TokenInterface
 import Token
 import Lexer
 import Terminal
@@ -72,7 +73,7 @@ doProcess cmd file = do
 
   putStrLn "[Parsing-Surface syntax]"
   -- exprSeqAst <- parsing PB.parserSpec terminalList
-  exprSeqAst <- parsing False PBLinks.parserSpec ((), 1, 1, text) (aLexer lexerSpec)
+  exprSeqAst <- parsing False PBLinks.parserSpec ((), 1, 1, text) (aLexer lexerSpec) (fromToken (endOfToken lexerSpec))
 
   verbose (_flag_debug_parse cmd) $ putStrLn "Dumping..."
   verbose (_flag_debug_parse cmd) $ putDocW 80 {- putStrLn $ show -} $ ppPolyRpcProg $ fromASTTopLevelDeclSeq exprSeqAst
