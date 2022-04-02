@@ -28,7 +28,7 @@ dependencies:
 - prettyprinter  >= 1.6.2 && <= 1.7.0
 - json           >= 0.10 && < 0.11
 - pretty         >= 1.1.3 && < 1.2
-- yapb           >= 0.1.4
+- yapb           >= 0.2.1
 - containers     >= 0.6.0 && < 0.7
 - unordered-containers >= 0.2.10.0 && <= 0.2.12.0
 - mtl            >= 2.2.2 && <= 2.2.2

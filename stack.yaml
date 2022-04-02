@@ -1,7 +1,7 @@
 packages:
 - .
-- ../yapb
 extra-deps:
+- yapb-0.2.1
 - json-0.10
 - aeson-1.4.7.1@sha256:6d8d2fd959b7122a1df9389cf4eca30420a053d67289f92cdc0dbc0dab3530ba,7098
 - aeson-pretty-0.8.8@sha256:9924a16d0c362ff59dd6d5b875749ff5d599d2688f89d080388a0014714441ef,2291
