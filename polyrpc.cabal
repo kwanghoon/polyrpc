@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 086fb49d8af378186ad946dfc334ae64549aa2e300a1d1bc91fb9a6d2797995a
+-- hash: 3f4bc39c2661a96b5bb20b8da87de6706f7974a5387d2e8d6abe26aac2a6867f
 
 name:           polyrpc
 version:        0.3
@@ -91,7 +91,7 @@ executable polyrpc
     , transformers >=0.5.6.2 && <=0.5.6.2
     , unordered-containers >=0.2.10.0 && <=0.2.12.0
     , utility-ht >=0.0.15 && <=0.0.15
-    , yapb >=0.2.1
+    , yapb >=0.2.2
   default-language: Haskell2010
 
 test-suite polyrpc-test
@@ -120,5 +120,5 @@ test-suite polyrpc-test
     , transformers >=0.5.6.2 && <=0.5.6.2
     , unordered-containers >=0.2.10.0 && <=0.2.12.0
     , utility-ht >=0.0.15 && <=0.0.15
-    , yapb >=0.2.1
+    , yapb >=0.2.2
   default-language: Haskell2010
