@@ -1,0 +1,583 @@
+
+[benchmark1.rl]
+
+Configuration {
+  config_SIMPLE   = True,
+  config_R_LEVEL  = 1, 
+  config_GS_LEVEL = 8,
+  config_DEBUG    = False, 
+  config_DISPLAY  = False,
+  config_PRESENTATION = 0,
+  config_ALGORITHM = 3
+}
+
+
+8
+
+Time:  57.40
+
+[White Terminal *,White Nonterminal ArithUnary]
+[White Terminal /,White Nonterminal ArithUnary]
+[White Terminal +,White Nonterminal ArithMulDiv]
+[White Terminal -,White Nonterminal ArithMulDiv]
+[White Terminal <,White Nonterminal ArithAddSub]
+[White Terminal <=,White Nonterminal ArithAddSub]
+[White Terminal >,White Nonterminal ArithAddSub]
+[White Terminal >=,White Nonterminal ArithAddSub]
+[White Terminal !=,White Nonterminal Comp]
+[White Terminal ==,White Nonterminal Comp]
+[White Terminal and,White Nonterminal CompEqNeq]
+[White Terminal or,White Nonterminal LogicAnd]
+[White Terminal :=,White Nonterminal AssignExpr]
+[White Terminal (,White Terminal )]
+[White Terminal boolean]
+[White Terminal identifier]
+[White Terminal integer]
+[White Terminal string]
+[White Terminal then,White Nonterminal LExpr,White Terminal else,White Nonterminal LExpr]
+[White Terminal {,White Nonterminal Identifiers,White Terminal }]
+
+["*","..."]
+["/","..."]
+["+","..."]
+["-","..."]
+["<","..."]
+["<=","..."]
+[">","..."]
+[">=","..."]
+["!=","..."]
+["==","..."]
+["and","..."]
+["or","..."]
+[":=","..."]
+["(",")"]
+["boolean"]
+["identifier"]
+["integer"]
+["string"]
+["then","...","else","..."]
+["{","...","}"]
+
+
+7
+
+Time:  12.48
+
+[White Terminal *,White Nonterminal ArithUnary]
+[White Terminal /,White Nonterminal ArithUnary]
+[White Terminal +,White Nonterminal ArithMulDiv]
+[White Terminal -,White Nonterminal ArithMulDiv]
+[White Terminal <,White Nonterminal ArithAddSub]
+[White Terminal <=,White Nonterminal ArithAddSub]
+[White Terminal >,White Nonterminal ArithAddSub]
+[White Terminal >=,White Nonterminal ArithAddSub]
+[White Terminal !=,White Nonterminal Comp]
+[White Terminal ==,White Nonterminal Comp]
+[White Terminal and,White Nonterminal CompEqNeq]
+[White Terminal or,White Nonterminal LogicAnd]
+[White Terminal :=,White Nonterminal AssignExpr]
+[White Terminal (,White Terminal )]
+[White Terminal boolean]
+[White Terminal identifier]
+[White Terminal integer]
+[White Terminal string]
+[White Terminal then,White Nonterminal LExpr,White Terminal else,White Nonterminal LExpr]
+[White Terminal {,White Nonterminal Identifiers,White Terminal }]
+
+["*","..."]
+["/","..."]
+["+","..."]
+["-","..."]
+["<","..."]
+["<=","..."]
+[">","..."]
+[">=","..."]
+["!=","..."]
+["==","..."]
+["and","..."]
+["or","..."]
+[":=","..."]
+["(",")"]
+["boolean"]
+["identifier"]
+["integer"]
+["string"]
+["then","...","else","..."]
+["{","...","}"]
+
+
+6
+
+Time:   2.92
+
+[White Terminal *,White Nonterminal ArithUnary]
+[White Terminal /,White Nonterminal ArithUnary]
+[White Terminal +,White Nonterminal ArithMulDiv]
+[White Terminal -,White Nonterminal ArithMulDiv]
+[White Terminal <,White Nonterminal ArithAddSub]
+[White Terminal <=,White Nonterminal ArithAddSub]
+[White Terminal >,White Nonterminal ArithAddSub]
+[White Terminal >=,White Nonterminal ArithAddSub]
+[White Terminal !=,White Nonterminal Comp]
+[White Terminal ==,White Nonterminal Comp]
+[White Terminal and,White Nonterminal CompEqNeq]
+[White Terminal or,White Nonterminal LogicAnd]
+[White Terminal :=,White Nonterminal AssignExpr]
+[White Terminal (,White Terminal )]
+[White Terminal boolean]
+[White Terminal identifier]
+[White Terminal integer]
+[White Terminal string]
+[White Terminal then,White Nonterminal LExpr,White Terminal else,White Nonterminal LExpr]
+[White Terminal {,White Nonterminal Identifiers,White Terminal }]
+
+["*","..."]
+["/","..."]
+["+","..."]
+["-","..."]
+["<","..."]
+["<=","..."]
+[">","..."]
+[">=","..."]
+["!=","..."]
+["==","..."]
+["and","..."]
+["or","..."]
+[":=","..."]
+["(",")"]
+["boolean"]
+["identifier"]
+["integer"]
+["string"]
+["then","...","else","..."]
+["{","...","}"]
+
+
+5
+
+Time:   0.63
+
+[White Terminal *,White Nonterminal ArithUnary]
+[White Terminal /,White Nonterminal ArithUnary]
+[White Terminal +,White Nonterminal ArithMulDiv]
+[White Terminal -,White Nonterminal ArithMulDiv]
+[White Terminal <,White Nonterminal ArithAddSub]
+[White Terminal <=,White Nonterminal ArithAddSub]
+[White Terminal >,White Nonterminal ArithAddSub]
+[White Terminal >=,White Nonterminal ArithAddSub]
+[White Terminal !=,White Nonterminal Comp]
+[White Terminal ==,White Nonterminal Comp]
+[White Terminal and,White Nonterminal CompEqNeq]
+[White Terminal or,White Nonterminal LogicAnd]
+[White Terminal :=,White Nonterminal AssignExpr]
+[White Terminal (,White Terminal )]
+[White Terminal boolean]
+[White Terminal identifier]
+[White Terminal integer]
+[White Terminal string]
+[White Terminal then,White Nonterminal LExpr,White Terminal else,White Nonterminal LExpr]
+[White Terminal {,White Nonterminal Identifiers,White Terminal }]
+
+["*","..."]
+["/","..."]
+["+","..."]
+["-","..."]
+["<","..."]
+["<=","..."]
+[">","..."]
+[">=","..."]
+["!=","..."]
+["==","..."]
+["and","..."]
+["or","..."]
+[":=","..."]
+["(",")"]
+["boolean"]
+["identifier"]
+["integer"]
+["string"]
+["then","...","else","..."]
+["{","...","}"]
+
+
+4
+
+
+Time:   0.15
+
+[White Terminal *,White Nonterminal ArithUnary]
+[White Terminal /,White Nonterminal ArithUnary]
+[White Terminal +,White Nonterminal ArithMulDiv]
+[White Terminal -,White Nonterminal ArithMulDiv]
+[White Terminal <,White Nonterminal ArithAddSub]
+[White Terminal <=,White Nonterminal ArithAddSub]
+[White Terminal >,White Nonterminal ArithAddSub]
+[White Terminal >=,White Nonterminal ArithAddSub]
+[White Terminal !=,White Nonterminal Comp]
+[White Terminal ==,White Nonterminal Comp]
+[White Terminal and,White Nonterminal CompEqNeq]
+[White Terminal or,White Nonterminal LogicAnd]
+[White Terminal :=,White Nonterminal AssignExpr]
+[White Terminal (,White Terminal )]
+[White Terminal boolean]
+[White Terminal identifier]
+[White Terminal integer]
+[White Terminal string]
+[White Terminal then,White Nonterminal LExpr,White Terminal else,White Nonterminal LExpr]
+[White Terminal {,White Nonterminal Identifiers,White Terminal }]
+
+["*","..."]
+["/","..."]
+["+","..."]
+["-","..."]
+["<","..."]
+["<=","..."]
+[">","..."]
+[">=","..."]
+["!=","..."]
+["==","..."]
+["and","..."]
+["or","..."]
+[":=","..."]
+["(",")"]
+["boolean"]
+["identifier"]
+["integer"]
+["string"]
+["then","...","else","..."]
+["{","...","}"]
+
+
+
+3
+
+
+Time:   0.04
+
+[White Terminal *,White Nonterminal ArithUnary]
+[White Terminal /,White Nonterminal ArithUnary]
+[White Terminal +,White Nonterminal ArithMulDiv]
+[White Terminal -,White Nonterminal ArithMulDiv]
+[White Terminal <,White Nonterminal ArithAddSub]
+[White Terminal <=,White Nonterminal ArithAddSub]
+[White Terminal >,White Nonterminal ArithAddSub]
+[White Terminal >=,White Nonterminal ArithAddSub]
+[White Terminal !=,White Nonterminal Comp]
+[White Terminal ==,White Nonterminal Comp]
+[White Terminal and,White Nonterminal CompEqNeq]
+[White Terminal or,White Nonterminal LogicAnd]
+[White Terminal :=,White Nonterminal AssignExpr]
+[White Terminal (,White Terminal )]
+[White Terminal boolean]
+[White Terminal identifier]
+[White Terminal integer]
+[White Terminal string]
+[White Terminal {,White Nonterminal Identifiers,White Terminal }]
+
+["*","..."]
+["/","..."]
+["+","..."]
+["-","..."]
+["<","..."]
+["<=","..."]
+[">","..."]
+[">=","..."]
+["!=","..."]
+["==","..."]
+["and","..."]
+["or","..."]
+[":=","..."]
+["(",")"]
+["boolean"]
+["identifier"]
+["integer"]
+["string"]
+["{","...","}"]
+
+
+
+2
+
+
+Time:   0.01
+
+[White Terminal *,White Nonterminal ArithUnary]
+[White Terminal /,White Nonterminal ArithUnary]
+[White Terminal +,White Nonterminal ArithMulDiv]
+[White Terminal -,White Nonterminal ArithMulDiv]
+[White Terminal <,White Nonterminal ArithAddSub]
+[White Terminal <=,White Nonterminal ArithAddSub]
+[White Terminal >,White Nonterminal ArithAddSub]
+[White Terminal >=,White Nonterminal ArithAddSub]
+[White Terminal !=,White Nonterminal Comp]
+[White Terminal ==,White Nonterminal Comp]
+[White Terminal and,White Nonterminal CompEqNeq]
+[White Terminal or,White Nonterminal LogicAnd]
+[White Terminal :=,White Nonterminal AssignExpr]
+[White Terminal (,White Terminal )]
+[White Terminal boolean]
+[White Terminal identifier]
+[White Terminal integer]
+[White Terminal string]
+
+["*","..."]
+["/","..."]
+["+","..."]
+["-","..."]
+["<","..."]
+["<=","..."]
+[">","..."]
+[">=","..."]
+["!=","..."]
+["==","..."]
+["and","..."]
+["or","..."]
+[":=","..."]
+["(",")"]
+["boolean"]
+["identifier"]
+["integer"]
+["string"]
+
+
+1
+
+
+Time:   0.00
+
+[White Terminal boolean]
+[White Terminal identifier]
+[White Terminal integer]
+[White Terminal string]
+
+["boolean"]
+["identifier"]
+["integer"]
+["string"]
+
+
+
+[benchmark2.rl]
+
+Configuration {
+  config_SIMPLE   = True,
+  config_R_LEVEL  = 1, 
+  config_GS_LEVEL = 8,
+  config_DEBUG    = False, 
+  config_DISPLAY  = False,
+  config_PRESENTATION = 0,
+  config_ALGORITHM = 3
+}
+
+
+8
+
+
+Time:  28.87
+
+[White Terminal !,White Nonterminal DerefExpr]
+[White Terminal (,White Terminal )]
+[White Terminal -,White Nonterminal Term]
+[White Terminal \,White Nonterminal Identifiers,White Terminal .,White Nonterminal LExpr]
+[White Terminal \,White Nonterminal Location,White Terminal :,White Nonterminal Identifiers,White Terminal .,White Nonterminal LExpr]
+[White Terminal boolean]
+[White Terminal case,White Nonterminal Expr,White Terminal {,White Nonterminal Alternatives,White Terminal }]
+[White Terminal identifier]
+[White Terminal if,White Nonterminal Expr,White Terminal then,White Nonterminal LExpr,White Terminal else,White Nonterminal LExpr]
+[White Terminal integer]
+[White Terminal let,White Terminal {,White Nonterminal Bindings,White Terminal },White Nonterminal LExpr,White Terminal end]
+[White Terminal string]
+
+["!","..."]
+["(",")"]
+["-","..."]
+["\\","...",".","..."]
+["\\","...",":","...",".","..."]
+["boolean"]
+["case","...","{","...","}"]
+["identifier"]
+["if","...","then","...","else","..."]
+["integer"]
+["let","{","...","}","...","end"]
+["string"]
+
+
+7
+
+
+Time:   6.37
+
+[White Terminal !,White Nonterminal DerefExpr]
+[White Terminal (,White Terminal )]
+[White Terminal -,White Nonterminal Term]
+[White Terminal \,White Nonterminal Identifiers,White Terminal .,White Nonterminal LExpr]
+[White Terminal \,White Nonterminal Location,White Terminal :,White Nonterminal Identifiers,White Terminal .,White Nonterminal LExpr]
+[White Terminal boolean]
+[White Terminal case,White Nonterminal Expr,White Terminal {,White Nonterminal Alternatives,White Terminal }]
+[White Terminal identifier]
+[White Terminal if,White Nonterminal Expr,White Terminal then,White Nonterminal LExpr,White Terminal else,White Nonterminal LExpr]
+[White Terminal integer]
+[White Terminal let,White Terminal {,White Nonterminal Bindings,White Terminal },White Nonterminal LExpr,White Terminal end]
+[White Terminal string]
+
+["!","..."]
+["(",")"]
+["-","..."]
+["\\","...",".","..."]
+["\\","...",":","...",".","..."]
+["boolean"]
+["case","...","{","...","}"]
+["identifier"]
+["if","...","then","...","else","..."]
+["integer"]
+["let","{","...","}","...","end"]
+["string"]
+
+
+6
+
+Time:   1.30
+
+[White Terminal !,White Nonterminal DerefExpr]
+[White Terminal (,White Terminal )]
+[White Terminal -,White Nonterminal Term]
+[White Terminal \,White Nonterminal Identifiers,White Terminal .,White Nonterminal LExpr]
+[White Terminal \,White Nonterminal Location,White Terminal :,White Nonterminal Identifiers,White Terminal .,White Nonterminal LExpr]
+[White Terminal boolean]
+[White Terminal case,White Nonterminal Expr,White Terminal {,White Nonterminal Alternatives,White Terminal }]
+[White Terminal identifier]
+[White Terminal if,White Nonterminal Expr,White Terminal then,White Nonterminal LExpr,White Terminal else,White Nonterminal LExpr]
+[White Terminal integer]
+[White Terminal let,White Terminal {,White Nonterminal Bindings,White Terminal },White Nonterminal LExpr,White Terminal end]
+[White Terminal string]
+
+["!","..."]
+["(",")"]
+["-","..."]
+["\\","...",".","..."]
+["\\","...",":","...",".","..."]
+["boolean"]
+["case","...","{","...","}"]
+["identifier"]
+["if","...","then","...","else","..."]
+["integer"]
+["let","{","...","}","...","end"]
+["string"]
+
+
+5
+
+
+Time:   0.31
+
+[White Terminal !,White Nonterminal DerefExpr]
+[White Terminal (,White Terminal )]
+[White Terminal -,White Nonterminal Term]
+[White Terminal \,White Nonterminal Identifiers,White Terminal .,White Nonterminal LExpr]
+[White Terminal boolean]
+[White Terminal case,White Nonterminal Expr,White Terminal {,White Nonterminal Alternatives,White Terminal }]
+[White Terminal identifier]
+[White Terminal integer]
+[White Terminal string]
+
+["!","..."]
+["(",")"]
+["-","..."]
+["\\","...",".","..."]
+["boolean"]
+["case","...","{","...","}"]
+["identifier"]
+["integer"]
+["string"]
+
+
+
+4
+
+
+Time:   0.07
+
+[White Terminal !,White Nonterminal DerefExpr]
+[White Terminal (,White Terminal )]
+[White Terminal -,White Nonterminal Term]
+[White Terminal \,White Nonterminal Identifiers,White Terminal .,White Nonterminal LExpr]
+[White Terminal boolean]
+[White Terminal identifier]
+[White Terminal integer]
+[White Terminal string]
+
+["!","..."]
+["(",")"]
+["-","..."]
+["\\","...",".","..."]
+["boolean"]
+["identifier"]
+["integer"]
+["string"]
+
+
+
+3
+
+
+Time:   0.02
+
+[White Terminal !,White Nonterminal DerefExpr]
+[White Terminal (,White Terminal )]
+[White Terminal -,White Nonterminal Term]
+[White Terminal boolean]
+[White Terminal identifier]
+[White Terminal integer]
+[White Terminal string]
+
+["!","..."]
+["(",")"]
+["-","..."]
+["boolean"]
+["identifier"]
+["integer"]
+["string"]
+
+
+
+
+2
+
+
+Time:   0.00
+
+[White Terminal !,White Nonterminal DerefExpr]
+[White Terminal (,White Terminal )]
+[White Terminal -,White Nonterminal Term]
+[White Terminal boolean]
+[White Terminal identifier]
+[White Terminal integer]
+[White Terminal string]
+
+["!","..."]
+["(",")"]
+["-","..."]
+["boolean"]
+["identifier"]
+["integer"]
+["string"]
+
+
+
+1
+
+
+Time:   0.00
+
+[White Terminal boolean]
+[White Terminal identifier]
+[White Terminal integer]
+[White Terminal string]
+
+["boolean"]
+["identifier"]
+["integer"]
+["string"]
+
+
+
