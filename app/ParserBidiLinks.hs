@@ -518,6 +518,8 @@ parserSpec = ParserSpec
       rule "Term -> ( LExpr )" (\rhs -> return $ get rhs 2 )
     ],
 
+    synCompSpec = Nothing,
+
     baseDir = "./",
     actionTblFile = "action_table.txt",
     gotoTblFile = "goto_table.txt",
