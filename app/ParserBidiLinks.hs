@@ -34,6 +34,8 @@ import Literal
 import Expr
 import Surface
 
+import ParserTime
+
 import Data.Set(delete, toList)
 
 -- | Utility
@@ -518,12 +520,16 @@ parserSpec = ParserSpec
       rule "Term -> ( LExpr )" (\rhs -> return $ get rhs 2 )
     ],
 
-    synCompSpec = Nothing,
-
     baseDir = "./",
     actionTblFile = "action_table.txt",
     gotoTblFile = "goto_table.txt",
     grammarFile = "prod_rules.txt",
     parserSpecFile = "mygrammar.grm",
-    genparserexe = "yapb-exe"
+    genparserexe = "yapb-exe",
+
+    synCompSpec = Nothing,
+    parserTime = ParserTime {
+                   pa_startTime=startTime,
+                   pa_finishTime=finishTime
+                 }
   }

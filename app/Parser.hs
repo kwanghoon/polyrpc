@@ -8,6 +8,8 @@ import Prim
 import Literal
 import Expr
 
+import ParserTime
+
 -- | Utility
 rule prodRule action              = (prodRule, action, Nothing  )
 ruleWithPrec prodRule action prec = (prodRule, action, Just prec)
@@ -418,5 +420,10 @@ parserSpec = ParserSpec
     gotoTblFile = "goto_table.txt",
     grammarFile = "prod_rules.txt",
     parserSpecFile = "mygrammar.grm",
-    genparserexe = "yapb-exe"
+    genparserexe = "yapb-exe",
+    
+    parserTime = ParserTime {
+                   pa_startTime=startTime,
+                   pa_finishTime=finishTime
+                 }
   }
