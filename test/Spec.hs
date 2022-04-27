@@ -20,7 +20,7 @@ spec = hspec $ do
     -- let benchmark2 = "main : Int = if x > 1 then "  -- examples/exp/benchmark2.rl
 
     let config_simple = True
-    let max_gs_level  = 8
+    let max_gs_level  = 8               -- Max GS level (8) for polyrpc
     
     let config =
           Configuration
@@ -37,22 +37,22 @@ spec = hspec $ do
     let benchmark1 = "./examples/exp/benchmark1.rl"
     
     it ("[Benchmark1] ") $
-      do mapM_ (item benchmark1 config) [1..max_gs_level]  -- Max GS level (9) for polyrpc
+      do mapM_ (item benchmark1 config) [1..max_gs_level]  
 
     let benchmark2 = "./examples/exp/benchmark2.rl"
     
     it ("[Benchmark2] ") $
-      do mapM_ (item benchmark2 config) [1..max_gs_level]  -- Max GS level (9) for polyrpc
+      do mapM_ (item benchmark2 config) [1..max_gs_level] 
 
     let benchmark3 = "./examples/exp/benchmark3.rl"
 
     it ("[Benchmark3] ") $
-      do mapM_ (item benchmark3 config) [1..max_gs_level]  -- Max GS level (9) for polyrpc
+      do mapM_ (item benchmark3 config) [1..max_gs_level] 
 
     let benchmark4 = "./examples/exp/benchmark4.rl"
     
     it ("[Benchmark4] ") $
-      do mapM_ (item benchmark4 config) [1..max_gs_level]  -- Max GS level (9) for polyrpc
+      do mapM_ (item benchmark4 config) [1..max_gs_level] 
 
 
 item benchmark_file init_config gslevel = 

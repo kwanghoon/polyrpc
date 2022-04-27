@@ -5,6 +5,13 @@
 
 packages:
 - completed:
+    hackage: yapb-0.2.6@sha256:335789dad8a833b8ec124bfcea100cf5f08d5dc2b5eead4b199abb00ccd21aa2,4795
+    pantry-tree:
+      size: 4100
+      sha256: 5eb4ce8a994061d44e45f5293b68e16d05a3674decf7d5ac93af185f4b5e52c8
+  original:
+    hackage: yapb-0.2.6
+- completed:
     hackage: json-0.10@sha256:d9fc6b07ce92b8894825a17d2cf14799856767eb30c8bf55962baa579207d799,3210
     pantry-tree:
       size: 3190
