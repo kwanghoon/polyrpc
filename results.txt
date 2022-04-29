@@ -16,7 +16,7 @@ Installing executable polyrpc in /home/choi/work/lang/haskell/syncomp/polyrpc/.s
 Registering library for polyrpc-0.3..
 polyrpc> test (suite: polyrpc-test)
 
-Candidates:
+Candidates: bm1-1
 [White Terminal boolean]
 [White Terminal identifier]
 [White Terminal integer]
@@ -27,7 +27,7 @@ Candidates:
 ["integer"]
 ["string"]
 
-Candidates:
+Candidates: bm1-2
 [White Terminal *,White Nonterminal ArithUnary]
 [White Terminal /,White Nonterminal ArithUnary]
 [White Terminal +,White Nonterminal ArithMulDiv]
@@ -66,7 +66,7 @@ Candidates:
 ["integer"]
 ["string"]
 
-Candidates:
+Candidates: bm1-3
 [White Terminal *,White Nonterminal ArithUnary]
 [White Terminal /,White Nonterminal ArithUnary]
 [White Terminal +,White Nonterminal ArithMulDiv]
@@ -107,7 +107,7 @@ Candidates:
 ["string"]
 ["{","...","}"]
 
-Candidates:
+Candidates: bm1-4
 [White Terminal *,White Nonterminal ArithUnary]
 [White Terminal /,White Nonterminal ArithUnary]
 [White Terminal +,White Nonterminal ArithMulDiv]
@@ -150,7 +150,7 @@ Candidates:
 ["then","...","else","..."]
 ["{","...","}"]
 
-Candidates:
+Candidates: bm1-5
 [White Terminal *,White Nonterminal ArithUnary]
 [White Terminal /,White Nonterminal ArithUnary]
 [White Terminal +,White Nonterminal ArithMulDiv]
@@ -193,7 +193,7 @@ Candidates:
 ["then","...","else","..."]
 ["{","...","}"]
 
-Candidates:
+Candidates: bm1-6
 [White Terminal *,White Nonterminal ArithUnary]
 [White Terminal /,White Nonterminal ArithUnary]
 [White Terminal +,White Nonterminal ArithMulDiv]
@@ -236,7 +236,7 @@ Candidates:
 ["then","...","else","..."]
 ["{","...","}"]
 
-Candidates:
+Candidates: bm1-7
 [White Terminal *,White Nonterminal ArithUnary]
 [White Terminal /,White Nonterminal ArithUnary]
 [White Terminal +,White Nonterminal ArithMulDiv]
@@ -279,7 +279,7 @@ Candidates:
 ["then","...","else","..."]
 ["{","...","}"]
 
-Candidates:
+Candidates: bm1-8
 [White Terminal *,White Nonterminal ArithUnary]
 [White Terminal /,White Nonterminal ArithUnary]
 [White Terminal +,White Nonterminal ArithMulDiv]
@@ -322,7 +322,7 @@ Candidates:
 ["then","...","else","..."]
 ["{","...","}"]
 
-Candidates:
+Candidates: bm2-1
 [White Terminal boolean]
 [White Terminal identifier]
 [White Terminal integer]
@@ -333,7 +333,7 @@ Candidates:
 ["integer"]
 ["string"]
 
-Candidates:
+Candidates: bm2-2
 [White Terminal !,White Nonterminal DerefExpr]
 [White Terminal (,White Terminal )]
 [White Terminal -,White Nonterminal Term]
@@ -350,7 +350,7 @@ Candidates:
 ["integer"]
 ["string"]
 
-Candidates:
+Candidates: bm2-3
 [White Terminal !,White Nonterminal DerefExpr]
 [White Terminal (,White Terminal )]
 [White Terminal -,White Nonterminal Term]
@@ -367,7 +367,7 @@ Candidates:
 ["integer"]
 ["string"]
 
-Candidates:
+Candidates: bm2-4
 [White Terminal !,White Nonterminal DerefExpr]
 [White Terminal (,White Terminal )]
 [White Terminal -,White Nonterminal Term]
@@ -386,7 +386,7 @@ Candidates:
 ["integer"]
 ["string"]
 
-Candidates:
+Candidates: bm2-5
 [White Terminal !,White Nonterminal DerefExpr]
 [White Terminal (,White Terminal )]
 [White Terminal -,White Nonterminal Term]
@@ -407,7 +407,7 @@ Candidates:
 ["integer"]
 ["string"]
 
-Candidates:
+Candidates: bm2-6
 [White Terminal !,White Nonterminal DerefExpr]
 [White Terminal (,White Terminal )]
 [White Terminal -,White Nonterminal Term]
@@ -434,7 +434,7 @@ Candidates:
 ["let","{","...","}","...","end"]
 ["string"]
 
-Candidates:
+Candidates: bm2-7
 [White Terminal !,White Nonterminal DerefExpr]
 [White Terminal (,White Terminal )]
 [White Terminal -,White Nonterminal Term]
@@ -461,7 +461,7 @@ Candidates:
 ["let","{","...","}","...","end"]
 ["string"]
 
-Candidates:
+Candidates: bm2-8
 [White Terminal !,White Nonterminal DerefExpr]
 [White Terminal (,White Terminal )]
 [White Terminal -,White Nonterminal Term]
@@ -488,7 +488,7 @@ Candidates:
 ["let","{","...","}","...","end"]
 ["string"]
 
-Candidates:
+Candidates: bm3-1
 [White Terminal boolean]
 [White Terminal identifier]
 [White Terminal integer]
@@ -499,7 +499,7 @@ Candidates:
 ["integer"]
 ["string"]
 
-Candidates:
+Candidates: bm3-2
 [White Terminal *,White Nonterminal ArithUnary]
 [White Terminal /,White Nonterminal ArithUnary]
 [White Terminal +,White Nonterminal ArithMulDiv]
@@ -538,7 +538,7 @@ Candidates:
 ["integer"]
 ["string"]
 
-Candidates:
+Candidates: bm3-3
 [White Terminal *,White Nonterminal ArithUnary]
 [White Terminal /,White Nonterminal ArithUnary]
 [White Terminal +,White Nonterminal ArithMulDiv]
@@ -579,7 +579,7 @@ Candidates:
 ["string"]
 ["{","...","}"]
 
-Candidates:
+Candidates: bm3-4
 [White Terminal *,White Nonterminal ArithUnary]
 [White Terminal /,White Nonterminal ArithUnary]
 [White Terminal +,White Nonterminal ArithMulDiv]
@@ -622,7 +622,7 @@ Candidates:
 ["then","...","else","..."]
 ["{","...","}"]
 
-Candidates:
+Candidates: bm3-5
 [White Terminal *,White Nonterminal ArithUnary]
 [White Terminal /,White Nonterminal ArithUnary]
 [White Terminal +,White Nonterminal ArithMulDiv]
@@ -665,7 +665,7 @@ Candidates:
 ["then","...","else","..."]
 ["{","...","}"]
 
-Candidates:
+Candidates: bm3-6
 [White Terminal *,White Nonterminal ArithUnary]
 [White Terminal /,White Nonterminal ArithUnary]
 [White Terminal +,White Nonterminal ArithMulDiv]
@@ -708,7 +708,7 @@ Candidates:
 ["then","...","else","..."]
 ["{","...","}"]
 
-Candidates:
+Candidates: bm3-7
 [White Terminal *,White Nonterminal ArithUnary]
 [White Terminal /,White Nonterminal ArithUnary]
 [White Terminal +,White Nonterminal ArithMulDiv]
@@ -751,7 +751,7 @@ Candidates:
 ["then","...","else","..."]
 ["{","...","}"]
 
-Candidates:
+Candidates: bm3-8
 [White Terminal *,White Nonterminal ArithUnary]
 [White Terminal /,White Nonterminal ArithUnary]
 [White Terminal +,White Nonterminal ArithMulDiv]
@@ -794,7 +794,7 @@ Candidates:
 ["then","...","else","..."]
 ["{","...","}"]
 
-Candidates:
+Candidates: bm4-1 
 [White Terminal boolean]
 [White Terminal identifier]
 [White Terminal integer]
@@ -805,7 +805,7 @@ Candidates:
 ["integer"]
 ["string"]
 
-Candidates:
+Candidates: bm4-2
 [White Terminal !,White Nonterminal DerefExpr]
 [White Terminal (,White Terminal )]
 [White Terminal -,White Nonterminal Term]
@@ -822,7 +822,7 @@ Candidates:
 ["integer"]
 ["string"]
 
-Candidates:
+Candidates: bm4-3
 [White Terminal !,White Nonterminal DerefExpr]
 [White Terminal (,White Terminal )]
 [White Terminal -,White Nonterminal Term]
@@ -839,7 +839,7 @@ Candidates:
 ["integer"]
 ["string"]
 
-Candidates:
+Candidates: bm4-4
 [White Terminal !,White Nonterminal DerefExpr]
 [White Terminal (,White Terminal )]
 [White Terminal -,White Nonterminal Term]
@@ -858,7 +858,7 @@ Candidates:
 ["integer"]
 ["string"]
 
-Candidates:
+Candidates: bm4-5
 [White Terminal !,White Nonterminal DerefExpr]
 [White Terminal (,White Terminal )]
 [White Terminal -,White Nonterminal Term]
@@ -879,7 +879,7 @@ Candidates:
 ["integer"]
 ["string"]
 
-Candidates:
+Candidates: bm4-6
 [White Terminal !,White Nonterminal DerefExpr]
 [White Terminal (,White Terminal )]
 [White Terminal -,White Nonterminal Term]
@@ -906,7 +906,7 @@ Candidates:
 ["let","{","...","}","...","end"]
 ["string"]
 
-Candidates:
+Candidates: bm4-7
 [White Terminal !,White Nonterminal DerefExpr]
 [White Terminal (,White Terminal )]
 [White Terminal -,White Nonterminal Term]
@@ -933,7 +933,7 @@ Candidates:
 ["let","{","...","}","...","end"]
 ["string"]
 
-Candidates:
+Candidates: bm4-8
 [White Terminal !,White Nonterminal DerefExpr]
 [White Terminal (,White Terminal )]
 [White Terminal -,White Nonterminal Term]
