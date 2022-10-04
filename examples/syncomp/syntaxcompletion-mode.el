@@ -31,7 +31,7 @@
   (set-process-filter
    (get-process "syntaxa") 
    (lambda (process output)
-     (message "output: %s" output)
+;     (message "output: %s" output)
      (cond ((string= output "LexError") ; Lexical error
 	    (message "There is some lexical error up to the cursor position."))
 	   ((string= output "ParseError") ; Parse error
@@ -41,8 +41,32 @@
 	   (t 
 	    (let* ((outputList (toList output))
 		   (cands (cdr outputList))
-		   )
-	      (popup-cands cands)))))))
+                   (cands_ (make-cands cands)))
+              (let ((name (popup-menu* cands_)))
+                (insert name))))))))
+
+(defun deleteEmpStr (strList)
+  (if (null strList)
+      nil
+    (let ((s (car strList)))
+      (if (equal s "")
+          (deleteEmpStr (cdr strList))
+        (cons s (deleteEmpStr (cdr strList)))))))
+
+(defun make-cand (ccList) ;This function egnores colors.
+  (if (null ccList)
+      nil
+    (let* ((color (car ccList))
+           (cand (cadr ccList)))
+      (concat cand " " (make-cand (cddr ccList))))))
+
+(defun make-cands (cands)
+  (if (null cands)
+      nil
+    (let* ((cc (car cands))
+           (ccList (deleteEmpStr (split-string cc " ")))
+           (cand (make-cand ccList)))
+      (cons cand (make-cands (cdr cands))))))
 
 (defun connect-server ()
   (setq buf (get-buffer-create "syntax1"))
